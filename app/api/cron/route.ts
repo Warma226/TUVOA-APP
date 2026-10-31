@@ -8,7 +8,7 @@ import { GUARDRAILS, RUBRIQUES, TOPICS, allSources, allTriggers, isOn } from "@/
 import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 function authorized(req: Request) {
   const secret = process.env.CRON_SECRET;
