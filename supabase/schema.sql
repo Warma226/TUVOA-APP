@@ -37,6 +37,24 @@ alter table posts enable row level security;
 alter table settings enable row level security;
 alter table seen_items enable row level security;
 
+-- Les projets Supabase récents n'accordent plus les droits par défaut : seul le serveur de l'app (service_role) y accède.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on table posts, settings, seen_items to service_role;
+revoke all on table posts, settings, seen_items from anon, authenticated;
+
 -- Images importées depuis l'app (tes visuels, photos de fond) : seau public « visuels ».
 -- L'app le crée aussi toute seule au premier envoi.
 insert into storage.buckets (id, name, public) values ('visuels', 'visuels', true) on conflict (id) do nothing;
+
+-- Veille et publications planifiées toutes les 15 minutes, lancées par Supabase (pg_cron + pg_net).
+-- Remplace <ADRESSE> et <CRON_SECRET> (la même valeur que dans Vercel) avant de lancer ce bloc.
+-- create extension if not exists pg_cron with schema pg_catalog;
+-- create extension if not exists pg_net with schema extensions;
+-- select vault.create_secret('<ADRESSE>', 'tuvoa_url');
+-- select vault.create_secret('<CRON_SECRET>', 'tuvoa_cron_secret');
+-- select cron.schedule('tuvoa-veille', '*/15 * * * *', $$
+--   select net.http_get(
+--     url := (select decrypted_secret from vault.decrypted_secrets where name = 'tuvoa_url') || '/api/cron',
+--     headers := jsonb_build_object('Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'tuvoa_cron_secret')),
+--     timeout_milliseconds := 60000);
+-- $$);

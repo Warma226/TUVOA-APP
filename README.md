@@ -47,11 +47,9 @@ Sans Supabase, l'application tourne en **mode démo** : les posts disparaissent 
 Ouvre ensuite l'adresse de l'app, connecte-toi, et ajoute-la à l'écran d'accueil du téléphone.
 
 ### 3. Veille automatique (toutes les 15 minutes)
-Dans GitHub : **Settings › Secrets and variables › Actions › New repository secret**
-- `TUVOA_URL` : l'adresse de l'app
-- `TUVOA_CRON_SECRET` : la même valeur que `CRON_SECRET`
+La tâche est lancée par Supabase (extensions pg_cron et pg_net), avec l'adresse de l'app et la clé `CRON_SECRET` gardées dans le coffre (Vault) de Supabase. Le bloc à lancer est en fin de `supabase/schema.sql`. Dans Vercel, la protection « Vercel Authentication » doit rester limitée aux versions de test (Preview), sinon la tâche et les réseaux sociaux ne peuvent pas joindre l'app.
 
-La tâche est dans `.github/workflows/tuvoa-cron.yml`. Tu peux la lancer à la main depuis l'onglet **Actions**.
+Solution de secours : `.github/workflows/tuvoa-cron.yml`, avec les secrets GitHub `TUVOA_URL` et `TUVOA_CRON_SECRET`.
 
 ### 4. Relier les comptes
 
