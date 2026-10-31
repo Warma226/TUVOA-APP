@@ -3,7 +3,7 @@ import { generatePost, rewrite, draftWithoutAI, aiConfigured, type GenerateInput
 import { fetchArticleText } from "@/lib/veille";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 // POST { mode: "post", ...GenerateInput }  → textes pour toutes les plateformes
 // POST { mode: "rewrite", action, text, platform } → texte réécrit
