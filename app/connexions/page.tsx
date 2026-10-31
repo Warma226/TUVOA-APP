@@ -129,6 +129,18 @@ export default function Connexions() {
             ) : null}
           </article>
         ))}
+        <button
+          type="button"
+          className="btn ghost"
+          style={{ marginTop: 8 }}
+          onClick={async () => {
+            await fetch("/api/logout", { method: "POST" }).catch(() => undefined);
+            window.location.href = "/acces";
+          }}
+        >
+          <Icon name="sortie" size={18} />
+          Se déconnecter
+        </button>
       </main>
       <BottomNav />
     </>

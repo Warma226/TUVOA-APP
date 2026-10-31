@@ -122,10 +122,10 @@ input[type="range"] { width: 100%; accent-color: var(--bleu); height: 24px; }
 .switch span { display: block; width: 26px; height: 26px; border-radius: 50%; background: var(--blanc); }
 
 label.field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
-input[type="text"], input[type="url"], input[type="datetime-local"], input[type="date"], input[type="time"], textarea, select {
+input[type="text"], input[type="password"], input[type="url"], input[type="datetime-local"], input[type="date"], input[type="time"], textarea, select {
   width: 100%; border: 1px solid var(--gris-3); border-radius: 12px; padding: 12px; font-size: 15px; font-weight: 400; background: var(--blanc);
 }
-input[type="text"], input[type="url"], input[type="datetime-local"], input[type="date"], input[type="time"], select { height: 48px; }
+input[type="text"], input[type="password"], input[type="url"], input[type="datetime-local"], input[type="date"], input[type="time"], select { height: 48px; }
 textarea { resize: vertical; line-height: 1.55; }
 input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid var(--bleu); outline-offset: 2px; }
 
@@ -187,3 +187,35 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 details summary { list-style-position: inside; }
 .grid4 { display: grid; gap: 8px; }
 .no-visual { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 5; background: var(--gris-2); color: var(--texte-3); font-size: 14px; font-weight: 600; text-decoration: none; }
+
+/* ─── Écran de connexion ─────────────────────────────────────────── */
+.app:has(.login) { max-width: none; }
+.login { min-height: 100dvh; display: grid; grid-template-columns: 1fr; background: var(--blanc); }
+.login-brand { display: none; }
+.login-main { display: flex; align-items: center; justify-content: center; padding: 32px 24px calc(32px + env(safe-area-inset-bottom)); }
+.login-card { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 26px; }
+.login-logo-mobile { margin-bottom: 8px; }
+.login-kicker { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--bleu); }
+.login-pass { position: relative; display: block; }
+.login-pass input { padding-right: 52px; height: 52px !important; font-size: 16px; }
+.login-eye { position: absolute; right: 4px; top: 4px; width: 44px; height: 44px; border: 0; border-radius: 10px; background: none; color: var(--texte-2); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.login-eye:hover { color: var(--noir); background: var(--gris-1); }
+@media (min-width: 900px) {
+  .login { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .login-brand {
+    display: flex; flex-direction: column; justify-content: space-between; gap: 40px;
+    padding: 48px 56px; color: #ffffff;
+    background: radial-gradient(120% 90% at 85% 15%, #1f4fbf 0%, var(--bleu-nuit) 45%, #06173d 100%);
+  }
+  .login-brand-body { display: flex; flex-direction: column; gap: 28px; max-width: 460px; }
+  .login-headline { font-family: var(--font-archivo), var(--font-inter), sans-serif; font-weight: 800; font-size: 40px; line-height: 1.08; letter-spacing: -0.01em; }
+  .login-brand ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 18px; }
+  .login-brand li { display: flex; gap: 14px; align-items: flex-start; }
+  .login-brand li > span:last-child { display: flex; flex-direction: column; gap: 2px; font-size: 15px; line-height: 1.45; color: #d6e0ff; }
+  .login-brand li strong { color: #ffffff; font-size: 16px; }
+  .login-ico { width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .login-site { font-weight: 700; font-size: 15px; color: #9db8ff; }
+  .login-logo-mobile { display: none; }
+  .login-main { padding: 48px; }
+  .login-card h1 { font-size: 32px; }
+}
