@@ -1,5 +1,5 @@
 import type { PostStatus } from "./store";
-import type { Platform } from "./config";
+import type { Platform, TriggerFormat } from "./config";
 
 export const STATUS_LABEL: Record<PostStatus, string> = {
   brouillon: "Brouillon",
@@ -24,4 +24,10 @@ export const PLATFORM_LABEL: Record<Platform, string> = {
   linkedin: "LinkedIn",
   tiktok: "TikTok",
   wordpress: "WordPress",
+};
+
+export const FORMAT_LABEL: Record<TriggerFormat, string> = {
+  resume: "Résumé",
+  explication: "Explication",
+  "les-deux": "Résumé + explication",
 };

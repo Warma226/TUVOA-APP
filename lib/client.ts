@@ -3,7 +3,8 @@
 // Avec Supabase : tout passe par le serveur.
 // Sans Supabase (mode démo) : les posts et réglages sont gardés dans ce navigateur (localStorage),
 // car sur Vercel la mémoire du serveur n'est pas partagée entre les requêtes.
-import type { Post, Settings } from "./store";
+import type { Post } from "./store";
+import { mergeSettings, type Settings } from "./settings";
 import type { Platform } from "./config";
 
 export type PostWithVisuals = Post & { visuals: Record<string, string> };
@@ -66,12 +67,7 @@ export async function getInfo(): Promise<Info> {
   const info = await json<Info>(await fetch("/api/settings", { cache: "no-store" }));
   demoFlag = info.demo;
   if (info.demo) {
-    const local = readLocal<Partial<Settings>>(LS_SETTINGS, {});
-    info.settings = {
-      autopilot: local.autopilot ?? info.settings.autopilot,
-      triggersEnabled: { ...info.settings.triggersEnabled, ...(local.triggersEnabled ?? {}) },
-      sourcesEnabled: { ...info.settings.sourcesEnabled, ...(local.sourcesEnabled ?? {}) },
-    };
+    info.settings = mergeSettings(info.settings, readLocal<Partial<Settings>>(LS_SETTINGS, {}));
   }
   return info;
 }
@@ -83,12 +79,7 @@ async function isDemo(): Promise<boolean> {
 
 export async function saveSettings(patch: Partial<Settings>): Promise<void> {
   if (await isDemo()) {
-    const cur = readLocal<Partial<Settings>>(LS_SETTINGS, {});
-    writeLocal(LS_SETTINGS, {
-      autopilot: typeof patch.autopilot === "boolean" ? patch.autopilot : cur.autopilot,
-      triggersEnabled: { ...(cur.triggersEnabled ?? {}), ...(patch.triggersEnabled ?? {}) },
-      sourcesEnabled: { ...(cur.sourcesEnabled ?? {}), ...(patch.sourcesEnabled ?? {}) },
-    });
+    writeLocal(LS_SETTINGS, mergeSettings(readLocal<Partial<Settings>>(LS_SETTINGS, {}), patch));
     return;
   }
   await json(await fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) }));

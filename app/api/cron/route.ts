@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { fetchVeille, fetchArticleText } from "@/lib/veille";
 import { generatePost } from "@/lib/claude";
 import { publishPost } from "@/lib/publish";
-import { TRIGGERS, GUARDRAILS, RUBRIQUES } from "@/lib/config";
+import { GUARDRAILS, RUBRIQUES, TOPICS, allSources, allTriggers, isOn } from "@/lib/config";
 import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,9 @@ export async function GET(req: Request) {
 
   // ─── 1. Veille et déclencheurs ───────────────────────────────────
   if (process.env.ANTHROPIC_API_KEY) {
-    const { items, errors } = await fetchVeille(settings.sourcesEnabled, settings.triggersEnabled);
+    const triggers = allTriggers(settings.triggers).filter((t) => isOn(settings.triggersEnabled, t.id, t.enabledByDefault));
+    const sources = allSources(settings.customSources).filter((x) => isOn(settings.sourcesEnabled, x.id, x.enabledByDefault));
+    const { items, errors } = await fetchVeille(sources, triggers);
     errors.forEach((e) => log.push(e));
     const candidates = items.filter((it) => it.triggers.length > 0);
     const unseen = await filterUnseen(candidates.map((c) => c.url));
@@ -35,7 +37,7 @@ export async function GET(req: Request) {
 
     for (const item of candidates) {
       if (!unseen.has(item.url)) continue;
-      const trigger = TRIGGERS.find((t) => t.id === item.triggers[0]);
+      const trigger = triggers.find((t) => t.id === item.triggers[0]);
       if (!trigger || item.score < trigger.minScore) {
         seenNow.push(item.url);
         continue;
@@ -52,6 +54,7 @@ export async function GET(req: Request) {
           sourceUrl: item.url,
           articleTitle: item.title,
           articleText: articleText || item.summary,
+          categorie: TOPICS.find((t) => t.id === item.topics[0])?.label,
         });
         generated++;
 

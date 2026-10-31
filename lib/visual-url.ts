@@ -1,7 +1,7 @@
 // Construit les liens signés vers les visuels d'un post.
 import { signParams, appUrl } from "./sign";
 import type { Post } from "./store";
-import type { VisualFormat } from "./visual";
+import type { VisualFormat } from "./formats";
 
 export function visualUrl(post: Pick<Post, "rubrique" | "visual" | "source_name">, format: VisualFormat, absolute = false): string {
   const p = new URLSearchParams();
@@ -17,9 +17,4 @@ export function visualUrl(post: Pick<Post, "rubrique" | "visual" | "source_name"
   return `${absolute ? appUrl() : ""}/api/visuel?${p.toString()}`;
 }
 
-export function formatFor(platform: string, rubrique: string): VisualFormat {
-  if (platform === "tiktok") return "vertical";
-  if (platform === "wordpress") return "paysage";
-  if (platform === "linkedin" && rubrique === "actu") return "paysage";
-  return "portrait";
-}
+export { formatFor } from "./formats";
