@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/BottomNav";
 import { Icon } from "@/components/Icon";
+import { ImageField } from "@/components/ImageField";
 import { PLATFORMS, RUBRIQUES, TOPICS, type Platform } from "@/lib/config";
 import { PLATFORM_LABEL } from "@/lib/labels";
 import type { Post } from "@/lib/store";
@@ -305,14 +306,15 @@ function Editeur() {
         {current.rubrique !== "actu" ? (
           <section className="card" style={{ padding: "12px 14px" }} aria-labelledby="ton-visuel">
             <h2 id="ton-visuel" className="label">Ton visuel {RUBRIQUES.find((r) => r.id === current.rubrique)?.hashtag}</h2>
-            <label className="field" style={{ marginTop: 8 }}>
-              <span className="muted small" style={{ fontWeight: 400 }}>Lien de l'image que tu as créée (PNG ou JPG, format 4:5 conseillé).</span>
-              <input type="url" disabled={locked} placeholder="https://…/visuel.png" value={current.visual.image ?? ""} onChange={(e) => update({ ...current, visual: { ...current.visual, image: e.target.value.trim() || undefined } })} />
-            </label>
-            {current.visual.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={current.visual.image} alt="Ton visuel" style={{ width: 120, aspectRatio: "4 / 5", objectFit: "cover", borderRadius: 8, background: "var(--gris-1)", marginTop: 8 }} />
-            ) : null}
+            <div style={{ marginTop: 8 }}>
+              <ImageField
+                label="Image"
+                hint="Le visuel que tu as créé (PNG ou JPG, format 4:5 conseillé)."
+                disabled={locked}
+                value={current.visual.image ?? ""}
+                onChange={(url) => update({ ...current, visual: { ...current.visual, image: url || undefined } })}
+              />
+            </div>
           </section>
         ) : (
           <details className="card" style={{ padding: "12px 14px" }}>
@@ -326,11 +328,14 @@ function Editeur() {
                 Texte du visuel (1 ou 2 phrases)
                 <textarea rows={3} disabled={locked} value={current.visual.texte} onChange={(e) => update({ ...current, visual: { ...current.visual, texte: e.target.value } })} />
               </label>
-              <label className="field">
-                Photo de fond (lien)
-                <input type="url" disabled={locked} placeholder="https://…/photo.jpg" value={current.visual.photo ?? ""} onChange={(e) => update({ ...current, visual: { ...current.visual, photo: e.target.value.trim() || undefined } })} />
-                <span className="muted small" style={{ fontWeight: 400 }}>Image libre de droits ou fournie par la marque, crédit à citer dans le texte. Sans photo, le fond reste sombre.</span>
-              </label>
+              <ImageField
+                label="Photo de fond"
+                hint="Image libre de droits ou fournie par la marque, crédit à citer dans le texte. Sans photo, le fond reste sombre."
+                placeholder="https://…/photo.jpg"
+                disabled={locked}
+                value={current.visual.photo ?? ""}
+                onChange={(url) => update({ ...current, visual: { ...current.visual, photo: url || undefined } })}
+              />
             </div>
           </details>
         )}

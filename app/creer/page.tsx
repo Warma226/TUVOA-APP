@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/BottomNav";
 import { Icon } from "@/components/Icon";
+import { ImageField } from "@/components/ImageField";
 import { RUBRIQUES, PLATFORMS, type Platform, type RubriqueId } from "@/lib/config";
 import type { Generated } from "@/lib/claude";
 import type { Post } from "@/lib/store";
@@ -178,11 +179,7 @@ function Creer() {
         ) : null}
 
         {rubrique !== "actu" ? (
-          <label className="field">
-            Ton visuel (lien de l'image)
-            <input type="url" value={photo} onChange={(e) => setPhoto(e.target.value)} placeholder="https://…/visuel.png" />
-            <span className="muted small" style={{ fontWeight: 400 }}>Le visuel que tu as créé. Tu peux aussi l'ajouter plus tard dans l'éditeur.</span>
-          </label>
+          <ImageField label="Ton visuel" hint="Le visuel que tu as créé. Tu peux aussi l'ajouter plus tard dans l'éditeur." value={photo} onChange={setPhoto} />
         ) : null}
 
         <fieldset style={{ border: 0, margin: 0, padding: 0 }} className="stack">

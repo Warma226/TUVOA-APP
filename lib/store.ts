@@ -40,7 +40,7 @@ let client: SupabaseClient | null = null;
 export function isDemo() {
   return !(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
-function db(): SupabaseClient {
+export function db(): SupabaseClient {
   if (!client) {
     client = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_SERVICE_ROLE_KEY as string, {
       auth: { persistSession: false },
