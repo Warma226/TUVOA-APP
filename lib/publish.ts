@@ -1,7 +1,7 @@
 // Publication sur les canaux de TUVOA.
 import type { Platform } from "./config";
 import type { Post, PublishResult } from "./store";
-import { visualUrl, formatFor } from "./visual-url";
+import { imageFor } from "./visual-url";
 
 type Publisher = (post: Post) => Promise<Omit<PublishResult, "at">>;
 
@@ -26,11 +26,18 @@ export function connectionStatus(): Record<Platform, { configured: boolean; deta
   };
 }
 
-async function imageBytes(post: Post, platform: Platform): Promise<ArrayBuffer> {
-  const url = visualUrl(post, formatFor(platform, post.rubrique), true);
-  const res = await fetch(url);
+function imageUrl(post: Post, platform: Platform): string {
+  const url = imageFor(post, platform, true);
+  if (!url) throw new Error("Aucun visuel : ajoute le lien de ton visuel dans l'éditeur.");
+  return url;
+}
+
+async function imageBytes(post: Post, platform: Platform): Promise<{ bytes: ArrayBuffer; type: string; ext: string }> {
+  const res = await fetch(imageUrl(post, platform));
   if (!res.ok) throw new Error(`Visuel indisponible (${res.status})`);
-  return res.arrayBuffer();
+  const type = (res.headers.get("content-type") ?? "image/png").split(";")[0];
+  const ext = type.includes("jpeg") ? "jpg" : type.includes("webp") ? "webp" : "png";
+  return { bytes: await res.arrayBuffer(), type, ext };
 }
 
 function escapeHtml(t: string) {
@@ -41,11 +48,11 @@ const wordpress: Publisher = async (post) => {
   const base = (process.env.WP_URL ?? "").replace(/\/$/, "");
   const auth = "Basic " + Buffer.from(`${process.env.WP_USER}:${process.env.WP_APP_PASSWORD}`).toString("base64");
   // 1. Image à la une
-  const bytes = await imageBytes(post, "wordpress");
+  const img = await imageBytes(post, "wordpress");
   const media = await fetch(`${base}/wp-json/wp/v2/media`, {
     method: "POST",
-    headers: { Authorization: auth, "Content-Type": "image/png", "Content-Disposition": `attachment; filename="tuvoa-${post.id.slice(0, 8)}.png"` },
-    body: bytes,
+    headers: { Authorization: auth, "Content-Type": img.type, "Content-Disposition": `attachment; filename="tuvoa-${post.id.slice(0, 8)}.${img.ext}"` },
+    body: img.bytes,
   });
   if (!media.ok) throw new Error(`WordPress (image) ${media.status} : ${(await media.text()).slice(0, 200)}`);
   const mediaJson = (await media.json()) as { id: number };
@@ -67,7 +74,7 @@ const wordpress: Publisher = async (post) => {
 const facebook: Publisher = async (post) => {
   const version = process.env.FB_GRAPH_VERSION || "v21.0";
   const body = new URLSearchParams({
-    url: visualUrl(post, formatFor("facebook", post.rubrique), true),
+    url: imageUrl(post, "facebook"),
     caption: post.texts.facebook,
     access_token: process.env.FB_PAGE_TOKEN ?? "",
   });
@@ -94,7 +101,7 @@ const linkedin: Publisher = async (post) => {
   if (!init.ok) throw new Error(`LinkedIn (image) ${init.status} : ${(await init.text()).slice(0, 200)}`);
   const { value } = (await init.json()) as { value: { uploadUrl: string; image: string } };
   // 2. Envoie l'image
-  const up = await fetch(value.uploadUrl, { method: "PUT", headers: { Authorization: headers.Authorization }, body: await imageBytes(post, "linkedin") });
+  const up = await fetch(value.uploadUrl, { method: "PUT", headers: { Authorization: headers.Authorization }, body: (await imageBytes(post, "linkedin")).bytes });
   if (!up.ok) throw new Error(`LinkedIn (envoi image) ${up.status}`);
   // 3. Crée le post
   const res = await fetch("https://api.linkedin.com/rest/posts", {

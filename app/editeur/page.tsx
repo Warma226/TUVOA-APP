@@ -21,12 +21,6 @@ const ACTIONS: { id: string; label: string }[] = [
   { id: "traduire", label: "Traduire" },
 ];
 
-const VISUEL_LABELS: Record<Post["rubrique"], [string, string]> = {
-  actu: ["Catégorie (bandeau bleu)", "Texte du visuel (1 ou 2 phrases)"],
-  cyberbase: ["Notion (titre)", "Définition (sépare les paragraphes par une ligne vide)"],
-  portrait: ["Nom de l'expert", "Spécialité"],
-};
-
 const limitOf = (p: Platform) => PLATFORMS.find((x) => x.id === p)?.limit ?? 3000;
 
 // Hashtags proposés à partir de la rubrique, des thèmes détectés et des produits cités.
@@ -308,42 +302,38 @@ function Editeur() {
           </section>
         ) : null}
 
-        <details className="card" style={{ padding: "12px 14px" }}>
-          <summary className="label" style={{ cursor: "pointer" }}>Visuel {RUBRIQUES.find((r) => r.id === current.rubrique)?.hashtag}</summary>
-          <div className="stack" style={{ marginTop: 12 }}>
-            <label className="field">
-              {VISUEL_LABELS[current.rubrique][0]}
-              <input
-                type="text"
-                disabled={locked}
-                value={current.rubrique === "portrait" ? current.visual.nom ?? current.visual.titre : current.visual.titre}
-                onChange={(e) =>
-                  update({ ...current, visual: current.rubrique === "portrait" ? { ...current.visual, nom: e.target.value, titre: e.target.value } : { ...current.visual, titre: e.target.value } })
-                }
-              />
+        {current.rubrique !== "actu" ? (
+          <section className="card" style={{ padding: "12px 14px" }} aria-labelledby="ton-visuel">
+            <h2 id="ton-visuel" className="label">Ton visuel {RUBRIQUES.find((r) => r.id === current.rubrique)?.hashtag}</h2>
+            <label className="field" style={{ marginTop: 8 }}>
+              <span className="muted small" style={{ fontWeight: 400 }}>Lien de l'image que tu as créée (PNG ou JPG, format 4:5 conseillé).</span>
+              <input type="url" disabled={locked} placeholder="https://…/visuel.png" value={current.visual.image ?? ""} onChange={(e) => update({ ...current, visual: { ...current.visual, image: e.target.value.trim() || undefined } })} />
             </label>
-            <label className="field">
-              {VISUEL_LABELS[current.rubrique][1]}
-              <textarea
-                rows={current.rubrique === "cyberbase" ? 6 : 3}
-                disabled={locked}
-                value={current.rubrique === "portrait" ? current.visual.specialite ?? current.visual.texte : current.visual.texte}
-                onChange={(e) =>
-                  update({ ...current, visual: current.rubrique === "portrait" ? { ...current.visual, specialite: e.target.value, texte: e.target.value } : { ...current.visual, texte: e.target.value } })
-                }
-              />
-            </label>
-            {current.rubrique !== "cyberbase" ? (
-              <label className="field">
-                {current.rubrique === "portrait" ? "Photo de l'expert (lien)" : "Photo de fond (lien)"}
-                <input type="url" disabled={locked} placeholder="https://…/photo.jpg" value={current.visual.photo ?? ""} onChange={(e) => update({ ...current, visual: { ...current.visual, photo: e.target.value || undefined } })} />
-                <span className="muted small" style={{ fontWeight: 400 }}>
-                  {current.rubrique === "portrait" ? "Photo fournie par la personne, avec son accord." : "Image libre de droits ou fournie par la marque, crédit à citer dans le texte. Sans photo, le fond reste sombre."}
-                </span>
-              </label>
+            {current.visual.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={current.visual.image} alt="Ton visuel" style={{ width: 120, aspectRatio: "4 / 5", objectFit: "cover", borderRadius: 8, background: "var(--gris-1)", marginTop: 8 }} />
             ) : null}
-          </div>
-        </details>
+          </section>
+        ) : (
+          <details className="card" style={{ padding: "12px 14px" }}>
+            <summary className="label" style={{ cursor: "pointer" }}>Visuel #ActuTech</summary>
+            <div className="stack" style={{ marginTop: 12 }}>
+              <label className="field">
+                Catégorie (bandeau bleu)
+                <input type="text" disabled={locked} value={current.visual.titre} onChange={(e) => update({ ...current, visual: { ...current.visual, titre: e.target.value } })} />
+              </label>
+              <label className="field">
+                Texte du visuel (1 ou 2 phrases)
+                <textarea rows={3} disabled={locked} value={current.visual.texte} onChange={(e) => update({ ...current, visual: { ...current.visual, texte: e.target.value } })} />
+              </label>
+              <label className="field">
+                Photo de fond (lien)
+                <input type="url" disabled={locked} placeholder="https://…/photo.jpg" value={current.visual.photo ?? ""} onChange={(e) => update({ ...current, visual: { ...current.visual, photo: e.target.value.trim() || undefined } })} />
+                <span className="muted small" style={{ fontWeight: 400 }}>Image libre de droits ou fournie par la marque, crédit à citer dans le texte. Sans photo, le fond reste sombre.</span>
+              </label>
+            </div>
+          </details>
+        )}
 
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
       </main>

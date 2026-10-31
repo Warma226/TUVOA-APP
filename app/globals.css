@@ -186,3 +186,4 @@ input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visib
 .tag.bleu[aria-pressed="true"] { background: var(--bleu); color: var(--blanc); }
 details summary { list-style-position: inside; }
 .grid4 { display: grid; gap: 8px; }
+.no-visual { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 5; background: var(--gris-2); color: var(--texte-3); font-size: 14px; font-weight: 600; text-decoration: none; }

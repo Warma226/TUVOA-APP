@@ -21,19 +21,25 @@ export default function Rubriques() {
     <>
       <TopBar title="Rubriques" back="/creer" />
       <main className="page sub" style={{ paddingTop: 4 }}>
-        <p className="muted">Chaque rubrique a son gabarit, son rythme et ses règles. L'IA remplit le gabarit, tu valides.</p>
+        <p className="muted">Chaque rubrique a son rythme et ses règles. L'Actualité a un visuel généré ; pour #CyberBase et #Portrait, tu ajoutes ton propre visuel.</p>
         {RUBRIQUES.map((r) => {
           const ex = EXEMPLES[r.id];
           const src = visualUrl({ rubrique: r.id, visual: { titre: ex.titre, texte: ex.texte, nom: ex.nom, specialite: ex.specialite }, source_name: ex.source ?? null }, "portrait");
           return (
             <Link key={r.id} href={`/creer?rubrique=${r.id}`} className="card link" style={{ flexDirection: "row", gap: 14, padding: 12 }} aria-label={`Créer un post ${r.hashtag}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" loading="lazy" style={{ width: 112, aspectRatio: "4 / 5", objectFit: "cover", borderRadius: 10, background: "var(--gris-1)", flexShrink: 0 }} />
+              {r.id === "actu" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={src} alt="" loading="lazy" style={{ width: 112, aspectRatio: "4 / 5", objectFit: "cover", borderRadius: 10, background: "var(--gris-1)", flexShrink: 0 }} />
+              ) : (
+                <span aria-hidden="true" style={{ width: 112, aspectRatio: "4 / 5", borderRadius: 10, border: "1px dashed var(--gris-3)", background: "var(--gris-1)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: 12, fontWeight: 600, color: "var(--texte-2)", padding: 8 }}>
+                  Ton visuel
+                </span>
+              )}
               <span className="stack" style={{ gap: 6, minWidth: 0, paddingTop: 4 }}>
                 <span style={{ fontFamily: "var(--font-archivo)", fontWeight: 800, fontSize: 17 }}>{r.id === "actu" ? r.label : r.hashtag}</span>
                 <span className="small" style={{ fontSize: 13, color: "var(--texte-3)", lineHeight: 1.45 }}>{r.description}</span>
                 <span className="wrap">
-                  <span className="badge">Format 4:5</span>
+                  <span className="badge">{r.id === "actu" ? "Visuel généré" : "Ton visuel"}</span>
                   {r.heure !== undefined ? <span className="badge bleu">Chaque jour à {r.heure} h</span> : null}
                   {r.alwaysManual ? <span className="badge vert">Toujours manuel</span> : <span className="badge bleu">Suit le mode général</span>}
                   {r.id === "portrait" ? <span className="badge ambre">Accord de la personne</span> : null}

@@ -24,7 +24,8 @@ export type Post = {
     wp_body: string;
     commun?: string; // texte de base de l'éditeur (onglet « Commun »)
   };
-  visual: { titre: string; texte: string; nom?: string; specialite?: string; photo?: string };
+  // image : visuel préparé par toi (lien), utilisé pour #CyberBase et #Portrait
+  visual: { titre: string; texte: string; nom?: string; specialite?: string; photo?: string; image?: string };
   platforms: Platform[];
   status: PostStatus;
   scheduled_at: string | null;

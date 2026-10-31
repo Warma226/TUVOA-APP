@@ -117,7 +117,7 @@ function Creer() {
         texte: rubrique === "portrait" ? specialite : gen?.visuel_texte || "",
         nom: rubrique === "portrait" ? nom : undefined,
         specialite: rubrique === "portrait" ? specialite : undefined,
-        photo: rubrique === "portrait" && photo ? photo : undefined,
+        image: rubrique !== "actu" && photo.trim() ? photo.trim() : undefined,
       },
     };
     try {
@@ -169,13 +169,20 @@ function Creer() {
           <div className="stack">
             <label className="field">Nom de l'expert<input type="text" value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Prénom Nom" /></label>
             <label className="field">Spécialité<input type="text" value={specialite} onChange={(e) => setSpecialite(e.target.value)} placeholder="Expert en investigation numérique et en IA" /></label>
-            <label className="field">Lien de la photo (fournie par la personne)<input type="url" value={photo} onChange={(e) => setPhoto(e.target.value)} placeholder="https://…/photo.jpg" /></label>
             <label className="field">Infos fournies par la personne<textarea rows={4} value={infos} onChange={(e) => setInfos(e.target.value)} placeholder="Parcours, projets, réalisations…" /></label>
             <button type="button" role="checkbox" aria-checked={consent} className="option" onClick={() => setConsent(!consent)}>
               <span style={{ fontWeight: 600 }}>{consent ? "☑" : "☐"} La personne a donné son accord</span>
               <span className="muted small">Pour la photo, les infos et la publication. Elle relira le texte avant sa sortie.</span>
             </button>
           </div>
+        ) : null}
+
+        {rubrique !== "actu" ? (
+          <label className="field">
+            Ton visuel (lien de l'image)
+            <input type="url" value={photo} onChange={(e) => setPhoto(e.target.value)} placeholder="https://…/visuel.png" />
+            <span className="muted small" style={{ fontWeight: 400 }}>Le visuel que tu as créé. Tu peux aussi l'ajouter plus tard dans l'éditeur.</span>
+          </label>
         ) : null}
 
         <fieldset style={{ border: 0, margin: 0, padding: 0 }} className="stack">
