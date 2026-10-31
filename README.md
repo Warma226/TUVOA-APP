@@ -35,9 +35,9 @@ Sans Supabase, l'application tourne en **mode démo** : les posts disparaissent 
 
 | Variable | Valeur |
 |---|---|
-| `APP_PASSWORD` | Le mot de passe de l'app (identifiant : `tuvoa`). **Obligatoire.** |
-| `APP_SECRET` | Une longue suite de caractères au hasard. |
-| `APP_URL` | L'adresse donnée par Vercel, sans `/` final. |
+| `APP_PASSWORD` | Le mot de passe de l'app (identifiant : `tuvoa`). **Seule variable obligatoire pour ouvrir l'app.** |
+| `APP_SECRET` | Facultatif : une longue suite de caractères au hasard. Sinon, le mot de passe sert de clé. |
+| `APP_URL` | Facultatif sur Vercel (détectée automatiquement). À renseigner si tu utilises ton propre domaine. |
 | `CRON_SECRET` | Une autre longue suite de caractères au hasard. |
 | `ANTHROPIC_API_KEY` | Ta clé API, créée sur console.anthropic.com. |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Les valeurs notées à l'étape 1. |
