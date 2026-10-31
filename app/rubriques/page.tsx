@@ -19,9 +19,10 @@ const EXEMPLES: Record<RubriqueId, { titre: string; texte: string; nom?: string;
 export default function Rubriques() {
   return (
     <>
-      <TopBar title="Rubriques" back="/creer" />
-      <main className="page sub" style={{ paddingTop: 4 }}>
+      <TopBar title="Rubriques" back="/creer" wide />
+      <main className="page sub wide" style={{ paddingTop: 4 }}>
         <p className="muted">Chaque rubrique a son rythme et ses règles. L'Actualité a un visuel généré ; pour #CyberBase et #Portrait, tu ajoutes ton propre visuel.</p>
+        <div className="cards">
         {RUBRIQUES.map((r) => {
           const ex = EXEMPLES[r.id];
           const src = visualUrl({ rubrique: r.id, visual: { titre: ex.titre, texte: ex.texte, nom: ex.nom, specialite: ex.specialite }, source_name: ex.source ?? null }, "portrait");
@@ -48,6 +49,7 @@ export default function Rubriques() {
             </Link>
           );
         })}
+        </div>
       </main>
     </>
   );

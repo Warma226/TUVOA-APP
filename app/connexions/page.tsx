@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BottomNav } from "@/components/BottomNav";
 import { Icon } from "@/components/Icon";
 import { PLATFORMS, type Platform } from "@/lib/config";
 import { getInfo, type Info } from "@/lib/client";
@@ -142,7 +141,6 @@ export default function Connexions() {
           Se déconnecter
         </button>
       </main>
-      <BottomNav />
     </>
   );
 }

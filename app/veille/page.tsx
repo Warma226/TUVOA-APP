@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { BottomNav } from "@/components/BottomNav";
 import { Icon } from "@/components/Icon";
 import { TOPICS, allSources, allTriggers, isOn, type Trigger } from "@/lib/config";
 import type { VeilleItem } from "@/lib/veille";
@@ -111,6 +110,7 @@ export default function Veille() {
         {items === null ? <p className="muted">Lecture des sources…</p> : null}
         {items && shown.length === 0 ? <p className="muted">Rien pour ce thème pour l'instant.</p> : null}
 
+        <div className="cards">
         {shown.map((it) => {
           const params = new URLSearchParams({ src: it.url, source: it.sourceName, titre: it.title, resume: it.summary.slice(0, 400) });
           const theme = TOPICS.find((t) => t.id === it.topics[0])?.label;
@@ -148,8 +148,8 @@ export default function Veille() {
             </article>
           );
         })}
+        </div>
       </main>
-      <BottomNav />
     </>
   );
 }

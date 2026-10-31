@@ -44,13 +44,14 @@ export default function Declencheurs() {
       <TopBar
         title="Déclencheurs"
         back="/veille"
+        wide
         right={
           <Link href="/declencheurs/modifier" className="icon-btn primary" aria-label="Nouveau déclencheur">
             <Icon name="plus" size={22} stroke={2.2} />
           </Link>
         }
       />
-      <main className="page sub" style={{ paddingTop: 4 }}>
+      <main className="page sub wide" style={{ paddingTop: 4 }}>
         <p className="muted">Quand une actu correspond, TUVOA récupère l'article, le résume ou l'explique, prépare le visuel et le post.</p>
 
         {demo ? (
@@ -92,6 +93,7 @@ export default function Declencheurs() {
 
         {triggers.length === 0 ? <p className="muted">Aucun déclencheur. Ajoute-en un avec le bouton +.</p> : null}
 
+        <div className="cards">
         {triggers.map((t) => {
           const on = isOn(s?.triggersEnabled, t.id, t.enabledByDefault);
           const isAuto = auto && t.mode === "general";
@@ -117,8 +119,9 @@ export default function Declencheurs() {
             </article>
           );
         })}
+        </div>
 
-        <section className="card" style={{ background: "var(--gris-1)", border: 0 }}>
+        <section className="card" style={{ background: "var(--surface-2)", border: 0 }}>
           <h3>Garde-fous de l'autopilote</h3>
           <ul className="small" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7, color: "var(--texte-3)" }}>
             <li>Au moins {GUARDRAILS.minSourcesForAuto} sources différentes sur le même sujet.</li>

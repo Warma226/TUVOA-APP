@@ -59,8 +59,8 @@ export default function Sources() {
 
   return (
     <>
-      <TopBar title="Sources" back="/veille" />
-      <main className="page sub" style={{ paddingTop: 8 }}>
+      <TopBar title="Sources" back="/veille" wide />
+      <main className="page sub wide" style={{ paddingTop: 8 }}>
         <form className="row" onSubmit={add} style={{ alignItems: "stretch" }}>
           <label className="sr-only" htmlFor="src-url">Adresse du site à suivre</label>
           <input id="src-url" type="url" inputMode="url" placeholder="https://site-tech.com" value={url} onChange={(e) => setUrl(e.target.value)} style={{ flex: 1, minWidth: 0 }} />
@@ -73,6 +73,7 @@ export default function Sources() {
         {ok ? <p className="notice" role="status">{ok}</p> : null}
 
         {s === null && !error ? <p className="muted">Chargement…</p> : null}
+        <div className="cards">
         {s
           ? allSources(s.customSources).map((src) => {
               const on = Boolean(src.feed) && isOn(s.sourcesEnabled, src.id, src.enabledByDefault);
@@ -102,6 +103,7 @@ export default function Sources() {
               );
             })
           : null}
+        </div>
       </main>
     </>
   );
