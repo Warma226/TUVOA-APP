@@ -43,7 +43,6 @@ export async function GET(req: Request) {
         continue;
       }
       if (generated >= GUARDRAILS.maxGenerationsPerRun) break;
-      seenNow.push(item.url);
       try {
         const articleText = await fetchArticleText(item.url);
         const g = await generatePost({
@@ -57,6 +56,8 @@ export async function GET(req: Request) {
           categorie: TOPICS.find((t) => t.id === item.topics[0])?.label,
         });
         generated++;
+        // Marquée comme traitée seulement si l'IA a répondu : en cas d'échec, l'actu sera retentée au passage suivant.
+        seenNow.push(item.url);
 
         const rubrique = RUBRIQUES.find((r) => r.id === "actu");
         const canAuto =
