@@ -42,7 +42,16 @@ export default function Connexions() {
   }, []);
 
   const services = [
-    { id: "ia", nom: "IA (rédaction)", ok: Boolean(info?.ai), detail: info?.ai ? "Active" : "Non configurée", help: ["Crée une clé sur console.anthropic.com.", "Dans Vercel : ANTHROPIC_API_KEY, puis redéploie."] },
+    {
+      id: "ia",
+      nom: "IA (rédaction)",
+      ok: Boolean(info?.ai),
+      detail: info?.ai ? (info.aiProvider === "gemini" ? "Active · Google Gemini (gratuit)" : "Active · Claude") : "Non configurée",
+      help: [
+        "Gratuit : crée une clé sur aistudio.google.com (Get API key), puis ajoute GEMINI_API_KEY dans Vercel et redéploie.",
+        "Ou payant à l'usage : clé Claude sur platform.claude.com, à ajouter comme ANTHROPIC_API_KEY.",
+      ],
+    },
     {
       id: "db",
       nom: "Base de données",

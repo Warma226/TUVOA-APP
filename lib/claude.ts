@@ -28,9 +28,18 @@ export type GenerateInput = {
 
 export type RewriteAction = "raccourcir" | "reformuler" | "expliquer" | "ton" | "traduire";
 
-async function callClaude(system: string, user: string, maxTokens = 2500): Promise<string> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("Ajoute ANTHROPIC_API_KEY dans Vercel pour activer la rédaction par l'IA.");
+// Deux fournisseurs possibles : Claude (ANTHROPIC_API_KEY, payant à l'usage)
+// ou Google Gemini (GEMINI_API_KEY, offre gratuite avec quotas). Claude est utilisé s'il est configuré.
+export function aiProvider(): "claude" | "gemini" | null {
+  if (process.env.ANTHROPIC_API_KEY) return "claude";
+  if (process.env.GEMINI_API_KEY) return "gemini";
+  return null;
+}
+export function aiConfigured(): boolean {
+  return aiProvider() !== null;
+}
+
+async function callAnthropic(key: string, system: string, user: string, maxTokens: number): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -51,6 +60,37 @@ async function callClaude(system: string, user: string, maxTokens = 2500): Promi
   }
   const data = (await res.json()) as { content?: { type: string; text?: string }[] };
   return (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
+}
+
+async function callGemini(key: string, system: string, user: string, maxTokens: number): Promise<string> {
+  const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": key },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: system }] },
+      contents: [{ role: "user", parts: [{ text: user }] }],
+      // Marge large : les modèles Gemini récents réfléchissent avant de répondre et ces jetons comptent aussi.
+      generationConfig: { maxOutputTokens: Math.max(maxTokens * 4, 8192), temperature: 0.7 },
+    }),
+  });
+  if (res.status === 429) throw new Error("Quota gratuit de Gemini atteint pour le moment : réessaie dans une minute (ou demain si c'est le quota du jour).");
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Erreur de l'IA Gemini (${res.status}) : ${detail.slice(0, 300)}`);
+  }
+  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
+  const text = (data.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? "").join("");
+  if (!text.trim()) throw new Error("Gemini n'a pas renvoyé de texte. Réessaie.");
+  return text;
+}
+
+async function callClaude(system: string, user: string, maxTokens = 2500): Promise<string> {
+  const anthropic = process.env.ANTHROPIC_API_KEY;
+  if (anthropic) return callAnthropic(anthropic, system, user, maxTokens);
+  const gemini = process.env.GEMINI_API_KEY;
+  if (gemini) return callGemini(gemini, system, user, maxTokens);
+  throw new Error("Ajoute GEMINI_API_KEY (gratuit) ou ANTHROPIC_API_KEY dans Vercel pour activer la rédaction par l'IA.");
 }
 
 function extractJson<T>(text: string): T {
@@ -126,7 +166,7 @@ export async function rewrite(action: RewriteAction, text: string, platform: str
   return out.trim();
 }
 
-// Brouillon sans IA (quand ANTHROPIC_API_KEY n'est pas configurée) : structure prête à compléter,
+// Brouillon sans IA (quand aucune clé d'IA n'est configurée) : structure prête à compléter,
 // construite uniquement à partir du titre, de l'idée et de la source. Rien n'est recopié de l'article.
 export function draftWithoutAI(input: GenerateInput): Generated {
   const rub = RUBRIQUES.find((r) => r.id === input.rubrique) ?? RUBRIQUES[0];

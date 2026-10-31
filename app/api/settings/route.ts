@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSettings, saveSettings, mergeSettings, isDemo, type Settings } from "@/lib/store";
 import { connectionStatus } from "@/lib/publish";
+import { aiProvider } from "@/lib/claude";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,8 @@ export async function GET() {
   return NextResponse.json({
     settings,
     demo: isDemo(),
-    ai: Boolean(process.env.ANTHROPIC_API_KEY),
+    ai: aiProvider() !== null,
+    aiProvider: aiProvider(),
     connections: connectionStatus(),
   });
 }

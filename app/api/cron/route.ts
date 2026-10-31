@@ -2,7 +2,7 @@
 // 1. lit la veille et applique les déclencheurs ; 2. publie les posts planifiés arrivés à échéance.
 import { NextResponse } from "next/server";
 import { fetchVeille, fetchArticleText } from "@/lib/veille";
-import { generatePost } from "@/lib/claude";
+import { generatePost, aiConfigured } from "@/lib/claude";
 import { publishPost } from "@/lib/publish";
 import { GUARDRAILS, RUBRIQUES, TOPICS, allSources, allTriggers, isOn } from "@/lib/config";
 import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday } from "@/lib/store";
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   const settings = await getSettings();
 
   // ─── 1. Veille et déclencheurs ───────────────────────────────────
-  if (process.env.ANTHROPIC_API_KEY) {
+  if (aiConfigured()) {
     const triggers = allTriggers(settings.triggers).filter((t) => isOn(settings.triggersEnabled, t.id, t.enabledByDefault));
     const sources = allSources(settings.customSources).filter((x) => isOn(settings.sourcesEnabled, x.id, x.enabledByDefault));
     const { items, errors } = await fetchVeille(sources, triggers);
@@ -90,7 +90,7 @@ export async function GET(req: Request) {
     }
     await markSeen(seenNow);
   } else {
-    log.push("Veille automatique en pause : ANTHROPIC_API_KEY manquante.");
+    log.push("Veille automatique en pause : ajoute GEMINI_API_KEY (gratuit) ou ANTHROPIC_API_KEY dans Vercel.");
   }
 
   // ─── 2. Publication des posts arrivés à échéance ─────────────────

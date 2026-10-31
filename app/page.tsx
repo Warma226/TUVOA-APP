@@ -87,7 +87,7 @@ export default function Dashboard() {
 
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
         {info?.demo ? <p className="notice">Mode démo : tes posts sont gardés sur ce téléphone. Pour la veille automatique et les publications planifiées, branche Supabase (voir Connexions).</p> : null}
-        {info && !info.ai ? <p className="notice ambre">Rédaction par l'IA inactive : les brouillons sont préparés à partir de l'actu, à compléter à la main. Ajoute ANTHROPIC_API_KEY dans Vercel pour l'activer.</p> : null}
+        {info && !info.ai ? <p className="notice ambre">Rédaction par l'IA inactive : les brouillons sont préparés à partir de l'actu, à compléter à la main. Ajoute une clé gratuite Google Gemini (GEMINI_API_KEY) dans Vercel pour l'activer.</p> : null}
 
         <div className="grid3">
           <Stat value={count("planifie")} label="Planifiés" href="/calendrier?filtre=planifie" dark />
