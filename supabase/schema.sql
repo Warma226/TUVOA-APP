@@ -36,3 +36,7 @@ create table if not exists seen_items (
 alter table posts enable row level security;
 alter table settings enable row level security;
 alter table seen_items enable row level security;
+
+-- Images importées depuis l'app (tes visuels, photos de fond) : seau public « visuels ».
+-- L'app le crée aussi toute seule au premier envoi.
+insert into storage.buckets (id, name, public) values ('visuels', 'visuels', true) on conflict (id) do nothing;

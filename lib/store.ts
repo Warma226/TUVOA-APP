@@ -1,6 +1,6 @@
 // Accès aux données : Supabase si configuré, sinon mémoire (mode démo, réinitialisé au redémarrage).
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { SOURCES, TRIGGERS, type Platform, type RubriqueId } from "./config";
+import type { Platform, RubriqueId } from "./config";
 
 export type PostStatus = "brouillon" | "a_valider" | "planifie" | "publie" | "erreur" | "annule";
 
@@ -22,8 +22,10 @@ export type Post = {
     tiktok: string;
     wp_title: string;
     wp_body: string;
+    commun?: string; // texte de base de l'éditeur (onglet « Commun »)
   };
-  visual: { titre: string; texte: string; nom?: string; specialite?: string; photo?: string };
+  // image : visuel préparé par toi (lien), utilisé pour #CyberBase et #Portrait
+  visual: { titre: string; texte: string; nom?: string; specialite?: string; photo?: string; image?: string };
   platforms: Platform[];
   status: PostStatus;
   scheduled_at: string | null;
@@ -31,23 +33,14 @@ export type Post = {
   results: Partial<Record<Platform, PublishResult>>;
 };
 
-export type Settings = {
-  autopilot: boolean;
-  triggersEnabled: Record<string, boolean>;
-  sourcesEnabled: Record<string, boolean>;
-};
-
-export const DEFAULT_SETTINGS: Settings = {
-  autopilot: false,
-  triggersEnabled: Object.fromEntries(TRIGGERS.map((t) => [t.id, t.enabledByDefault])),
-  sourcesEnabled: Object.fromEntries(SOURCES.map((s) => [s.id, s.enabledByDefault])),
-};
+export { DEFAULT_SETTINGS, mergeSettings, type Settings } from "./settings";
+import { DEFAULT_SETTINGS, mergeSettings, type Settings } from "./settings";
 
 let client: SupabaseClient | null = null;
 export function isDemo() {
   return !(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
-function db(): SupabaseClient {
+export function db(): SupabaseClient {
   if (!client) {
     client = createClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_SERVICE_ROLE_KEY as string, {
       auth: { persistSession: false },
@@ -153,12 +146,7 @@ export async function getSettings(): Promise<Settings> {
   if (isDemo()) return mem().settings;
   const { data, error } = await db().from("settings").select("data").eq("id", 1).maybeSingle();
   if (error) throw new Error(error.message);
-  const stored = (data?.data ?? {}) as Partial<Settings>;
-  return {
-    autopilot: stored.autopilot ?? DEFAULT_SETTINGS.autopilot,
-    triggersEnabled: { ...DEFAULT_SETTINGS.triggersEnabled, ...(stored.triggersEnabled ?? {}) },
-    sourcesEnabled: { ...DEFAULT_SETTINGS.sourcesEnabled, ...(stored.sourcesEnabled ?? {}) },
-  };
+  return mergeSettings((data?.data ?? {}) as Partial<Settings>);
 }
 
 export async function saveSettings(s: Settings): Promise<Settings> {

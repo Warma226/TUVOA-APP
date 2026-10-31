@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listPosts, getPost, savePost, deletePost, emptyPost, isDemo, type Post } from "@/lib/store";
-import { visualUrl, formatFor } from "@/lib/visual-url";
+import { imageFor } from "@/lib/visual-url";
 import { publishPost } from "@/lib/publish";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const maxDuration = 60;
 
 function withVisuals(post: Post) {
   const visuals: Record<string, string> = {};
-  for (const p of ["facebook", "linkedin", "tiktok", "wordpress"]) visuals[p] = visualUrl(post, formatFor(p, post.rubrique));
+  for (const p of ["facebook", "linkedin", "tiktok", "wordpress"]) visuals[p] = imageFor(post, p);
   return { ...post, visuals };
 }
 

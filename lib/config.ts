@@ -10,9 +10,10 @@ export const PLATFORMS: { id: Platform; label: string; limit: number }[] = [
 ];
 
 export type RubriqueId = "actu" | "cyberbase" | "portrait";
-export const RUBRIQUES: { id: RubriqueId; label: string; hashtag: string; description: string; alwaysManual: boolean }[] = [
+// `heure` : rubrique publiée chaque jour à heure fixe (heure locale du téléphone).
+export const RUBRIQUES: { id: RubriqueId; label: string; hashtag: string; description: string; alwaysManual: boolean; heure?: number }[] = [
   { id: "actu", label: "Actualité tech", hashtag: "#ActuTech", description: "Les infos du moment, résumées et sourcées.", alwaysManual: false },
-  { id: "cyberbase", label: "CyberBase", hashtag: "#CyberBase", description: "Comprendre les notions basiques de la tech.", alwaysManual: false },
+  { id: "cyberbase", label: "CyberBase", hashtag: "#CyberBase", description: "Comprendre les notions basiques de la tech. Une notion chaque jour à 8 h.", alwaysManual: false, heure: 8 },
   { id: "portrait", label: "Portrait", hashtag: "#Portrait", description: "Les experts tech d'ici et d'ailleurs. Accord de la personne obligatoire.", alwaysManual: true },
 ];
 
@@ -93,6 +94,8 @@ export const TOPICS: { id: string; label: string; keywords: string[] }[] = [
 
 export type TriggerFormat = "resume" | "explication" | "les-deux";
 export type TriggerMode = "general" | "manuel";
+// Image jointe au post : seul le visuel TUVOA généré est branché pour l'instant.
+export type TriggerImage = "visuel" | "presse" | "banque";
 export type Trigger = {
   id: string;
   name: string;
@@ -102,6 +105,7 @@ export type Trigger = {
   format: TriggerFormat;
   platforms: Platform[];
   mode: TriggerMode; // "manuel" = toujours un aperçu, même en autopilote
+  image?: TriggerImage;
   enabledByDefault: boolean;
 };
 
@@ -151,6 +155,21 @@ export const TRIGGERS: Trigger[] = [
     enabledByDefault: false,
   },
 ];
+
+// Les déclencheurs modifiés dans l'app remplacent la liste par défaut ci-dessus.
+export function allTriggers(custom?: Trigger[] | null): Trigger[] {
+  return Array.isArray(custom) ? custom : TRIGGERS;
+}
+
+// Sources par défaut + sources ajoutées depuis l'app.
+export function allSources(custom?: Source[] | null): Source[] {
+  const extra = (custom ?? []).filter((c) => !SOURCES.some((s) => s.id === c.id));
+  return [...SOURCES, ...extra];
+}
+
+export function isOn(map: Record<string, boolean> | undefined, id: string, fallback: boolean): boolean {
+  return typeof map?.[id] === "boolean" ? (map[id] as boolean) : fallback;
+}
 
 // Garde-fous de l'autopilote
 export const GUARDRAILS = {

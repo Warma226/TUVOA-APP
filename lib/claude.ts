@@ -21,6 +21,7 @@ export type GenerateInput = {
   articleTitle?: string;
   articleText?: string;
   articleSummary?: string;
+  categorie?: string; // thème détecté par la veille (bandeau du visuel #ActuTech)
   // Pour les portraits : infos fournies et validées par la personne
   portrait?: { nom: string; specialite: string; infos: string };
 };
@@ -62,7 +63,7 @@ function extractJson<T>(text: string): T {
 export async function generatePost(input: GenerateInput): Promise<Generated> {
   const rub = RUBRIQUES.find((r) => r.id === input.rubrique) ?? RUBRIQUES[0];
   const consignesRubrique: Record<RubriqueId, string> = {
-    actu: "Rubrique #ActuTech : résume l'actualité, dis pourquoi c'est important pour le lecteur, cite la source.",
+    actu: "Rubrique #ActuTech : résume l'actualité, dis pourquoi c'est important pour le lecteur, cite la source. visuel_titre = la catégorie en 1 ou 2 mots (Cybersécurité, IA, Smartphones, Startups, Télécoms, Numérique…), visuel_texte = l'info en 1 ou 2 phrases (35 mots maximum).",
     cyberbase:
       "Rubrique #CyberBase (comprendre les notions basiques de la tech) : définis la notion en 2 courts paragraphes, simples et concrets, avec un exemple du quotidien. visuel_titre = le nom de la notion (2 à 4 mots), visuel_texte = la définition (2 paragraphes, 60 mots maximum au total).",
     portrait:
@@ -79,12 +80,13 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   parts.push(`Rubrique : ${rub.label} (${rub.hashtag}).`, consignesRubrique[rub.id], format);
   if (input.idea) parts.push(`Idée ou angle donné par l'éditeur : ${input.idea}`);
   if (input.articleTitle) parts.push(`Titre de l'article source : ${input.articleTitle}`);
+  if (input.categorie) parts.push(`Thème détecté par la veille : ${input.categorie}`);
   if (input.sourceName) parts.push(`Source à citer : ${input.sourceName}${input.sourceUrl ? ` (${input.sourceUrl})` : ""}`);
   if (input.articleText) parts.push(`Texte de l'article (pour comprendre, ne jamais recopier) :\n"""\n${input.articleText.slice(0, 10000)}\n"""`);
   if (input.portrait) parts.push(`Infos fournies par l'expert : nom ${input.portrait.nom}, spécialité ${input.portrait.specialite}. ${input.portrait.infos}`);
   parts.push(`Réponds uniquement avec un objet JSON valide, sans texte autour, de la forme :
 {
-  "variantes": ["accroche 1", "accroche 2", "accroche 3"],
+  "variantes": ["accroche directe", "accroche pédagogique", "accroche sous forme de question"],
   "facebook": "post Facebook complet (ton direct, 2 à 5 phrases, 2 à 4 hashtags dont ${rub.hashtag}, source citée)",
   "linkedin": "post LinkedIn complet (ton professionnel, phrases aérées, 3 hashtags, source citée)",
   "tiktok": "légende TikTok de 150 caractères maximum",
@@ -134,7 +136,7 @@ export function draftWithoutAI(input: GenerateInput): Generated {
     const { nom, specialite, infos } = input.portrait;
     const base = `${nom}, ${specialite}.${infos ? `\n\n${infos}` : ""}`;
     return {
-      variantes: [`Portrait : ${nom}`, `Qui est ${nom} ?`, `${nom}, ${specialite}`],
+      variantes: [`Portrait : ${nom}`, `${nom}, ${specialite}`, `Qui est ${nom} ?`],
       facebook: `${base}\n\n#Portrait #ExpertsTech #TUVOA`,
       linkedin: `Portrait d'expert : ${base}\n\n#Portrait #ExpertsTech #TUVOA`,
       tiktok: `Portrait : ${nom}, ${specialite}`.slice(0, 150),
@@ -148,7 +150,7 @@ export function draftWithoutAI(input: GenerateInput): Generated {
     const notion = (input.idea || "Notion").trim();
     const a_completer = "[Définition en 2 phrases simples, avec un exemple du quotidien.]";
     return {
-      variantes: [`C'est quoi, ${notion} ?`, `${notion} : la notion à connaître`, `${notion}, expliqué simplement`],
+      variantes: [`${notion} : la notion à connaître`, `${notion}, expliqué simplement`, `C'est quoi, ${notion} ?`],
       facebook: `#CyberBase · ${notion}\n\n${a_completer}\n\nTu vois ? #CyberBase #Tech #TUVOA`,
       linkedin: `#CyberBase · ${notion}\n\n${a_completer}\n\n#CyberBase #Cybersécurité #TUVOA`,
       tiktok: `${notion}, expliqué en 30 secondes #CyberBase`.slice(0, 150),
@@ -162,13 +164,13 @@ export function draftWithoutAI(input: GenerateInput): Generated {
   const angle = input.idea && input.articleTitle ? `\n\n${input.idea}` : "";
   const a_completer = "[Ce que ça change pour toi, en 2 phrases.]";
   return {
-    variantes: [titre, `Ce qu'il faut retenir : ${titre}`, `${titre}, tu vois ?`],
+    variantes: [titre, `Ce qu'il faut retenir : ${titre}`, `${titre} : qu'est-ce que ça change pour toi ?`],
     facebook: `${titre}${angle}\n\n${a_completer}\n\n${source}${lien}\n\n${rub.hashtag} #Tech #TUVOA`.trim(),
     linkedin: `${titre}${angle}\n\n${a_completer}\n\n${source}${lien}\n\n${rub.hashtag} #Tech #Innovation`.trim(),
     tiktok: `${titre} ${rub.hashtag}`.slice(0, 150),
     wp_title: titre,
     wp_body: `<p>${a_completer}</p>`,
-    visuel_titre: titre,
-    visuel_texte: "",
+    visuel_titre: input.categorie || "Actu tech",
+    visuel_texte: titre,
   };
 }

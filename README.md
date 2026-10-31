@@ -17,6 +17,8 @@ Tout se configure depuis un téléphone, dans le navigateur.
 
 **Garde-fous de l'autopilote** (modifiables dans `lib/config.ts`) : 2 sources minimum sur le même sujet, 10 minutes pour annuler, 6 publications automatiques par jour au maximum, jamais d'automatique pour les sujets sensibles (décès, politique, justice…), portraits toujours en manuel. Les textes sont toujours reformulés et sourcés.
 
+**Rubriques et visuels** : seule l'Actualité (#ActuTech) a un visuel généré par l'app : photo plein cadre, bandeau de catégorie bleu, texte de l'actu. Pour #CyberBase (une notion chaque jour à 8 h : l'aperçu propose le prochain jour libre et le calendrier signale les jours vides) et #Portrait, tu crées toi-même le visuel et tu colles son lien dans l'éditeur.
+
 **Charte** : bleu `#2563EB`, orange `#E94A06`, police Archivo (licence libre) pour les visuels. Le logo officiel reste en Coolvetica : pour l'utiliser sur les visuels, mets une image PNG de ton logo en ligne et indique son adresse dans `LOGO_URL`.
 
 ## Mise en ligne (environ 30 minutes, depuis le téléphone)

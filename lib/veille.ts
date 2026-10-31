@@ -1,6 +1,6 @@
 // Veille : lecture des flux RSS, filtrage selon la ligne éditoriale, regroupement des doublons.
 import Parser from "rss-parser";
-import { SOURCES, TOPICS, TRIGGERS, GUARDRAILS, type Trigger } from "./config";
+import { TOPICS, GUARDRAILS, type Source, type Trigger } from "./config";
 
 export type VeilleItem = {
   id: string;
@@ -59,8 +59,9 @@ function matchTrigger(t: Trigger, item: { sourceId: string; text: string }): boo
   return t.keywords.some((k) => item.text.includes(k.toLowerCase()));
 }
 
-export async function fetchVeille(sourcesEnabled: Record<string, boolean>, triggersEnabled?: Record<string, boolean>): Promise<{ items: VeilleItem[]; errors: string[] }> {
-  const active = SOURCES.filter((s) => s.feed && sourcesEnabled[s.id]);
+// `sources` et `triggers` : uniquement ceux qui sont activés.
+export async function fetchVeille(sources: Source[], triggers: Trigger[]): Promise<{ items: VeilleItem[]; errors: string[] }> {
+  const active = sources.filter((s) => s.feed);
   const errors: string[] = [];
   const raw: Omit<VeilleItem, "sameStoryCount">[] = [];
 
@@ -79,10 +80,10 @@ export async function fetchVeille(sourcesEnabled: Record<string, boolean>, trigg
       const text = ` ${title} ${summary} `.toLowerCase();
       if (s.filterKeywords && !s.filterKeywords.some((k) => text.includes(k))) continue;
       const topics = TOPICS.filter((t) => t.keywords.some((k) => text.includes(k))).map((t) => t.id);
-      const triggers = TRIGGERS.filter((t) => (triggersEnabled ? triggersEnabled[t.id] : true) && matchTrigger(t, { sourceId: s.id, text })).map((t) => t.id);
+      const matched = triggers.filter((t) => matchTrigger(t, { sourceId: s.id, text })).map((t) => t.id);
       const blocked = GUARDRAILS.blockedKeywords.some((k) => text.includes(k));
       const ageH = entry.isoDate ? (Date.now() - new Date(entry.isoDate).getTime()) / 3.6e6 : 24;
-      let score = 40 + topics.length * 15 + triggers.length * 20 - Math.min(30, Math.max(0, ageH - 6));
+      let score = 40 + topics.length * 15 + matched.length * 20 - Math.min(30, Math.max(0, ageH - 6));
       score = Math.max(0, Math.min(100, Math.round(score)));
       raw.push({
         id: url,
@@ -95,7 +96,7 @@ export async function fetchVeille(sourcesEnabled: Record<string, boolean>, trigg
         publishedAt: entry.isoDate ?? null,
         topics,
         score,
-        triggers,
+        triggers: matched,
         blocked,
       });
     }
@@ -131,4 +132,57 @@ export async function fetchArticleText(url: string): Promise<string> {
   } catch {
     return "";
   }
+}
+
+// Trouve le flux RSS d'un site à partir de son adresse (page d'accueil ou flux direct).
+export async function discoverSource(input: string): Promise<Source> {
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(input.trim()) ? input.trim() : `https://${input.trim()}`);
+  } catch {
+    throw new Error("Adresse invalide.");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Adresse invalide.");
+  const domain = url.hostname.replace(/^www\./, "");
+
+  const candidates: string[] = [];
+  let lang: "fr" | "en" = "fr";
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "TUVOA-Veille/0.1 (+https://www.tuvoa.media)" }, signal: AbortSignal.timeout(12000) });
+    const body = await res.text();
+    if (/^\s*(<\?xml|<rss|<feed)/i.test(body)) {
+      candidates.push(res.url || url.toString());
+    } else {
+      if (/<html[^>]*lang=["']?en/i.test(body)) lang = "en";
+      for (const m of body.matchAll(/<link[^>]+>/gi)) {
+        const tag = m[0];
+        if (!/rel=["']?alternate/i.test(tag) || !/(rss|atom)\+xml/i.test(tag)) continue;
+        const href = tag.match(/href=["']([^"']+)["']/i)?.[1];
+        if (href) candidates.push(new URL(href.replace(/&amp;/g, "&"), res.url || url).toString());
+      }
+    }
+  } catch {
+    // site injoignable : on tente quand même les adresses de flux courantes
+  }
+  candidates.push(`${url.origin}/feed`, `${url.origin}/rss`, `${url.origin}/feed.xml`, `${url.origin}/rss.xml`);
+
+  for (const feed of Array.from(new Set(candidates))) {
+    try {
+      const parsed = await parser.parseURL(feed);
+      if (!parsed.items?.length) continue;
+      return {
+        id: `perso-${domain.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`,
+        name: clean(parsed.title) || domain,
+        domain,
+        lang,
+        theme: "Ajoutée",
+        feed,
+        enabledByDefault: true,
+        note: "Source ajoutée depuis l'app.",
+      };
+    } catch {
+      // flux suivant
+    }
+  }
+  throw new Error("Aucun flux RSS trouvé sur ce site. Essaie avec l'adresse exacte du flux (souvent …/feed).");
 }
