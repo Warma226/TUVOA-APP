@@ -62,27 +62,44 @@ async function callAnthropic(key: string, system: string, user: string, maxToken
   return (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
 }
 
+// Modèles essayés dans l'ordre : l'offre gratuite renvoie souvent « surchargé » (503) ou « quota atteint » (429)
+// sur un modèle alors qu'un autre répond.
+function geminiModels(): string[] {
+  const list = [process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash"];
+  return Array.from(new Set(list));
+}
+
 async function callGemini(key: string, system: string, user: string, maxTokens: number): Promise<string> {
-  const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": key },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: "user", parts: [{ text: user }] }],
-      // Marge large : les modèles Gemini récents réfléchissent avant de répondre et ces jetons comptent aussi.
-      generationConfig: { maxOutputTokens: Math.max(maxTokens * 4, 8192), temperature: 0.7 },
-    }),
-  });
-  if (res.status === 429) throw new Error("Quota gratuit de Gemini atteint pour le moment : réessaie dans une minute (ou demain si c'est le quota du jour).");
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(`Erreur de l'IA Gemini (${res.status}) : ${detail.slice(0, 300)}`);
+  let lastStatus = 0;
+  let lastDetail = "";
+  for (const model of geminiModels()) {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: user }] }],
+        // Marge large : les modèles Gemini récents réfléchissent avant de répondre et ces jetons comptent aussi.
+        generationConfig: { maxOutputTokens: Math.max(maxTokens * 4, 8192), temperature: 0.7 },
+      }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
+      const text = (data.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? "").join("");
+      if (text.trim()) return text;
+      lastStatus = 200;
+      lastDetail = "réponse vide";
+      continue;
+    }
+    lastStatus = res.status;
+    lastDetail = (await res.text()).slice(0, 300);
+    // Surcharge, quota ou modèle indisponible : on passe au modèle suivant.
+    if ([429, 500, 503, 404].includes(res.status)) continue;
+    break;
   }
-  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
-  const text = (data.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? "").join("");
-  if (!text.trim()) throw new Error("Gemini n'a pas renvoyé de texte. Réessaie.");
-  return text;
+  if (lastStatus === 429) throw new Error("Quota gratuit de Gemini atteint pour le moment : réessaie dans une minute (ou demain si c'est le quota du jour).");
+  if (lastStatus === 503 || lastStatus === 500) throw new Error("Gemini est surchargé en ce moment : réessaie dans quelques minutes.");
+  throw new Error(`Erreur de l'IA Gemini (${lastStatus}) : ${lastDetail}`);
 }
 
 async function callClaude(system: string, user: string, maxTokens = 2500): Promise<string> {
