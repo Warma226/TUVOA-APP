@@ -1,0 +1,27 @@
+# Lance la veille et les publications planifiées de TUVOA toutes les 15 minutes.
+# À configurer dans GitHub › Settings › Secrets and variables › Actions :
+#   TUVOA_URL         → l'adresse de l'app (ex. https://tuvoa-app.vercel.app)
+#   TUVOA_CRON_SECRET → la même valeur que CRON_SECRET dans Vercel
+name: TUVOA veille et publications
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Appeler la tâche TUVOA
+        env:
+          TUVOA_URL: ${{ secrets.TUVOA_URL }}
+          TUVOA_CRON_SECRET: ${{ secrets.TUVOA_CRON_SECRET }}
+        run: |
+          if [ -z "$TUVOA_URL" ] || [ -z "$TUVOA_CRON_SECRET" ]; then
+            echo "Secrets TUVOA_URL et TUVOA_CRON_SECRET à configurer."
+            exit 0
+          fi
+          curl -sS --fail-with-body --max-time 90 \
+            -H "Authorization: Bearer $TUVOA_CRON_SECRET" \
+            "$TUVOA_URL/api/cron"
