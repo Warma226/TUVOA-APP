@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { BottomNav, TopBar } from "@/components/BottomNav";
 import { RUBRIQUES, PLATFORMS, type Platform, type RubriqueId } from "@/lib/config";
 import type { Generated } from "@/lib/claude";
+import type { Post } from "@/lib/store";
+import { savePost } from "@/lib/client";
 
 export default function CreerPage() {
   return (
@@ -20,6 +22,8 @@ function Creer() {
   const sourceUrl = q.get("src");
   const sourceName = q.get("source");
   const articleTitle = q.get("titre") ?? "";
+  const articleSummary = q.get("resume") ?? "";
+  const [notice, setNotice] = useState("");
 
   const initialRubrique = q.get("rubrique");
   const [rubrique, setRubrique] = useState<RubriqueId>(
@@ -65,12 +69,14 @@ function Creer() {
           sourceUrl,
           sourceName,
           articleTitle,
+          articleSummary,
           portrait: rubrique === "portrait" ? { nom, specialite, infos } : undefined,
         }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error);
       setGen(d.generated);
+      setNotice(d.notice ?? "");
       setPicked(0);
     } catch (e) {
       setError((e as Error).message);
@@ -85,7 +91,7 @@ function Creer() {
     if (v) return;
     setBusy(true);
     const accroche = gen?.variantes[picked];
-    const post = {
+    const post: Partial<Post> = {
       rubrique,
       idea,
       title: articleTitle || gen?.visuel_titre || (rubrique === "portrait" ? nom : idea),
@@ -111,11 +117,13 @@ function Creer() {
         photo: rubrique === "portrait" && photo ? photo : undefined,
       },
     };
-    const res = await fetch("/api/posts", { method: "POST", body: JSON.stringify({ action: "save", post }) });
-    const d = await res.json();
-    setBusy(false);
-    if (!res.ok) return setError(d.error);
-    router.push(`/apercu?id=${d.post.id}&edit=1`);
+    try {
+      const saved = await savePost(post);
+      router.push(`/apercu?id=${saved.id}&edit=1`);
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
   }
 
   return (
@@ -176,9 +184,10 @@ function Creer() {
         </fieldset>
 
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
+        {notice ? <p className="notice ambre" role="status">{notice}</p> : null}
 
         <button type="button" className="btn dark" onClick={generate} disabled={busy}>
-          {busy && !gen ? "L'IA rédige…" : gen ? "✦ Régénérer avec l'IA" : "✦ Générer avec l'IA"}
+          {busy && !gen ? "Rédaction…" : gen ? "✦ Régénérer le brouillon" : "✦ Générer le brouillon"}
         </button>
 
         {gen ? (

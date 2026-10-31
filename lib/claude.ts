@@ -20,6 +20,7 @@ export type GenerateInput = {
   sourceUrl?: string | null;
   articleTitle?: string;
   articleText?: string;
+  articleSummary?: string;
   // Pour les portraits : infos fournies et validées par la personne
   portrait?: { nom: string; specialite: string; infos: string };
 };
@@ -121,4 +122,53 @@ export async function rewrite(action: RewriteAction, text: string, platform: str
     1500
   );
   return out.trim();
+}
+
+// Brouillon sans IA (quand ANTHROPIC_API_KEY n'est pas configurée) : structure prête à compléter,
+// construite uniquement à partir du titre, de l'idée et de la source. Rien n'est recopié de l'article.
+export function draftWithoutAI(input: GenerateInput): Generated {
+  const rub = RUBRIQUES.find((r) => r.id === input.rubrique) ?? RUBRIQUES[0];
+  const source = input.sourceName ? `Source : ${input.sourceName}` : "";
+  const lien = input.sourceUrl ? `\n${input.sourceUrl}` : "";
+  if (input.rubrique === "portrait" && input.portrait) {
+    const { nom, specialite, infos } = input.portrait;
+    const base = `${nom}, ${specialite}.${infos ? `\n\n${infos}` : ""}`;
+    return {
+      variantes: [`Portrait : ${nom}`, `Qui est ${nom} ?`, `${nom}, ${specialite}`],
+      facebook: `${base}\n\n#Portrait #ExpertsTech #TUVOA`,
+      linkedin: `Portrait d'expert : ${base}\n\n#Portrait #ExpertsTech #TUVOA`,
+      tiktok: `Portrait : ${nom}, ${specialite}`.slice(0, 150),
+      wp_title: `Portrait : ${nom}, ${specialite}`,
+      wp_body: `<p>${base.replace(/\n\n/g, "</p><p>")}</p>`,
+      visuel_titre: nom,
+      visuel_texte: specialite,
+    };
+  }
+  if (input.rubrique === "cyberbase") {
+    const notion = (input.idea || "Notion").trim();
+    const a_completer = "[Définition en 2 phrases simples, avec un exemple du quotidien.]";
+    return {
+      variantes: [`C'est quoi, ${notion} ?`, `${notion} : la notion à connaître`, `${notion}, expliqué simplement`],
+      facebook: `#CyberBase · ${notion}\n\n${a_completer}\n\nTu vois ? #CyberBase #Tech #TUVOA`,
+      linkedin: `#CyberBase · ${notion}\n\n${a_completer}\n\n#CyberBase #Cybersécurité #TUVOA`,
+      tiktok: `${notion}, expliqué en 30 secondes #CyberBase`.slice(0, 150),
+      wp_title: `${notion} : comprendre la notion simplement`,
+      wp_body: `<p>${a_completer}</p>`,
+      visuel_titre: notion,
+      visuel_texte: a_completer,
+    };
+  }
+  const titre = (input.articleTitle || input.idea || "Actualité tech").trim();
+  const angle = input.idea && input.articleTitle ? `\n\n${input.idea}` : "";
+  const a_completer = "[Ce que ça change pour toi, en 2 phrases.]";
+  return {
+    variantes: [titre, `Ce qu'il faut retenir : ${titre}`, `${titre}, tu vois ?`],
+    facebook: `${titre}${angle}\n\n${a_completer}\n\n${source}${lien}\n\n${rub.hashtag} #Tech #TUVOA`.trim(),
+    linkedin: `${titre}${angle}\n\n${a_completer}\n\n${source}${lien}\n\n${rub.hashtag} #Tech #Innovation`.trim(),
+    tiktok: `${titre} ${rub.hashtag}`.slice(0, 150),
+    wp_title: titre,
+    wp_body: `<p>${a_completer}</p>`,
+    visuel_titre: titre,
+    visuel_texte: "",
+  };
 }

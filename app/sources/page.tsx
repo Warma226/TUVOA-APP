@@ -2,19 +2,20 @@
 import { useEffect, useState } from "react";
 import { BottomNav, TopBar } from "@/components/BottomNav";
 import { SOURCES } from "@/lib/config";
+import { getInfo, saveSettings } from "@/lib/client";
 
 export default function Sources() {
   const [enabled, setEnabled] = useState<Record<string, boolean> | null>(null);
 
   useEffect(() => {
-    fetch("/api/settings").then((r) => r.json()).then((d) => setEnabled(d.settings.sourcesEnabled));
+    getInfo().then((d) => setEnabled(d.settings.sourcesEnabled)).catch(() => setEnabled({}));
   }, []);
 
   async function toggle(id: string) {
     if (!enabled) return;
     const next = { ...enabled, [id]: !enabled[id] };
     setEnabled(next);
-    await fetch("/api/settings", { method: "POST", body: JSON.stringify({ sourcesEnabled: { [id]: next[id] } }) });
+    await saveSettings({ sourcesEnabled: { [id]: next[id] } });
   }
 
   return (
@@ -23,7 +24,7 @@ export default function Sources() {
       <main className="page" style={{ paddingTop: 4 }}>
         <p className="muted">Pour ajouter une source, ajoute-la dans le fichier lib/config.ts du dépôt GitHub (ou demande-le à Claude).</p>
         {SOURCES.map((s) => {
-          const on = enabled?.[s.id] ?? s.enabledByDefault;
+          const on = Boolean(s.feed) && (enabled?.[s.id] ?? s.enabledByDefault);
           return (
             <article key={s.id} className="card">
               <div className="row">

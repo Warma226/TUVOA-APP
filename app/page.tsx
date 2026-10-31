@@ -5,6 +5,7 @@ import { Logo } from "@/components/Logo";
 import { BottomNav } from "@/components/BottomNav";
 import { STATUS_LABEL, STATUS_BADGE, PLATFORM_LABEL } from "@/lib/labels";
 import type { Post } from "@/lib/store";
+import { getInfo, listPosts, saveSettings } from "@/lib/client";
 
 type Info = { settings: { autopilot: boolean }; demo: boolean; ai: boolean };
 
@@ -12,16 +13,26 @@ export default function Dashboard() {
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [info, setInfo] = useState<Info | null>(null);
 
+  const [error, setError] = useState("");
+
   useEffect(() => {
-    fetch("/api/posts").then((r) => r.json()).then((d) => setPosts(d.posts ?? []));
-    fetch("/api/settings").then((r) => r.json()).then(setInfo);
+    getInfo()
+      .then((i) => {
+        setInfo(i);
+        return listPosts();
+      })
+      .then(setPosts)
+      .catch((e: Error) => {
+        setError(e.message);
+        setPosts([]);
+      });
   }, []);
 
   async function toggleAuto() {
     if (!info) return;
     const autopilot = !info.settings.autopilot;
     setInfo({ ...info, settings: { ...info.settings, autopilot } });
-    await fetch("/api/settings", { method: "POST", body: JSON.stringify({ autopilot }) });
+    await saveSettings({ autopilot }).catch((e: Error) => setError(e.message));
   }
 
   const count = (s: Post["status"]) => posts?.filter((p) => p.status === s).length ?? 0;
@@ -50,8 +61,9 @@ export default function Dashboard() {
           <h1 style={{ marginTop: 4 }}>Ton studio de posts tech</h1>
         </div>
 
-        {info?.demo ? <p className="notice ambre">Mode démo : la base de données n'est pas encore branchée, les posts disparaîtront au prochain redémarrage.</p> : null}
-        {info && !info.ai ? <p className="notice ambre">L'IA n'est pas encore activée : ajoute ANTHROPIC_API_KEY dans Vercel.</p> : null}
+        {error ? <p className="notice rouge" role="alert">{error}</p> : null}
+        {info?.demo ? <p className="notice">Mode démo : tes posts sont gardés sur ce téléphone. Pour la veille automatique et les publications planifiées, branche Supabase (voir Comptes).</p> : null}
+        {info && !info.ai ? <p className="notice ambre">Rédaction par l'IA inactive : les brouillons sont préparés à partir de l'actu, à compléter à la main. Ajoute ANTHROPIC_API_KEY dans Vercel pour l'activer.</p> : null}
 
         <div className="grid3">
           <Stat value={count("a_valider")} label="À valider" dark />

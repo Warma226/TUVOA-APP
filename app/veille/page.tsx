@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BottomNav, TopBar } from "@/components/BottomNav";
 import { TOPICS, TRIGGERS } from "@/lib/config";
 import type { VeilleItem } from "@/lib/veille";
+import { getInfo } from "@/lib/client";
 
 export default function Veille() {
   const [items, setItems] = useState<VeilleItem[] | null>(null);
@@ -14,12 +15,21 @@ export default function Veille() {
 
   function load() {
     setItems(null);
-    fetch("/api/veille")
+    getInfo()
+      .then((info) => {
+        const on = (m: Record<string, boolean>) => Object.keys(m).filter((k) => m[k]).join(",");
+        const q = new URLSearchParams({ sources: on(info.settings.sourcesEnabled), triggers: on(info.settings.triggersEnabled) });
+        return fetch(`/api/veille?${q.toString()}`, { cache: "no-store" });
+      })
       .then((r) => r.json())
       .then((d) => {
         setItems(d.items ?? []);
         setErrors(d.errors ?? (d.error ? [d.error] : []));
         setUpdatedAt(d.updatedAt ?? "");
+      })
+      .catch(() => {
+        setItems([]);
+        setErrors(["Veille indisponible pour le moment. Réessaie avec « Actualiser »."]);
       });
   }
   useEffect(load, []);
@@ -60,7 +70,7 @@ export default function Veille() {
         {items && shown.length === 0 ? <p className="muted">Rien pour ce thème pour l'instant.</p> : null}
 
         {shown.map((it) => {
-          const params = new URLSearchParams({ src: it.url, source: it.sourceName, titre: it.title });
+          const params = new URLSearchParams({ src: it.url, source: it.sourceName, titre: it.title, resume: it.summary.slice(0, 400) });
           return (
             <article key={it.id} className="card">
               <div className="row" style={{ justifyContent: "space-between" }}>

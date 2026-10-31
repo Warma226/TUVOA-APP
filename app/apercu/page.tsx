@@ -7,8 +7,7 @@ import { BottomNav, TopBar } from "@/components/BottomNav";
 import { PLATFORMS, type Platform } from "@/lib/config";
 import { STATUS_LABEL, STATUS_BADGE, PLATFORM_LABEL } from "@/lib/labels";
 import type { Post } from "@/lib/store";
-
-type PostWithVisuals = Post & { visuals: Record<string, string> };
+import { getInfo, loadPost, savePost, postAction, deletePost, type PostWithVisuals } from "@/lib/client";
 type TextKey = "facebook" | "linkedin" | "tiktok" | "wp_body";
 
 const TEXT_KEY: Record<Platform, TextKey> = { facebook: "facebook", linkedin: "linkedin", tiktok: "tiktok", wordpress: "wp_body" };
@@ -45,17 +44,18 @@ function Apercu() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [when, setWhen] = useState("");
+  const [demo, setDemo] = useState(false);
 
   useEffect(() => {
+    getInfo().then((i) => setDemo(i.demo)).catch(() => undefined);
     if (!id) return;
-    fetch(`/api/posts?id=${encodeURIComponent(id)}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) return setError(d.error);
-        setPost(d.post);
-        setWhen(toLocalInput(d.post.scheduled_at));
-        if (d.post.platforms?.length) setTab(d.post.platforms[0]);
-      });
+    loadPost(id)
+      .then((p) => {
+        setPost(p);
+        setWhen(toLocalInput(p.scheduled_at));
+        if (p.platforms?.length) setTab(p.platforms[0]);
+      })
+      .catch((e: Error) => setError(e.message));
   }, [id]);
 
   if (!id) {
@@ -96,19 +96,15 @@ function Apercu() {
     update({ texts: { ...current.texts, [key]: value } });
   }
 
-  async function call(body: Record<string, unknown>, label: string): Promise<PostWithVisuals | null> {
+  async function run(label: string, fn: () => Promise<PostWithVisuals>): Promise<PostWithVisuals | null> {
     setBusy(label);
     setError("");
     setInfo("");
     try {
-      const res = await fetch("/api/posts", { method: "POST", body: JSON.stringify(body) });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || "Erreur");
-      if (d.post) {
-        setPost(d.post);
-        setDirty(false);
-      }
-      return d.post ?? null;
+      const next = await fn();
+      setPost(next);
+      setDirty(false);
+      return next;
     } catch (e) {
       setError((e as Error).message);
       return null;
@@ -117,7 +113,7 @@ function Apercu() {
     }
   }
 
-  const save = () => call({ action: "save", post: current }, "save");
+  const save = () => run("save", () => savePost(current));
 
   async function saveIfNeeded(): Promise<boolean> {
     if (!dirty) return true;
@@ -147,25 +143,29 @@ function Apercu() {
     if (over) return setError(`Le texte ${PLATFORM_LABEL[tab]} dépasse la limite de caractères.`);
     if (!when) return setError("Choisis une date et une heure.");
     if (!(await saveIfNeeded())) return;
-    const p = await call({ action: "schedule", id: current.id, at: new Date(when).toISOString() }, "schedule");
-    if (p) setInfo(`Planifié le ${new Date(p.scheduled_at ?? when).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}.`);
+    const p = await run("schedule", () => postAction("schedule", current, new Date(when).toISOString()));
+    if (p && demo) setInfo("Planifié. En mode démo, la publication à l'heure prévue démarre une fois Supabase branché : d'ici là, utilise « Publier maintenant ».");
+    else if (p) setInfo(`Planifié le ${new Date(p.scheduled_at ?? when).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}.`);
   }
 
   async function publishNow() {
     const tooLong = current.platforms.find((p) => (current.texts[TEXT_KEY[p]] ?? "").length > (PLATFORMS.find((x) => x.id === p)?.limit ?? 3000));
     if (tooLong) return setError(`Le texte ${PLATFORM_LABEL[tooLong]} dépasse la limite de caractères.`);
     if (!(await saveIfNeeded())) return;
-    const p = await call({ action: "publish", id: current.id }, "publish");
+    const p = await run("publish", () => postAction("publish", current));
     if (p) setInfo(p.status === "publie" ? "Publié sur tous les canaux." : "Publication terminée avec des erreurs : vois le détail plus bas.");
   }
 
   async function remove() {
     if (!window.confirm("Supprimer définitivement ce post ?")) return;
     setBusy("delete");
-    const res = await fetch("/api/posts", { method: "POST", body: JSON.stringify({ action: "delete", id: current.id }) });
-    setBusy("");
-    if (res.ok) router.push("/");
-    else setError("Suppression impossible. Réessaie.");
+    try {
+      await deletePost(current.id);
+      router.push("/");
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy("");
+    }
   }
 
   return (
@@ -288,7 +288,7 @@ function Apercu() {
               </button>
             </div>
             {current.status === "planifie" ? (
-              <button type="button" className="btn ghost" onClick={() => call({ action: "cancel", id: current.id }, "cancel")} disabled={Boolean(busy)}>
+              <button type="button" className="btn ghost" onClick={() => run("cancel", () => postAction("cancel", current))} disabled={Boolean(busy)}>
                 Annuler la publication prévue
               </button>
             ) : null}

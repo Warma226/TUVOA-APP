@@ -3,20 +3,25 @@ import { useEffect, useState } from "react";
 import { BottomNav, TopBar } from "@/components/BottomNav";
 import { TRIGGERS, GUARDRAILS, SOURCES } from "@/lib/config";
 import { PLATFORM_LABEL } from "@/lib/labels";
+import { getInfo, saveSettings } from "@/lib/client";
 
 type S = { autopilot: boolean; triggersEnabled: Record<string, boolean> };
 
 export default function Declencheurs() {
   const [s, setS] = useState<S | null>(null);
+  const [demo, setDemo] = useState(false);
 
   useEffect(() => {
-    fetch("/api/settings").then((r) => r.json()).then((d) => setS(d.settings));
+    getInfo().then((d) => {
+      setS(d.settings);
+      setDemo(d.demo);
+    });
   }, []);
 
   async function save(patch: Partial<S>) {
     if (!s) return;
     setS({ ...s, ...patch, triggersEnabled: { ...s.triggersEnabled, ...(patch.triggersEnabled ?? {}) } });
-    await fetch("/api/settings", { method: "POST", body: JSON.stringify(patch) });
+    await saveSettings(patch);
   }
 
   const auto = s?.autopilot ?? false;
@@ -26,6 +31,10 @@ export default function Declencheurs() {
       <TopBar title="Déclencheurs" back="/veille" />
       <main className="page" style={{ paddingTop: 4 }}>
         <p className="muted">Quand une actu correspond, TUVOA lit l'article, le résume ou l'explique, prépare le visuel et le post.</p>
+
+        {demo ? (
+          <p className="notice ambre">Mode démo : les déclencheurs repèrent les actus dans la Veille, mais la création et la publication automatiques démarrent une fois Supabase branché.</p>
+        ) : null}
 
         <section className="panel" style={{ background: auto ? "var(--bleu)" : "var(--noir)" }} aria-label="Mode de publication">
           <div className="row" style={{ justifyContent: "space-between" }}>
