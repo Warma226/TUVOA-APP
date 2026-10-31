@@ -41,7 +41,8 @@ Sans Supabase, l'application tourne en **mode démo** : les posts disparaissent 
 | `APP_SECRET` | Facultatif : une longue suite de caractères au hasard. Sinon, le mot de passe sert de clé. |
 | `APP_URL` | Facultatif sur Vercel (détectée automatiquement). À renseigner si tu utilises ton propre domaine. |
 | `CRON_SECRET` | Une autre longue suite de caractères au hasard. |
-| `ANTHROPIC_API_KEY` | Ta clé API, créée sur console.anthropic.com. |
+| `GEMINI_API_KEY` | Gratuit : clé Google Gemini, créée sur aistudio.google.com (Get API key). |
+| `ANTHROPIC_API_KEY` | Facultatif, payant à l'usage : clé Claude, créée sur platform.claude.com. Utilisée en priorité si elle est présente. |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Les valeurs notées à l'étape 1. |
 
 Ouvre ensuite l'adresse de l'app, connecte-toi, et ajoute-la à l'écran d'accueil du téléphone.

@@ -12,6 +12,7 @@ export type Info = {
   settings: Settings;
   demo: boolean;
   ai: boolean;
+  aiProvider?: "claude" | "gemini" | null;
   connections: Record<Platform, { configured: boolean; detail: string }>;
 };
 
