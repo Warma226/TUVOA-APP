@@ -37,7 +37,7 @@ Sans Supabase, l'application tourne en **mode démo** : les posts disparaissent 
 
 | Variable | Valeur |
 |---|---|
-| `APP_PASSWORD` | Le mot de passe de l'app (identifiant : `tuvoa`). **Seule variable obligatoire pour ouvrir l'app.** |
+| `APP_PASSWORD` | Le mot de passe de l'écran de connexion. **Seule variable obligatoire pour ouvrir l'app.** |
 | `APP_SECRET` | Facultatif : une longue suite de caractères au hasard. Sinon, le mot de passe sert de clé. |
 | `APP_URL` | Facultatif sur Vercel (détectée automatiquement). À renseigner si tu utilises ton propre domaine. |
 | `CRON_SECRET` | Une autre longue suite de caractères au hasard. |
@@ -45,7 +45,7 @@ Sans Supabase, l'application tourne en **mode démo** : les posts disparaissent 
 | `ANTHROPIC_API_KEY` | Facultatif, payant à l'usage : clé Claude, créée sur platform.claude.com. Utilisée en priorité si elle est présente. |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Les valeurs notées à l'étape 1. |
 
-Ouvre ensuite l'adresse de l'app, connecte-toi, et ajoute-la à l'écran d'accueil du téléphone.
+Ouvre ensuite l'adresse de l'app : l'écran de connexion demande le mot de passe `APP_PASSWORD` (tu restes connecté 30 jours sur l'appareil ; « Se déconnecter » est dans Connexions). Ajoute-la ensuite à l'écran d'accueil du téléphone.
 
 ### 3. Veille automatique (toutes les 15 minutes)
 La tâche est lancée par Supabase (extensions pg_cron et pg_net), avec l'adresse de l'app et la clé `CRON_SECRET` gardées dans le coffre (Vault) de Supabase. Le bloc à lancer est en fin de `supabase/schema.sql`. Dans Vercel, la protection « Vercel Authentication » doit rester limitée aux versions de test (Preview), sinon la tâche et les réseaux sociaux ne peuvent pas joindre l'app.
