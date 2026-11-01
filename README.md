@@ -63,10 +63,14 @@ Dans ton WordPress : **Utilisateurs › Profil › Mots de passe d'application**
 2. Obtiens un jeton de Page longue durée avec les permissions `pages_manage_posts` et `pages_read_engagement`.
 3. Dans Vercel : `FB_PAGE_ID`, `FB_PAGE_TOKEN`.
 
-**LinkedIn (Page entreprise)**
-1. Crée une application sur developer.linkedin.com reliée à ta Page, et demande l'accès à la publication pour les organisations.
-2. Dans Vercel : `LINKEDIN_TOKEN`, `LINKEDIN_AUTHOR` (forme `urn:li:organization:123456`).
-3. Le jeton LinkedIn expire : il faudra le renouveler périodiquement.
+**LinkedIn (Page entreprise, via Make)**
+L'accès direct à l'API LinkedIn pour les Pages exige une entreprise enregistrée et un e-mail professionnel. L'app passe donc par Make (make.com, gratuit) :
+1. Dans Make, crée un scénario : « Webhooks › Custom webhook » → « HTTP › Get a file » (URL : `image_url`) → « LinkedIn › Create an Organization Image Post » (Page TUVOA, texte : `text`, image : le fichier, visibilité publique).
+2. Dans Vercel : `LINKEDIN_WEBHOOK_URL` = l'adresse du webhook, puis redéploie.
+3. Sur le webhook Make, clique « Redetermine data structure », puis dans l'app (Connexions) « Envoyer un exemple à Make » : rien n'est publié.
+4. Active le scénario. Champs envoyés : `text`, `image_url`, `title`, `source_url`, `post_id`, `test`.
+
+Accès direct (si un jour l'accès Community Management API est accordé) : `LINKEDIN_TOKEN` et `LINKEDIN_AUTHOR` (forme `urn:li:organization:123456`), sans `LINKEDIN_WEBHOOK_URL`.
 
 **TikTok**
 Demande l'accès « Content Posting API » sur developers.tiktok.com. La publication sera branchée une fois l'application validée par TikTok.
