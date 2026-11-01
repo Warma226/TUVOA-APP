@@ -10,6 +10,7 @@ export const FORMATS: Record<VisualFormat, { w: number; h: number; label: string
 export function formatFor(platform: string, rubrique: string): VisualFormat {
   if (platform === "tiktok") return "vertical";
   if (platform === "wordpress") return "paysage";
-  if (platform === "linkedin" && rubrique === "actu") return "paysage";
+  // Facebook et LinkedIn : même visuel 4:5 (1080 × 1350).
+  void rubrique;
   return "portrait";
 }

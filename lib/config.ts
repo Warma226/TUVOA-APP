@@ -206,4 +206,9 @@ Règles :
 - Distinguer clairement ce qui est officiel, une fuite ou une rumeur.
 - Pas de sensationnalisme, pas de point d'exclamation en série, 0 à 2 émojis maximum.
 - Les chiffres en chiffres, les noms de marques avec leur casse officielle.
+Qualité professionnelle, niveau rédaction d'un média sérieux :
+- Première phrase forte et précise (le fait principal), pas de formule creuse (« Grosse nouvelle », « Vous n'allez pas y croire »…).
+- Chaque phrase apporte une info ou une explication utile ; pas de remplissage ni de répétition.
+- Orthographe, accords et ponctuation française impeccables (espace avant « : ; ? ! », guillemets « »).
+- Termine par ce que le lecteur doit retenir ou faire, puis la source.
 `.trim();
