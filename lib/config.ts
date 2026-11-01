@@ -85,11 +85,14 @@ export const SOURCES: Source[] = [
   },
 ];
 
-export const TOPICS: { id: string; label: string; keywords: string[] }[] = [
-  { id: "ia", label: "IA", keywords: ["intelligence artificielle", " ia ", "ai ", " ai,", "llm", "chatgpt", "openai", "anthropic", "claude", "gemini", "machine learning", "modèle"] },
-  { id: "smartphones", label: "Smartphones", keywords: ["android", "iphone", "ios", "smartphone", "samsung", "galaxy", "pixel", "xiaomi", "téléphone", "mobile"] },
-  { id: "cyber", label: "Cybersécurité", keywords: ["faille", "vulnérabilit", "vulnerability", "malware", "ransomware", "phishing", "hack", "cve-", "zero-day", "exploit", "cyber", "breach", "fuite"] },
-  { id: "startups", label: "Startups", keywords: ["startup", "start-up", "levée", "raises", "funding", "series a", "series b", "seed", "fintech", "mobile money"] },
+// `poids` : points de pertinence ajoutés quand le thème est détecté (la veille classe les actus avec).
+// Les annonces de nouveaux smartphones intéressent peu le public de TUVOA : elles ne sont pas mises en avant.
+export const TOPICS: { id: string; label: string; keywords: string[]; poids: number }[] = [
+  { id: "afrique", label: "Afrique & télécoms", poids: 25, keywords: ["afrique", "africa", "african", "sénégal", "senegal", "côte d'ivoire", "ivory coast", "burkina", "mali", "niger", "bénin", "togo", "ghana", "nigeria", "kenya", "cameroun", "uemoa", "cedeao", "orange money", "mobile money", "wave", "mtn", "moov", "airtel", "télécom", "telecom", "opérateur"] },
+  { id: "cyber", label: "Cybersécurité", poids: 15, keywords: ["faille", "vulnérabilit", "vulnerability", "malware", "ransomware", "phishing", "arnaque", "scam", "hack", "cve-", "zero-day", "exploit", "cyber", "breach", "fuite"] },
+  { id: "ia", label: "IA", poids: 15, keywords: ["intelligence artificielle", " ia ", "ai ", " ai,", "llm", "chatgpt", "openai", "anthropic", "claude", "gemini", "machine learning", "modèle"] },
+  { id: "startups", label: "Startups", poids: 15, keywords: ["startup", "start-up", "levée", "raises", "funding", "series a", "series b", "seed", "fintech"] },
+  { id: "smartphones", label: "Smartphones", poids: 0, keywords: ["android", "iphone", "ios", "smartphone", "samsung", "galaxy", "pixel", "xiaomi", "tecno", "infinix", "itel"] },
 ];
 
 export type TriggerFormat = "resume" | "explication" | "les-deux";
@@ -130,7 +133,7 @@ export const TRIGGERS: Trigger[] = [
     format: "resume",
     platforms: ["facebook", "linkedin", "wordpress"],
     mode: "general",
-    enabledByDefault: true,
+    enabledByDefault: false, // nouveaux smartphones : peu suivis par le public de TUVOA
   },
   {
     id: "ia-modele",
@@ -192,7 +195,8 @@ export const GUARDRAILS = {
 // Guide de style donné à l'IA à chaque rédaction
 export const STYLE_GUIDE = `
 Tu écris pour TUVOA Tech Media, un média tech francophone (site : www.tuvoa.media).
-Ligne éditoriale : uniquement la tech (IA, smartphones, cybersécurité, startups, télécoms, numérique).
+Ligne éditoriale : uniquement la tech, avec en priorité ce qui touche le public africain : cybersécurité et arnaques, mobile money et télécoms, IA, startups et numérique en Afrique.
+Les annonces de nouveaux smartphones n'intéressent que si elles concernent l'Afrique (prix, disponibilité, modèles vendus localement) : sinon, reste bref.
 Ton : direct, clair, pédagogique, tutoiement. Signature possible en fin de post : « tu vois ? » (sans en abuser).
 Public : lecteurs francophones, en particulier en Afrique de l'Ouest ; explique le jargon.
 Règles :

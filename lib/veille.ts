@@ -79,11 +79,13 @@ export async function fetchVeille(sources: Source[], triggers: Trigger[]): Promi
       const summary = clean(entry.contentSnippet ?? entry.content ?? entry.summary).slice(0, 400);
       const text = ` ${title} ${summary} `.toLowerCase();
       if (s.filterKeywords && !s.filterKeywords.some((k) => text.includes(k))) continue;
-      const topics = TOPICS.filter((t) => t.keywords.some((k) => text.includes(k))).map((t) => t.id);
+      const found = TOPICS.filter((t) => t.keywords.some((k) => text.includes(k)));
+      const topics = found.map((t) => t.id);
+      const poidsThemes = found.reduce((sum, t) => sum + t.poids, 0);
       const matched = triggers.filter((t) => matchTrigger(t, { sourceId: s.id, text })).map((t) => t.id);
       const blocked = GUARDRAILS.blockedKeywords.some((k) => text.includes(k));
       const ageH = entry.isoDate ? (Date.now() - new Date(entry.isoDate).getTime()) / 3.6e6 : 24;
-      let score = 40 + topics.length * 15 + matched.length * 20 - Math.min(30, Math.max(0, ageH - 6));
+      let score = 40 + poidsThemes + matched.length * 20 - Math.min(30, Math.max(0, ageH - 6));
       score = Math.max(0, Math.min(100, Math.round(score)));
       raw.push({
         id: url,
