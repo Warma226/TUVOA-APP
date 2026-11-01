@@ -21,6 +21,15 @@ function authorized(req: Request) {
 export async function GET(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   const log: string[] = [];
+  try {
+    return await run(log);
+  } catch (e) {
+    console.error("cron", e);
+    return NextResponse.json({ ok: false, error: (e as Error).message, stack: (e as Error).stack?.split("\n").slice(0, 4), log }, { status: 500 });
+  }
+}
+
+async function run(log: string[]) {
   const settings = await getSettings();
 
   // ─── 1. Veille : l'autopilote choisit et publie seul ─────────────
