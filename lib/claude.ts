@@ -65,11 +65,11 @@ async function callAnthropic(key: string, system: string, user: string, maxToken
 // Modèles essayés dans l'ordre : l'offre gratuite renvoie souvent « surchargé » (503) ou « quota atteint » (429)
 // sur un modèle alors qu'un autre répond.
 function geminiModels(): string[] {
-  const list = [process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash"];
+  const list = [process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.5-flash-lite"];
   return Array.from(new Set(list));
 }
 
-async function callGemini(key: string, system: string, user: string, maxTokens: number): Promise<string> {
+async function callGemini(key: string, system: string, user: string, maxTokens: number, json = false): Promise<string> {
   let lastStatus = 0;
   let lastDetail = "";
   for (const model of geminiModels()) {
@@ -80,15 +80,19 @@ async function callGemini(key: string, system: string, user: string, maxTokens: 
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: user }] }],
         // Marge large : les modèles Gemini récents réfléchissent avant de répondre et ces jetons comptent aussi.
-        generationConfig: { maxOutputTokens: Math.max(maxTokens * 4, 8192), temperature: 0.7 },
+        generationConfig: {
+          maxOutputTokens: Math.max(maxTokens * 4, 8192),
+          temperature: 0.7,
+          ...(json ? { responseMimeType: "application/json" } : {}),
+        },
       }),
     });
     if (res.ok) {
       const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
       const text = (data.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? "").join("");
-      if (text.trim()) return text;
+      if (text.trim() && (!json || parsable(text))) return text;
       lastStatus = 200;
-      lastDetail = "réponse vide";
+      lastDetail = text.trim() ? "réponse illisible" : "réponse vide";
       continue;
     }
     lastStatus = res.status;
@@ -102,19 +106,56 @@ async function callGemini(key: string, system: string, user: string, maxTokens: 
   throw new Error(`Erreur de l'IA Gemini (${lastStatus}) : ${lastDetail}`);
 }
 
-async function callClaude(system: string, user: string, maxTokens = 2500): Promise<string> {
+async function callClaude(system: string, user: string, maxTokens = 2500, json = false): Promise<string> {
   const anthropic = process.env.ANTHROPIC_API_KEY;
   if (anthropic) return callAnthropic(anthropic, system, user, maxTokens);
   const gemini = process.env.GEMINI_API_KEY;
-  if (gemini) return callGemini(gemini, system, user, maxTokens);
+  if (gemini) return callGemini(gemini, system, user, maxTokens, json);
   throw new Error("Ajoute GEMINI_API_KEY (gratuit) ou ANTHROPIC_API_KEY dans Vercel pour activer la rédaction par l'IA.");
 }
 
-function extractJson<T>(text: string): T {
+// Retours à la ligne bruts dans les chaînes : erreur fréquente des modèles, on les échappe.
+function escapeRawNewlines(s: string): string {
+  let out = "";
+  let inStr = false;
+  let esc = false;
+  for (const ch of s) {
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      else if (ch === "\n") { out += "\\n"; continue; }
+      else if (ch === "\r") continue;
+      else if (ch === "\t") { out += "\\t"; continue; }
+    } else if (ch === '"') inStr = true;
+    out += ch;
+  }
+  return out;
+}
+
+function tryParse<T>(text: string): T | null {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start < 0 || end < start) throw new Error("Réponse de l'IA illisible. Réessaie.");
-  return JSON.parse(text.slice(start, end + 1)) as T;
+  if (start < 0 || end < start) return null;
+  const raw = text.slice(start, end + 1);
+  for (const candidate of [raw, escapeRawNewlines(raw), escapeRawNewlines(raw).replace(/,\s*([}\]])/g, "$1")]) {
+    try {
+      return JSON.parse(candidate) as T;
+    } catch {
+      /* essai suivant */
+    }
+  }
+  return null;
+}
+
+function parsable(text: string): boolean {
+  return tryParse(text) !== null;
+}
+
+function extractJson<T>(text: string): T {
+  const v = tryParse<T>(text);
+  if (v === null) throw new Error("Réponse de l'IA illisible. Réessaie.");
+  return v;
 }
 
 export async function generatePost(input: GenerateInput): Promise<Generated> {
@@ -154,7 +195,7 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   "visuel_texte": "texte court pour le visuel (40 mots maximum)"
 }`);
 
-  const text = await callClaude(STYLE_GUIDE, parts.join("\n\n"), 4000);
+  const text = await callClaude(STYLE_GUIDE, parts.join("\n\n"), 4000, true);
   const g = extractJson<Partial<Generated>>(text);
   return {
     variantes: Array.isArray(g.variantes) ? g.variantes.slice(0, 3).map(String) : [],
