@@ -2,10 +2,10 @@
 // 1. autopilote : choisit la meilleure actu, la rédige et la planifie ; 2. publie les posts planifiés arrivés à échéance.
 import { NextResponse } from "next/server";
 import { fetchVeille, fetchArticle, similar } from "@/lib/veille";
-import { generatePost, aiConfigured, sameStoryAs } from "@/lib/claude";
+import { generatePost, generateRecap, aiConfigured, sameStoryAs } from "@/lib/claude";
 import { publishPost, connectionStatus } from "@/lib/publish";
 import { GUARDRAILS, TOPICS, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
-import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts, postedUrls } from "@/lib/store";
+import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts, postedUrls, publishedSince, recapExists } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -23,6 +23,7 @@ export async function GET(req: Request) {
   const log: string[] = [];
   const q = new URL(req.url).searchParams;
   try {
+    if (q.get("recap") === "1") return NextResponse.json({ ok: true, log, recap: await weeklyRecap(log, { force: true, dry: q.get("dry") === "1" }) });
     return await run(log, { force: q.get("force") === "1", now: q.get("now") === "1" });
   } catch (e) {
     console.error("cron", e);
@@ -150,6 +151,9 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
     log.push("Veille automatique en pause : ajoute GEMINI_API_KEY (gratuit) ou ANTHROPIC_API_KEY dans Vercel.");
   }
 
+  // ─── 1 bis. Récap tech du vendredi ───────────────────────────────
+  if (aiConfigured() && settings.autopilot) await weeklyRecap(log, { force: false, dry: false });
+
   // ─── 2. Publication des posts arrivés à échéance ─────────────────
   for (const post of await duePosts()) {
     const done = await publishPost(post);
@@ -158,4 +162,52 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
   }
 
   return NextResponse.json({ ok: true, log, at: new Date().toISOString() });
+}
+
+// Récap tech de la semaine : le vendredi à partir de 17 h, une seule fois par semaine.
+async function weeklyRecap(log: string[], opts: { force: boolean; dry: boolean }) {
+  const now = new Date();
+  // Lundi 0 h (UTC) de la semaine en cours
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7)));
+  if (!opts.force && (now.getUTCDay() !== GUARDRAILS.recapDay || now.getUTCHours() < GUARDRAILS.recapHour || now.getUTCHours() >= GUARDRAILS.autoEndHour)) return null;
+  if (!opts.dry && (await recapExists(monday.toISOString()))) return null;
+  const week = (await publishedSince(monday.toISOString())).filter((p) => p.rubrique === "actu" && p.origin !== "recap");
+  if (week.length < GUARDRAILS.recapMinPosts) {
+    log.push(`Récap de la semaine : pas assez d'actus publiées (${week.length}).`);
+    return null;
+  }
+  const conn = connectionStatus();
+  const platforms = (["facebook", "linkedin"] as Platform[]).filter((p) => conn[p].configured);
+  const fmt = (d: Date) => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
+  const periode = `semaine du ${fmt(monday)} au ${fmt(now)}`;
+  try {
+    const r = await generateRecap(
+      week.map((p) => ({ title: p.title, text: p.texts.facebook || p.texts.linkedin, source: p.source_name })),
+      periode
+    );
+    // Image : celle de l'actu la plus récente qui en a une (sujet de tête de la semaine).
+    const image = [...week].reverse().find((p) => p.visual.image)?.visual.image;
+    if (opts.dry) return { ...r, image, platforms, posts: week.length };
+    if (!image || platforms.length === 0) {
+      log.push("Récap de la semaine : pas d'image ou aucun canal connecté.");
+      return null;
+    }
+    const post = emptyPost({
+      rubrique: "actu",
+      title: `Récap tech · ${periode}`,
+      origin: "recap",
+      platforms,
+      texts: { facebook: r.facebook, linkedin: r.linkedin, tiktok: "Le récap tech de la semaine #RécapTech", wp_title: r.titre, wp_body: "" },
+      visual: { titre: "Récap de la semaine", texte: r.titre, image },
+      status: "planifie",
+      auto: false,
+      scheduled_at: new Date(Date.now() + GUARDRAILS.delayMinutes * 60000).toISOString(),
+    });
+    await savePost(post);
+    log.push(`Récap de la semaine planifié (${week.length} actus).`);
+    return { ...r, image };
+  } catch (e) {
+    log.push(`Récap de la semaine : ${(e as Error).message}`);
+    return null;
+  }
 }
