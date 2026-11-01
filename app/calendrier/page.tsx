@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { BottomNav } from "@/components/BottomNav";
 import { Icon } from "@/components/Icon";
 import { PostRow } from "@/components/PostRow";
 import type { Post, PostStatus } from "@/lib/store";
@@ -160,13 +159,14 @@ function Calendrier() {
         {groupes.map((g) => (
           <section key={g.k} className="stack">
             <h2 className="label" style={{ color: "var(--texte-2)" }}>{titreJour(g.k)}</h2>
-            {g.posts.map((p) => (
-              <PostRow key={p.id} post={p} />
-            ))}
+            <div className="cards">
+              {g.posts.map((p) => (
+                <PostRow key={p.id} post={p} />
+              ))}
+            </div>
           </section>
         ))}
       </main>
-      <BottomNav />
     </>
   );
 }

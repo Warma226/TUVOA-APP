@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
-import { BottomNav } from "@/components/BottomNav";
 import { Icon } from "@/components/Icon";
 import { PostRow } from "@/components/PostRow";
 import type { Post } from "@/lib/store";
@@ -51,13 +50,15 @@ export default function Dashboard() {
   const toValidate = count("a_valider");
   const auto = info?.settings.autopilot ?? false;
   const today = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-  const list = upcoming(posts ?? []).slice(0, 5);
+  const list = upcoming(posts ?? []).slice(0, 6);
 
   return (
     <>
       <header className="topbar" style={{ paddingTop: 20 }}>
-        <Logo />
-        <div className="row" style={{ gap: 8 }}>
+        <div className="mobile-only">
+          <Logo />
+        </div>
+        <div className="row" style={{ gap: 8, marginLeft: "auto" }}>
           <button
             type="button"
             role="switch"
@@ -109,12 +110,13 @@ export default function Dashboard() {
           {posts && list.length === 0 ? (
             <p className="muted">Rien de prévu pour l'instant. Crée un post ou pars d'une actu de la <Link href="/veille">veille</Link>.</p>
           ) : null}
-          {list.map((p) => (
-            <PostRow key={p.id} post={p} />
-          ))}
+          <div className="cards">
+            {list.map((p) => (
+              <PostRow key={p.id} post={p} />
+            ))}
+          </div>
         </section>
       </main>
-      <BottomNav />
     </>
   );
 }
@@ -123,7 +125,7 @@ function Stat({ value, label, href, dark, danger }: { value: number; label: stri
   return (
     <Link
       href={href}
-      style={{ background: dark ? "var(--noir)" : "var(--gris-1)", color: dark ? "#fff" : "var(--noir)", borderRadius: 14, padding: "14px 12px", textDecoration: "none", display: "block" }}
+      style={{ background: dark ? "var(--noir)" : "var(--surface-2)", color: dark ? "#fff" : "var(--noir)", borderRadius: 14, padding: "14px 12px", textDecoration: "none", display: "block" }}
     >
       <span style={{ display: "block", fontFamily: "var(--font-archivo)", fontWeight: 800, fontSize: 24, color: danger && value ? "var(--rouge)" : undefined }}>{value}</span>
       <span className="small" style={{ display: "block", marginTop: 2, color: dark ? "#c9ccd3" : "var(--texte-2)" }}>{label}</span>

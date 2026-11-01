@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Archivo } from "next/font/google";
 import "./globals.css";
+import { BottomNav } from "@/components/BottomNav";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const archivo = Archivo({ subsets: ["latin"], weight: ["300", "800"], variable: "--font-archivo", display: "swap" });
@@ -21,7 +22,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr" className={`${inter.variable} ${archivo.variable}`}>
       <body>
-        <div className="app">{children}</div>
+        <div className="app">
+          {children}
+          <BottomNav />
+        </div>
       </body>
     </html>
   );
