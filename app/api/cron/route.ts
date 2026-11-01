@@ -2,10 +2,10 @@
 // 1. autopilote : choisit la meilleure actu, la rédige et la planifie ; 2. publie les posts planifiés arrivés à échéance.
 import { NextResponse } from "next/server";
 import { fetchVeille, fetchArticle, similar } from "@/lib/veille";
-import { generatePost, aiConfigured } from "@/lib/claude";
+import { generatePost, aiConfigured, sameStoryAs } from "@/lib/claude";
 import { publishPost, connectionStatus } from "@/lib/publish";
 import { GUARDRAILS, TOPICS, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
-import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts } from "@/lib/store";
+import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts, postedUrls } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -59,7 +59,7 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
       log.push(`Autopilote en attente : ${why}.`);
     } else {
       const { items, errors } = await fetchVeille(sources, triggers);
-      const already = await recentPosts(72);
+      const already = await recentPosts(24 * 14);
       errors.forEach((e) => log.push(e));
       // Actus fraîches (moins de 24 h), sur un thème suivi, sans sujet sensible ni doublon d'un post récent.
       const fresh = items.filter(
@@ -71,12 +71,22 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
           !already.some((p) => p.source_url === it.url || similar(p.title ?? "", it.title))
       );
       const unseen = await filterUnseen(fresh.map((c) => c.url));
-      const candidates = fresh.filter((it) => unseen.has(it.url)).sort((a, b) => b.score - a.score);
+      const used = await postedUrls(fresh.map((c) => c.url));
+      const candidates = fresh.filter((it) => unseen.has(it.url) && !used.has(it.url)).sort((a, b) => b.score - a.score);
+      // Titres des 7 derniers jours, pour la vérification « même sujet » par l'IA.
+      const weekTitles = already.filter((p) => Date.now() - new Date(p.created_at).getTime() < 7 * 24 * 3.6e6).map((p) => p.title).filter(Boolean);
+      let checks = 0;
       if (candidates.length === 0) log.push("Autopilote : aucune actu assez pertinente pour l'instant.");
 
       let tries = 0;
       for (const item of candidates) {
-        if (tries >= GUARDRAILS.maxGenerationsPerRun) break;
+        if (tries >= GUARDRAILS.maxGenerationsPerRun || checks >= 6) break;
+        checks++;
+        if (await sameStoryAs(item.title, item.summary, weekTitles)) {
+          await markSeen([item.url]);
+          log.push(`Ignorée (sujet déjà publié) : ${item.title}`);
+          continue;
+        }
         tries++;
         const trigger = triggers.find((t) => t.id === item.triggers[0]);
         // Canaux : ceux du déclencheur, sinon Facebook + LinkedIn ; uniquement les comptes connectés.
