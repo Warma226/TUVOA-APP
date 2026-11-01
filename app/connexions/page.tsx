@@ -19,9 +19,10 @@ const HELP: Record<Platform, string[]> = {
     "Dans Vercel : FB_PAGE_ID et FB_PAGE_TOKEN, puis redéploie.",
   ],
   linkedin: [
-    "Crée une application sur developer.linkedin.com reliée à ta Page entreprise.",
-    "Demande l'accès à la publication pour les organisations.",
-    "Dans Vercel : LINKEDIN_TOKEN et LINKEDIN_AUTHOR (urn:li:organization:…), puis redéploie. Le jeton expire : pense à le renouveler.",
+    "Sur make.com (gratuit), crée un scénario : module « Webhooks › Custom webhook », puis copie son adresse.",
+    "Dans Vercel : LINKEDIN_WEBHOOK_URL = cette adresse, puis redéploie.",
+    "Dans Make, sur le webhook : « Redetermine data structure », puis ici « Envoyer un exemple à Make ».",
+    "Ajoute « HTTP › Get a file » (URL : image_url) puis « LinkedIn › Create an Organization Image Post » (Page TUVOA, texte : text, image : le fichier). Active le scénario.",
   ],
   tiktok: [
     "Demande l'accès « Content Posting API » sur developers.tiktok.com.",
@@ -35,6 +36,23 @@ export default function Connexions() {
   const [error, setError] = useState("");
   const [tests, setTests] = useState<Record<string, { ok: boolean; detail: string }> | null>(null);
   const [testing, setTesting] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [makeMsg, setMakeMsg] = useState("");
+
+  async function sendMakeExample() {
+    setSending(true);
+    setMakeMsg("");
+    try {
+      const res = await fetch("/api/connexions/make-exemple", { method: "POST" });
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(d.error || `Envoi impossible (${res.status}).`);
+      setMakeMsg("✓ Exemple envoyé : Make connaît maintenant les champs text, image_url, title…");
+    } catch (e) {
+      setMakeMsg(`✗ ${(e as Error).message}`);
+    } finally {
+      setSending(false);
+    }
+  }
 
   async function runTests() {
     setTesting(true);
@@ -116,6 +134,12 @@ export default function Connexions() {
                   {c?.configured ? "Gérer" : "Connecter"}
                 </button>
               </div>
+              {p.id === "linkedin" && c?.configured && c.detail.includes("Make") ? (
+                <button type="button" className="btn small ghost" style={{ alignSelf: "flex-start" }} disabled={sending} onClick={sendMakeExample}>
+                  {sending ? "Envoi…" : "Envoyer un exemple à Make"}
+                </button>
+              ) : null}
+              {makeMsg && p.id === "linkedin" ? <p role="status" className="small" style={{ fontSize: 13, color: makeMsg.startsWith("✓") ? "var(--vert)" : "var(--rouge)" }}>{makeMsg}</p> : null}
               {tests?.[p.id] && c?.configured ? (
                 <p role="status" className="small" style={{ fontSize: 13, fontWeight: 600, color: tests[p.id].ok ? "var(--vert)" : "var(--rouge)" }}>
                   {tests[p.id].ok ? "✓ " : "✗ "}

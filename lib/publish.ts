@@ -26,8 +26,8 @@ export function connectionStatus(): Record<Platform, { configured: boolean; deta
       detail: process.env.FB_PAGE_ID ? `Page ${process.env.FB_PAGE_ID}` : "FB_PAGE_ID, FB_PAGE_TOKEN",
     },
     linkedin: {
-      configured: Boolean(process.env.LINKEDIN_TOKEN && process.env.LINKEDIN_AUTHOR),
-      detail: process.env.LINKEDIN_AUTHOR ?? "LINKEDIN_TOKEN, LINKEDIN_AUTHOR",
+      configured: Boolean(process.env.LINKEDIN_WEBHOOK_URL || (process.env.LINKEDIN_TOKEN && process.env.LINKEDIN_AUTHOR)),
+      detail: process.env.LINKEDIN_WEBHOOK_URL ? "Page TUVOA via Make" : process.env.LINKEDIN_AUTHOR ?? "LINKEDIN_WEBHOOK_URL (Make)",
     },
     tiktok: {
       configured: false,
@@ -94,7 +94,34 @@ const facebook: Publisher = async (post) => {
   return { ok: true, detail: "Photo publiée sur la Page", url: json.post_id ? `https://www.facebook.com/${json.post_id}` : undefined };
 };
 
+// Données envoyées à Make (scénario : Webhook → HTTP « Get a file » → LinkedIn « Create an Organization Image Post »).
+export function linkedinPayload(post: Post, test = false) {
+  return {
+    test,
+    post_id: post.id,
+    text: post.texts.linkedin,
+    image_url: imageFor(post, "linkedin", true),
+    title: post.title || post.visual.titre,
+    source_url: post.source_url ?? "",
+  };
+}
+
+const linkedinViaMake: Publisher = async (post) => {
+  const payload = linkedinPayload(post);
+  if (!payload.image_url) throw new Error("Aucun visuel : ajoute le lien de ton visuel dans l'éditeur.");
+  const res = await fetch(process.env.LINKEDIN_WEBHOOK_URL as string, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) throw new Error(`Make a répondu ${res.status} : ${(await res.text()).slice(0, 200)}. Vérifie que le scénario est activé.`);
+  return { ok: true, detail: "Envoyé à Make pour publication sur la Page LinkedIn" };
+};
+
 const linkedin: Publisher = async (post) => {
+  // Page TUVOA via Make (aucune validation LinkedIn nécessaire) si le webhook est configuré.
+  if (process.env.LINKEDIN_WEBHOOK_URL) return linkedinViaMake(post);
   const headers = {
     Authorization: `Bearer ${process.env.LINKEDIN_TOKEN}`,
     "LinkedIn-Version": linkedinVersion(),
@@ -183,6 +210,17 @@ async function testFacebook(): Promise<ConnectionTest> {
 }
 
 async function testLinkedin(): Promise<ConnectionTest> {
+  const hook = process.env.LINKEDIN_WEBHOOK_URL;
+  if (hook) {
+    let host = "";
+    try {
+      host = new URL(hook).hostname;
+    } catch {
+      return { ok: false, detail: "LINKEDIN_WEBHOOK_URL n'est pas une adresse valide." };
+    }
+    if (!/(^|\.)make\.com$/.test(host)) return { ok: false, detail: "LINKEDIN_WEBHOOK_URL doit être l'adresse du webhook Make (…make.com)." };
+    return { ok: true, detail: "Webhook Make configuré. Pour ne rien publier, il n'est pas appelé pendant le test." };
+  }
   const author = process.env.LINKEDIN_AUTHOR ?? "";
   const id = author.match(/^urn:li:organization:(\d+)$/)?.[1];
   if (!id) return { ok: false, detail: "LINKEDIN_AUTHOR doit avoir la forme urn:li:organization:123456." };
