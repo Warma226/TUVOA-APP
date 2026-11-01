@@ -1,5 +1,6 @@
 // Rédaction des posts avec Claude (API Messages d'Anthropic).
 import { STYLE_GUIDE, RUBRIQUES, type RubriqueId, type TriggerFormat } from "./config";
+import { convertirTout } from "./devises";
 
 export type Generated = {
   variantes: string[];
@@ -244,6 +245,9 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   if (input.portrait) parts.push(`Infos fournies par l'expert : nom ${input.portrait.nom}, spécialité ${input.portrait.specialite}. ${input.portrait.infos}`);
   parts.push("Tous les textes (accroches, posts, article, visuel) doivent être rédigés en français.");
   parts.push(
+    "Montants : écris CHAQUE montant en devise (dollars, euros, etc.) uniquement sous la forme [[MONTANT:valeur numérique complète:code ISO]], par exemple [[MONTANT:6430000000:USD]] pour 6,43 milliards de dollars ou [[MONTANT:1500000:EUR]] pour 1,5 million d'euros. L'application l'écrira en toutes lettres avec sa conversion en XOF : n'écris jamais toi-même la conversion."
+  );
+  parts.push(
     "Mise en forme des posts Facebook et LinkedIn (\\n dans le JSON) : paragraphes courts de 1 ou 2 phrases séparés par une ligne vide ; la chute dans son propre paragraphe ; puis une ligne vide et « Source : nom du média » seule sur sa ligne ; puis une ligne vide et les hashtags sur la dernière ligne. Jamais tout le texte en un seul bloc."
   );
   parts.push(`Réponds uniquement avec un objet JSON valide, sans texte autour, de la forme :
@@ -260,15 +264,18 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
 
   const text = await callClaude(STYLE_GUIDE, parts.join("\n\n"), 4000, true);
   const g = extractJson<Partial<Generated>>(text);
+  // Montants convertis en XOF au taux du jour (« … dollars soit … XOF »).
+  const cv = (v: unknown) => convertirTout(String(v ?? ""));
+  const variantes = Array.isArray(g.variantes) ? await Promise.all(g.variantes.slice(0, 3).map(cv)) : [];
   return {
-    variantes: Array.isArray(g.variantes) ? g.variantes.slice(0, 3).map(String) : [],
-    facebook: formatSocial(String(g.facebook ?? "")),
-    linkedin: formatSocial(String(g.linkedin ?? "")),
-    tiktok: String(g.tiktok ?? "").slice(0, 150),
-    wp_title: String(g.wp_title ?? ""),
-    wp_body: String(g.wp_body ?? ""),
+    variantes,
+    facebook: formatSocial(await cv(g.facebook)),
+    linkedin: formatSocial(await cv(g.linkedin)),
+    tiktok: (await cv(g.tiktok)).slice(0, 150),
+    wp_title: await cv(g.wp_title),
+    wp_body: await cv(g.wp_body),
     visuel_titre: String(g.visuel_titre ?? ""),
-    visuel_texte: String(g.visuel_texte ?? ""),
+    visuel_texte: await cv(g.visuel_texte),
   };
 }
 
@@ -285,7 +292,7 @@ export async function rewrite(action: RewriteAction, text: string, platform: str
     `${consignes[action]} Plateforme : ${platform}. Réponds uniquement avec le nouveau texte, sans guillemets ni commentaire.\n\nTexte :\n${text}`,
     1500
   );
-  return out.trim();
+  return convertirTout(out.trim());
 }
 
 // Brouillon sans IA (quand aucune clé d'IA n'est configurée) : structure prête à compléter,
