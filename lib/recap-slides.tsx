@@ -87,7 +87,7 @@ function Carte({ photo, titre, sous, w, h, opacity = 1, r = 0 }: { photo?: strin
 
 function item(d: { index: number; total: number; categorie: string; texte: string; photo?: string; source?: string; autres?: { photo?: string; categorie: string }[] }) {
   const info = fit(d.texte, 220);
-  const size = autoSize(info, [[90, 62], [130, 56], [170, 50], [999, 46]]);
+  const size = autoSize(info, [[90, 50], [130, 46], [170, 42], [999, 38]]);
   const cat = fit(d.categorie || "Actu tech", 20);
   return (
     <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: M, background: "#0A0F1F" }}>
@@ -122,12 +122,12 @@ function item(d: { index: number; total: number; categorie: string; texte: strin
       })()}
 
       {/* Mentions en italique */}
-      <div style={{ position: "absolute", right: 40, top: 712, display: "flex" }}>
-        <Mention text={`« ${cat} »`} size={46} pinceau={Math.min(320, cat.length * 20 + 60)} />
+      <div style={{ position: "absolute", right: 80, top: 712, display: "flex" }}>
+        <Mention text={`« ${cat} »`} size={38} pinceau={Math.min(270, cat.length * 17 + 50)} />
       </div>
-      <div style={{ position: "absolute", right: 110, top: 1075, display: "flex", fontFamily: SERIF, fontStyle: "italic", fontSize: 100, color: "#FFFFFF" }}>{`${d.index}/${d.total}`}</div>
+      <div style={{ position: "absolute", right: 110, top: 1075, display: "flex", fontFamily: SERIF, fontStyle: "italic", fontSize: 84, color: "#FFFFFF" }}>{`${d.index}/${d.total}`}</div>
       <div style={{ position: "absolute", left: 210, top: 1150, display: "flex" }}>
-        <Mention text={d.source ? `« Source : ${fit(d.source, 26)} »` : "« TUVOA Tech Media »"} size={40} pinceau={180} />
+        <Mention text={d.source ? `« Source : ${fit(d.source, 26)} »` : "« TUVOA Tech Media »"} size={33} pinceau={150} />
       </div>
     </div>
   );
