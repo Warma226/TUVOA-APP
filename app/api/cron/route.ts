@@ -172,7 +172,7 @@ async function weeklyRecap(log: string[], opts: { force: boolean; dry: boolean }
   if (!opts.force && (now.getUTCDay() !== GUARDRAILS.recapDay || now.getUTCHours() < GUARDRAILS.recapHour || now.getUTCHours() >= GUARDRAILS.autoEndHour)) return null;
   if (!opts.dry && (await recapExists(monday.toISOString()))) return null;
   const week = (await publishedSince(monday.toISOString())).filter((p) => p.rubrique === "actu" && p.origin !== "recap");
-  if (week.length < GUARDRAILS.recapMinPosts) {
+  if (week.length < (opts.dry ? 1 : GUARDRAILS.recapMinPosts)) {
     log.push(`Récap de la semaine : pas assez d'actus publiées (${week.length}).`);
     return null;
   }
