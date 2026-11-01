@@ -33,6 +33,23 @@ export default function Connexions() {
   const [info, setInfo] = useState<Info | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [tests, setTests] = useState<Record<string, { ok: boolean; detail: string }> | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  async function runTests() {
+    setTesting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/connexions", { cache: "no-store" });
+      const d = (await res.json()) as { results?: Record<string, { ok: boolean; detail: string }>; error?: string };
+      if (!res.ok || !d.results) throw new Error(d.error || `Test impossible (${res.status}).`);
+      setTests(d.results);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setTesting(false);
+    }
+  }
 
   useEffect(() => {
     getInfo()
@@ -68,6 +85,12 @@ export default function Connexions() {
       <main className="page" style={{ paddingTop: 4 }}>
         <p className="muted">Relie tes comptes pour que TUVOA publie à ta place, après ta validation.</p>
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
+        {info && PLATFORMS.some((p) => info.connections[p.id]?.configured) ? (
+          <button type="button" className="btn small ghost" style={{ alignSelf: "flex-start" }} onClick={runTests} disabled={testing}>
+            <Icon name="check" size={16} stroke={2.2} />
+            {testing ? "Test en cours…" : "Tester les comptes reliés"}
+          </button>
+        ) : null}
 
         {PLATFORMS.map((p) => {
           const c = info?.connections[p.id];
@@ -79,7 +102,7 @@ export default function Connexions() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontWeight: 600, fontSize: 16 }}>{p.label}</p>
                   <p className="small" style={{ fontSize: 13, color: c?.configured ? "var(--vert)" : "var(--texte-2)" }}>
-                    {c ? (c.configured ? `Connecté · ${c.detail}` : "Non connecté") : "…"}
+                    {c ? (c.configured ? `Relié · ${c.detail}` : "Non connecté") : "…"}
                   </p>
                 </div>
                 <button
@@ -93,6 +116,12 @@ export default function Connexions() {
                   {c?.configured ? "Gérer" : "Connecter"}
                 </button>
               </div>
+              {tests?.[p.id] && c?.configured ? (
+                <p role="status" className="small" style={{ fontSize: 13, fontWeight: 600, color: tests[p.id].ok ? "var(--vert)" : "var(--rouge)" }}>
+                  {tests[p.id].ok ? "✓ " : "✗ "}
+                  {tests[p.id].detail}
+                </p>
+              ) : null}
               {isOpen ? (
                 <ol id={`aide-${p.id}`} className="small" style={{ margin: "4px 0 0", paddingLeft: 20, lineHeight: 1.6, color: "var(--texte-3)" }}>
                   {c?.configured ? <li>Pour changer de compte, remplace les variables dans Vercel puis redéploie.</li> : HELP[p.id].map((h) => <li key={h}>{h}</li>)}
