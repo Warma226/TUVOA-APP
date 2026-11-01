@@ -88,9 +88,14 @@ export const SOURCES: Source[] = [
 // `poids` : points de pertinence ajoutés quand le thème est détecté (la veille classe les actus avec).
 // Les annonces de nouveaux smartphones intéressent peu le public de TUVOA : elles ne sont pas mises en avant.
 export const TOPICS: { id: string; label: string; keywords: string[]; poids: number }[] = [
+  { id: "burkina", label: "Burkina Faso", poids: 35, keywords: ["burkina", "burkinabè", "burkinabe", "ouaga", "ouagadougou", "bobo-dioulasso", "koudougou", "faso"] },
+  { id: "evenements", label: "Événements tech", poids: 20, keywords: ["forum ia", "cyber africa", "africa tech summit", "innov africa", "gitex", "hackathon", "salon du numérique", "semaine du numérique", "sitic"] },
   { id: "afrique", label: "Afrique & télécoms", poids: 25, keywords: ["afrique", "africa", "african", "sénégal", "senegal", "côte d'ivoire", "ivory coast", "burkina", "mali", "niger", "bénin", "togo", "ghana", "nigeria", "kenya", "cameroun", "uemoa", "cedeao", "orange money", "mobile money", "wave", "mtn", "moov", "airtel", "télécom", "telecom", "opérateur"] },
   { id: "cyber", label: "Cybersécurité", poids: 15, keywords: ["faille", "vulnérabilit", "vulnerability", "malware", "ransomware", "phishing", "arnaque", "scam", "hack", "cve-", "zero-day", "exploit", "cyber", "breach", "fuite"] },
   { id: "ia", label: "IA", poids: 15, keywords: ["intelligence artificielle", " ia ", "ai ", " ai,", "llm", "chatgpt", "openai", "anthropic", "claude", "gemini", "machine learning", "modèle"] },
+  { id: "crypto", label: "Crypto & blockchain", poids: 10, keywords: ["crypto", "blockchain", "bitcoin", "ethereum", "web3", "stablecoin", "binance"] },
+  { id: "reseaux", label: "Réseaux sociaux", poids: 10, keywords: ["réseaux sociaux", "social media", "facebook", "tiktok", "whatsapp", "instagram", "youtube", " meta ", "linkedin", "x (ex-twitter)"] },
+  { id: "robotique", label: "Robotique", poids: 10, keywords: ["robot", "robotique", "robotics", "drone", "humanoïde", "humanoid", "automatisation"] },
   { id: "startups", label: "Startups", poids: 15, keywords: ["startup", "start-up", "levée", "raises", "funding", "series a", "series b", "seed", "fintech"] },
   { id: "smartphones", label: "Smartphones", poids: 0, keywords: ["android", "iphone", "ios", "smartphone", "samsung", "galaxy", "pixel", "xiaomi", "tecno", "infinix", "itel"] },
 ];
@@ -204,8 +209,10 @@ export const GUARDRAILS = {
 
 // Guide de style donné à l'IA à chaque rédaction
 export const STYLE_GUIDE = `
-Tu écris pour TUVOA Tech Media, un média tech francophone (site : www.tuvoa.media).
-Ligne éditoriale : uniquement la tech, avec en priorité ce qui touche le public africain : cybersécurité et arnaques, mobile money et télécoms, IA, startups et numérique en Afrique.
+Tu écris pour TUVOA Tech Media (anciennement Warmachiner Tech), média burkinabè et africain d'infos et de formation en technologies, fondé en 2021 (site : www.tuvoa.media).
+Mission : « On décode la tech pour que chacun puisse s'en servir, pas juste la subir. » Conviction : la technologie n'a de valeur que si elle est comprise, et d'impact que si elle est partagée.
+Ligne éditoriale : uniquement la tech, traduite, ancrée dans les réalités locales et expliquée sans jargon, pour un public jeune. Priorité au Burkina Faso, puis à l'Afrique de l'Ouest et au continent : cybersécurité et arnaques, IA, crypto et blockchain, mobile money et télécoms, réseaux sociaux, robotique, startups, et les grands rendez-vous tech africains (Forum IA Ouaga, Forum Cyber Africa, Africa Tech Summit, Innov Africa…).
+Quand une actu mondiale a un effet concret pour les lecteurs africains (prix, accès, sécurité, emploi), dis-le en une phrase, sans rien inventer.
 Les annonces de nouveaux smartphones n'intéressent que si elles concernent l'Afrique (prix, disponibilité, modèles vendus localement) : sinon, reste bref.
 Ton : celui d'un média d'information tech sérieux. Neutre, factuel, rigoureux, à la troisième personne : pas de tutoiement, pas d'interpellation du lecteur, pas de formule familière, pas de « tu vois ? ».
 Le post résume l'information : qui, quoi, quand, chiffres clés, conséquences. Pas de conseils au lecteur sauf si l'info l'exige (ex. mise à jour de sécurité urgente), formulés sobrement.
