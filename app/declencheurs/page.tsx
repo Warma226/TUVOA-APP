@@ -125,7 +125,7 @@ export default function Declencheurs() {
           <h3>Garde-fous de l'autopilote</h3>
           <ul className="small" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7, color: "var(--texte-3)" }}>
             <li>L'app choisit elle-même l'actu la plus pertinente (Afrique, cybersécurité, IA, startups ; les déclencheurs passent en priorité).</li>
-            <li>Une publication toutes les {Math.round(GUARDRAILS.minGapMinutes / 60)} h au plus, entre {GUARDRAILS.autoStartHour} h et {GUARDRAILS.autoEndHour} h.</li>
+            <li>Une publication par heure, entre {GUARDRAILS.autoStartHour} h et {GUARDRAILS.autoEndHour} h.</li>
             <li>{GUARDRAILS.delayMinutes} minutes pour annuler avant chaque publication automatique.</li>
             <li>{GUARDRAILS.maxAutoPerDay} publications automatiques par jour au maximum.</li>
             <li>Jamais en automatique : décès, politique, accusations, conflits, justice.</li>

@@ -186,14 +186,14 @@ export const GUARDRAILS = {
   // Plage horaire de publication (heure UTC = heure d'Abidjan, Dakar, Ouaga ; +1 h à Lagos/Douala)
   autoStartHour: 7,
   autoEndHour: 21,
-  // Écart minimal entre deux publications automatiques
-  minGapMinutes: 120,
+  // Écart minimal entre deux publications automatiques (un post par heure ; marge pour le passage toutes les 15 min)
+  minGapMinutes: 55,
   // Pertinence minimale (thème suivi + actu fraîche) pour être publiée seule
   minAutoScore: 55,
   // Délai pendant lequel on peut annuler une publication automatique
   delayMinutes: 10,
   // Plafond de publications automatiques par jour
-  maxAutoPerDay: 6,
+  maxAutoPerDay: 15,
   // Plafond de posts générés par passage de la tâche planifiée (maîtrise des coûts IA)
   maxGenerationsPerRun: 2,
 };

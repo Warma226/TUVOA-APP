@@ -21,15 +21,17 @@ function authorized(req: Request) {
 export async function GET(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   const log: string[] = [];
+  const q = new URL(req.url).searchParams;
   try {
-    return await run(log);
+    return await run(log, { force: q.get("force") === "1", now: q.get("now") === "1" });
   } catch (e) {
     console.error("cron", e);
     return NextResponse.json({ ok: false, error: (e as Error).message, stack: (e as Error).stack?.split("\n").slice(0, 4), log }, { status: 500 });
   }
 }
 
-async function run(log: string[]) {
+// force : ignore l'écart entre deux posts et la plage horaire ; now : publie tout de suite (sans délai d'annulation).
+async function run(log: string[], opts: { force: boolean; now: boolean } = { force: false, now: false }) {
   const settings = await getSettings();
 
   // ─── 1. Veille : l'autopilote choisit et publie seul ─────────────
@@ -46,6 +48,7 @@ async function run(log: string[]) {
 
     const why =
       !settings.autopilot ? "autopilote coupé (Déclencheurs)"
+      : opts.force ? ""
       : hour < GUARDRAILS.autoStartHour || hour >= GUARDRAILS.autoEndHour ? `hors plage horaire (${GUARDRAILS.autoStartHour} h – ${GUARDRAILS.autoEndHour} h)`
       : autoToday >= GUARDRAILS.maxAutoPerDay ? "plafond du jour atteint"
       : pending ? "une publication automatique est déjà en attente"
@@ -120,11 +123,11 @@ async function run(log: string[]) {
             visual: { titre: g.visuel_titre || TOPICS.find((t) => t.id === item.topics[0])?.label || "Actu tech", texte: g.visuel_texte || item.title, image },
             status: "planifie",
             auto: true,
-            scheduled_at: new Date(Date.now() + GUARDRAILS.delayMinutes * 60000).toISOString(),
+            scheduled_at: new Date(Date.now() + (opts.now ? 0 : GUARDRAILS.delayMinutes) * 60000).toISOString(),
           });
           await savePost(post);
           await markSeen([item.url]);
-          log.push(`Autopilote : « ${item.title} » publié dans ${GUARDRAILS.delayMinutes} min (${platforms.join(", ")}).`);
+          log.push(`Autopilote : « ${item.title} » publié dans ${opts.now ? 0 : GUARDRAILS.delayMinutes} min (${platforms.join(", ")}).`);
           break; // un seul post par créneau
         } catch (e) {
           // Pas marquée comme vue : l'actu sera retentée au passage suivant.
