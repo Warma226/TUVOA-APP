@@ -245,7 +245,7 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   if (input.portrait) parts.push(`Infos fournies par l'expert : nom ${input.portrait.nom}, spécialité ${input.portrait.specialite}. ${input.portrait.infos}`);
   parts.push("Tous les textes (accroches, posts, article, visuel) doivent être rédigés en français.");
   parts.push(
-    "Montants : écris CHAQUE montant en devise (dollars, euros, etc.) uniquement sous la forme [[MONTANT:valeur numérique complète:code ISO]], par exemple [[MONTANT:6430000000:USD]] pour 6,43 milliards de dollars ou [[MONTANT:1500000:EUR]] pour 1,5 million d'euros. L'application l'écrira en toutes lettres avec sa conversion en XOF : n'écris jamais toi-même la conversion."
+    "Montants : écris CHAQUE montant en devise (dollars, euros, etc.) uniquement sous la forme [[MONTANT:valeur numérique complète:code ISO]], par exemple [[MONTANT:6430000000:USD]] pour 6,43 milliards de dollars ou [[MONTANT:1500000:EUR]] pour 1,5 million d'euros. L'application l'écrira en toutes lettres avec sa conversion en FCFA : n'écris jamais toi-même la conversion."
   );
   parts.push(
     "Mise en forme des posts Facebook et LinkedIn (\\n dans le JSON) : paragraphes courts de 1 ou 2 phrases séparés par une ligne vide ; la chute dans son propre paragraphe ; puis une ligne vide et « Source : nom du média » seule sur sa ligne ; puis une ligne vide et les hashtags sur la dernière ligne. Jamais tout le texte en un seul bloc."
@@ -264,7 +264,7 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
 
   const text = await callClaude(STYLE_GUIDE, parts.join("\n\n"), 4000, true);
   const g = extractJson<Partial<Generated>>(text);
-  // Montants convertis en XOF au taux du jour (« … dollars soit … XOF »).
+  // Montants convertis en FCFA au taux du jour (« … dollars, soit environ … FCFA »).
   const cv = (v: unknown) => convertirTout(String(v ?? ""));
   const variantes = Array.isArray(g.variantes) ? await Promise.all(g.variantes.slice(0, 3).map(cv)) : [];
   return {
