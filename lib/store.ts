@@ -14,7 +14,7 @@ export type Post = {
   title: string;
   source_name: string | null;
   source_url: string | null;
-  origin: "manuel" | "veille";
+  origin: "manuel" | "veille" | "recap";
   trigger_id: string | null;
   texts: {
     facebook: string;
@@ -135,6 +135,22 @@ export async function recentAutoPosts(hours: number): Promise<Post[]> {
   const { data, error } = await db().from("posts").select("*").eq("auto", true).gte("created_at", since).order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as Post[];
+}
+
+// Posts publiés depuis une date (pour le récap de la semaine).
+export async function publishedSince(sinceIso: string): Promise<Post[]> {
+  if (isDemo()) return mem().posts.filter((p) => p.status === "publie" && p.created_at >= sinceIso);
+  const { data, error } = await db().from("posts").select("*").eq("status", "publie").gte("created_at", sinceIso).order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Post[];
+}
+
+// Le récap de la semaine existe-t-il déjà ?
+export async function recapExists(sinceIso: string): Promise<boolean> {
+  if (isDemo()) return mem().posts.some((p) => p.origin === "recap" && p.created_at >= sinceIso);
+  const { count, error } = await db().from("posts").select("id", { count: "exact", head: true }).eq("origin", "recap").gte("created_at", sinceIso);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
 }
 
 // Articles déjà utilisés pour un post (depuis toujours, manuels compris).

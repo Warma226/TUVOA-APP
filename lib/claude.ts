@@ -219,6 +219,51 @@ export async function sameStoryAs(title: string, summary: string, recentTitles: 
   }
 }
 
+// ─── Récap tech de la semaine ──────────────────────────────────────
+export type RecapItem = { title: string; text: string; source: string | null };
+
+export async function generateRecap(items: RecapItem[], periode: string): Promise<{ facebook: string; linkedin: string; titre: string }> {
+  const liste = items
+    .map((it, i) => `${i + 1}. ${it.title}\n${it.text.replace(/#\S+/g, "").slice(0, 700)}\nSource : ${it.source ?? "?"}`)
+    .join("\n\n");
+  const out = await callClaude(
+    STYLE_GUIDE,
+    `Rédige le « Récap tech de la semaine » de TUVOA (${periode}) à partir des posts publiés cette semaine, ci-dessous.
+Sélectionne les 5 sujets les plus importants pour le public africain francophone (moins s'il y en a moins), du plus important au moins important.
+Ne rien inventer : n'utilise que les informations des posts.
+
+Posts de la semaine :
+${liste}
+
+Réponds uniquement avec un objet JSON :
+{
+  "intro": "une phrase d'introduction sobre",
+  "points": ["un point par sujet : une seule phrase factuelle (25 mots maximum), sans puce ni numéro"],
+  "chute": "une phrase de chute sobre qui met la semaine en perspective",
+  "titre": "titre court du récap (5 mots maximum)"
+}
+Montants : écris-les sous la forme [[MONTANT:valeur numérique complète:code ISO]] (ex. [[MONTANT:6430000000:USD]]).`,
+    2000,
+    true
+  );
+  const g = extractJson<{ intro?: string; points?: string[]; chute?: string; titre?: string }>(out);
+  const points = await Promise.all((g.points ?? []).filter(Boolean).slice(0, 5).map((p) => convertirTout(String(p).trim())));
+  if (points.length === 0) throw new Error("Récap vide");
+  const sources = Array.from(new Set(items.map((i) => i.source).filter(Boolean))).join(", ");
+  const corps = [
+    "Le récap tech de la semaine",
+    await convertirTout(String(g.intro ?? "").trim()),
+    points.map((p) => `• ${p}`).join("\n\n"),
+    await convertirTout(String(g.chute ?? "").trim()),
+    sources ? `Sources : ${sources}` : "",
+  ].filter(Boolean);
+  return {
+    facebook: [...corps, "#RécapTech #ActuTech #TUVOA"].join("\n\n"),
+    linkedin: [...corps, "#RécapTech #Tech #Afrique"].join("\n\n"),
+    titre: String(g.titre ?? "Récap tech de la semaine"),
+  };
+}
+
 export async function generatePost(input: GenerateInput): Promise<Generated> {
   const rub = RUBRIQUES.find((r) => r.id === input.rubrique) ?? RUBRIQUES[0];
   const consignesRubrique: Record<RubriqueId, string> = {

@@ -194,6 +194,10 @@ export const GUARDRAILS = {
   delayMinutes: 10,
   // Plafond de publications automatiques par jour
   maxAutoPerDay: 15,
+  // Récap tech de la semaine : vendredi (5) à 17 h (UTC), avec au moins 3 actus publiées dans la semaine
+  recapDay: 5,
+  recapHour: 17,
+  recapMinPosts: 3,
   // Plafond de posts générés par passage de la tâche planifiée (maîtrise des coûts IA)
   maxGenerationsPerRun: 2,
 };
