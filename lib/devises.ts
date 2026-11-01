@@ -105,8 +105,11 @@ export function convertirMontantsEnClair(texte: string, taux: Record<string, num
   });
 }
 
+// Retire les conversions écrites par l'IA elle-même (souvent fausses) : l'app refait le calcul.
+const CONVERSION_IA = /\s*[,(]?\s*soit\s+(?:environ\s+|près de\s+)?[\d  ,.]+\s*(?:milliards?|millions?)?\s*(?:de\s+)?(?:FCFA|F\s?CFA|XOF|francs?\s+CFA)\s*\)?/gi;
+
 export async function convertirTout(texte: string): Promise<string> {
   if (!texte) return texte;
   const taux = await tauxXof();
-  return convertirMontantsEnClair(remplacerMontants(texte, taux), taux);
+  return convertirMontantsEnClair(remplacerMontants(texte.replace(CONVERSION_IA, ""), taux), taux);
 }
