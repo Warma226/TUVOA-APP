@@ -33,7 +33,7 @@ function suggestHashtags(post: Post, text: string): string[] {
   const rub = RUBRIQUES.find((r) => r.id === post.rubrique);
   if (rub) out.push(rub.hashtag);
   out.push("#Tech");
-  TOPICS.filter((t) => t.keywords.some((k) => low.includes(k))).forEach((t) => out.push(`#${t.label.normalize("NFD").replace(/[̀-ͯ]/g, "")}`));
+  TOPICS.filter((t) => t.poids > 0 && t.keywords.some((k) => low.includes(k))).forEach((t) => out.push(`#${t.label.normalize("NFD").replace(/[^A-Za-z0-9]/g, "")}`));
   out.push("#TUVOA");
   return Array.from(new Set(out)).slice(0, 6);
 }

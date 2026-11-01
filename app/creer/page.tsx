@@ -147,7 +147,7 @@ function Creer() {
         {rubrique === "portrait" ? null : (
           <label className="field">
             {rubrique === "cyberbase" ? "Notion à expliquer" : sourceUrl ? "Ton angle (facultatif)" : "Ton idée"}
-            <textarea rows={3} value={idea} onChange={(e) => setIdea(e.target.value)} placeholder={rubrique === "cyberbase" ? "Social engineering" : "Les nouveautés d'Android 17 expliquées simplement"} />
+            <textarea rows={3} value={idea} onChange={(e) => setIdea(e.target.value)} placeholder={rubrique === "cyberbase" ? "Social engineering" : "Comment repérer une arnaque au mobile money"} />
           </label>
         )}
 
