@@ -20,12 +20,14 @@ export function visualUrl(post: Pick<Post, "rubrique" | "visual" | "source_name"
 export { formatFor } from "./formats";
 import { formatFor } from "./formats";
 
-// Seule l'Actualité a un visuel généré. #CyberBase et #Portrait utilisent le visuel que tu fournis.
+// Plus de visuel généré : l'Actualité publie l'image de l'article, #CyberBase et #Portrait le visuel que tu fournis.
 export function generatedRubrique(rubrique: string): boolean {
-  return rubrique === "actu";
+  void rubrique;
+  return false;
 }
 
 export function imageFor(post: Pick<Post, "rubrique" | "visual" | "source_name">, platform: string, absolute = false): string {
-  if (!generatedRubrique(post.rubrique)) return post.visual.image ?? "";
-  return visualUrl(post, formatFor(platform, post.rubrique), absolute);
+  void platform;
+  void absolute;
+  return post.visual.image ?? "";
 }

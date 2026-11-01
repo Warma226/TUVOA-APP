@@ -172,7 +172,7 @@ function extractJson<T>(text: string): T {
 export async function generatePost(input: GenerateInput): Promise<Generated> {
   const rub = RUBRIQUES.find((r) => r.id === input.rubrique) ?? RUBRIQUES[0];
   const consignesRubrique: Record<RubriqueId, string> = {
-    actu: "Rubrique #ActuTech : résume l'actualité, dis pourquoi c'est important pour le lecteur, cite la source. visuel_titre = la catégorie en 1 ou 2 mots (Cybersécurité, IA, Smartphones, Startups, Télécoms, Numérique…), visuel_texte = l'info en 1 ou 2 phrases (35 mots maximum).",
+    actu: "Rubrique #ActuTech : résume l'information de façon factuelle (faits, chiffres, contexte, portée), cite la source. visuel_titre = la catégorie en 1 ou 2 mots (Cybersécurité, IA, Smartphones, Startups, Télécoms, Numérique…), visuel_texte = l'info en 1 ou 2 phrases (35 mots maximum).",
     cyberbase:
       "Rubrique #CyberBase (comprendre les notions basiques de la tech) : définis la notion en 2 courts paragraphes, simples et concrets, avec un exemple du quotidien. visuel_titre = le nom de la notion (2 à 4 mots), visuel_texte = la définition (2 paragraphes, 60 mots maximum au total).",
     portrait:
@@ -197,7 +197,7 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   parts.push(`Réponds uniquement avec un objet JSON valide, sans texte autour, de la forme :
 {
   "variantes": ["accroche directe", "accroche pédagogique", "accroche sous forme de question"],
-  "facebook": "post Facebook complet (ton direct, 2 à 5 phrases, 2 à 4 hashtags dont ${rub.hashtag}, source citée)",
+  "facebook": "post Facebook complet (résumé factuel, 3 à 5 phrases, chute sobre, 2 à 4 hashtags dont ${rub.hashtag}, source citée)",
   "linkedin": "post LinkedIn complet (ton professionnel, phrases aérées, 3 hashtags, source citée)",
   "tiktok": "légende TikTok de 150 caractères maximum",
   "wp_title": "titre d'article WordPress",
@@ -225,7 +225,7 @@ export async function rewrite(action: RewriteAction, text: string, platform: str
     raccourcir: "Raccourcis ce texte de moitié en gardant l'essentiel et la source.",
     reformuler: "Reformule ce texte avec une autre accroche, même sens, même longueur.",
     expliquer: "Ajoute une explication très simple de ce que ça change concrètement pour le lecteur.",
-    ton: "Réécris ce texte dans le ton TUVOA (direct, tutoiement, clair).",
+    ton: "Réécris ce texte dans le ton TUVOA : neutre, factuel, rigoureux, à la troisième personne, sans tutoiement ni familiarité.",
     traduire: "Réécris ce texte entièrement en bon français (traduis tout passage dans une autre langue), même sens, même ton.",
   };
   const out = await callClaude(
@@ -261,7 +261,7 @@ export function draftWithoutAI(input: GenerateInput): Generated {
     const a_completer = "[Définition en 2 phrases simples, avec un exemple du quotidien.]";
     return {
       variantes: [`${notion} : la notion à connaître`, `${notion}, expliqué simplement`, `C'est quoi, ${notion} ?`],
-      facebook: `#CyberBase · ${notion}\n\n${a_completer}\n\nTu vois ? #CyberBase #Tech #TUVOA`,
+      facebook: `#CyberBase · ${notion}\n\n${a_completer}\n\n#CyberBase #Tech #TUVOA`,
       linkedin: `#CyberBase · ${notion}\n\n${a_completer}\n\n#CyberBase #Cybersécurité #TUVOA`,
       tiktok: `${notion}, expliqué en 30 secondes #CyberBase`.slice(0, 150),
       wp_title: `${notion} : comprendre la notion simplement`,
@@ -272,9 +272,9 @@ export function draftWithoutAI(input: GenerateInput): Generated {
   }
   const titre = (input.articleTitle || input.idea || "Actualité tech").trim();
   const angle = input.idea && input.articleTitle ? `\n\n${input.idea}` : "";
-  const a_completer = "[Ce que ça change pour toi, en 2 phrases.]";
+  const a_completer = "[Résumé de l’information en 2 ou 3 phrases.]";
   return {
-    variantes: [titre, `Ce qu'il faut retenir : ${titre}`, `${titre} : qu'est-ce que ça change pour toi ?`],
+    variantes: [titre, `Ce qu'il faut retenir : ${titre}`, `${titre} : les enjeux`],
     facebook: `${titre}${angle}\n\n${a_completer}\n\n${source}${lien}\n\n${rub.hashtag} #Tech #TUVOA`.trim(),
     linkedin: `${titre}${angle}\n\n${a_completer}\n\n${source}${lien}\n\n${rub.hashtag} #Tech #Innovation`.trim(),
     tiktok: `${titre} ${rub.hashtag}`.slice(0, 150),

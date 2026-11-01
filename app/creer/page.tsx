@@ -91,6 +91,7 @@ function Creer() {
       const d = await res.json().catch(() => ({ error: "Le serveur n'a pas répondu à temps. Réessaie." }));
       if (!res.ok || !d.generated) throw new Error(d.error || "Aucun texte reçu. Réessaie.");
       setGen(d.generated);
+      if (d.image && !photo.trim()) setPhoto(d.image);
       setNotice(d.notice ?? "");
       setPicked(0);
     } catch (e) {
@@ -110,7 +111,7 @@ function Creer() {
       gen ?? (sourceUrl || idea.trim() || rubrique === "portrait"
         ? draftWithoutAI({ rubrique, idea, sourceUrl, sourceName, articleTitle, articleSummary, categorie, portrait: rubrique === "portrait" ? { nom, specialite, infos } : undefined })
         : null);
-    const accroche = gen?.variantes[picked];
+    const accroche = gen && picked > 0 ? gen.variantes[picked] : undefined;
     const post: Partial<Post> = {
       rubrique,
       idea,
@@ -134,7 +135,7 @@ function Creer() {
         texte: rubrique === "portrait" ? specialite : g?.visuel_texte || "",
         nom: rubrique === "portrait" ? nom : undefined,
         specialite: rubrique === "portrait" ? specialite : undefined,
-        image: rubrique !== "actu" && photo.trim() ? photo.trim() : undefined,
+        image: photo.trim() || undefined,
       },
     };
     try {
@@ -196,6 +197,8 @@ function Creer() {
 
         {rubrique !== "actu" ? (
           <ImageField label="Ton visuel" hint="Le visuel que tu as créé. Tu peux aussi l'ajouter plus tard dans l'éditeur." value={photo} onChange={setPhoto} />
+        ) : sourceUrl || photo ? (
+          <ImageField label="Image de l'article" hint="Récupérée automatiquement depuis l'article. Tu peux la remplacer." value={photo} onChange={setPhoto} />
         ) : null}
 
         <fieldset style={{ border: 0, margin: 0, padding: 0 }} className="stack">
@@ -241,7 +244,7 @@ function Creer() {
           <section className="stack" aria-labelledby="propose">
             <h2 id="propose" className="label">Post proposé · Facebook</h2>
             <div className="card" style={{ padding: 16, whiteSpace: "pre-wrap", fontSize: 15, lineHeight: 1.5 }}>
-              {withHook(gen.facebook, gen.variantes[picked])}
+              {withHook(gen.facebook, picked > 0 ? gen.variantes[picked] : undefined)}
             </div>
             <p className="muted small">LinkedIn, TikTok et l'article WordPress sont aussi prêts : tu les verras dans l'éditeur avant de publier.</p>
           </section>

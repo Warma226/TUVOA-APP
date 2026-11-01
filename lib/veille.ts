@@ -16,6 +16,7 @@ export type VeilleItem = {
   sameStoryCount: number; // nombre de sources différentes sur le même sujet
   triggers: string[]; // déclencheurs correspondants
   blocked: boolean; // sujet sensible : jamais en automatique
+  image: string; // image fournie par le flux RSS (secours si l'article n'en donne pas)
 };
 
 const parser = new Parser({ timeout: 12000, headers: { "User-Agent": "TUVOA-Veille/0.1 (+https://www.tuvoa.media)" } });
@@ -100,6 +101,7 @@ export async function fetchVeille(sources: Source[], triggers: Trigger[]): Promi
         score,
         triggers: matched,
         blocked,
+        image: entry.enclosure?.url && /^https:/.test(entry.enclosure.url) && (!entry.enclosure.type || entry.enclosure.type.startsWith("image")) ? entry.enclosure.url : "",
       });
     }
   });
@@ -117,22 +119,48 @@ export async function fetchVeille(sources: Source[], triggers: Trigger[]): Promi
 
 // Récupère le texte d'un article pour le résumer (le texte n'est jamais publié tel quel).
 export async function fetchArticleText(url: string): Promise<string> {
+  return (await fetchArticle(url)).text;
+}
+
+// Image principale de l'article (balises og:image / twitter:image), en adresse absolue.
+function articleImage(html: string, pageUrl: string): string {
+  const metas = Array.from(html.matchAll(/<meta\b[^>]*>/gi)).map((m) => m[0]);
+  for (const key of ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"]) {
+    for (const tag of metas) {
+      const name = /(?:property|name)\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1]?.toLowerCase();
+      if (name !== key) continue;
+      const content = /content\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
+      if (!content) continue;
+      try {
+        const abs = new URL(content.replace(/&amp;/g, "&").trim(), pageUrl).toString();
+        if (/^https:\/\//.test(abs)) return abs;
+      } catch {
+        /* adresse invalide */
+      }
+    }
+  }
+  return "";
+}
+
+// Texte (pour que l'IA comprenne) et image de l'article.
+export async function fetchArticle(url: string): Promise<{ text: string; image: string }> {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "TUVOA-Veille/0.1 (+https://www.tuvoa.media)" },
-      signal: AbortSignal.timeout(5000),
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; TUVOA-Veille/0.1; +https://www.tuvoa.media)" },
+      signal: AbortSignal.timeout(6000),
     });
-    if (!res.ok) return "";
+    if (!res.ok) return { text: "", image: "" };
     const html = await res.text();
+    const image = articleImage(html, res.url || url);
     const body = html
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
       .replace(/<style[\s\S]*?<\/style>/gi, " ")
       .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
       .replace(/<footer[\s\S]*?<\/footer>/gi, " ");
     const paragraphs = Array.from(body.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)).map((m) => clean(m[1]));
-    return paragraphs.filter((p) => p.length > 60).join("\n").slice(0, 12000);
+    return { text: paragraphs.filter((p) => p.length > 60).join("\n").slice(0, 12000), image };
   } catch {
-    return "";
+    return { text: "", image: "" };
   }
 }
 
