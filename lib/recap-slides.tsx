@@ -70,7 +70,7 @@ function Assombri() {
 function Carte({ photo, titre, sous, w, h, opacity = 1, r = 0 }: { photo?: string; titre: string; sous?: string; w: number; h: number; opacity?: number; r?: number }) {
   const ph = Math.round(h * 0.62);
   return (
-    <div style={{ display: "flex", flexDirection: "column", width: w, height: h, padding: 10, borderRadius: 18, background: "rgba(255,255,255,0.94)", boxShadow: "0 16px 36px rgba(0,0,0,0.45)", opacity, transform: r ? `rotate(${r}deg)` : undefined }}>
+    <div style={{ display: "flex", flexDirection: "column", width: w, height: h, padding: 10, borderRadius: 18, background: "rgba(255,255,255,0.94)", boxShadow: "0 16px 36px rgba(0,0,0,0.45)", opacity, ...(r ? { transform: `rotate(${r}deg)` } : {}) }}>
       <div style={{ display: "flex", position: "relative", width: w - 20, height: ph, borderRadius: 12, overflow: "hidden", background: "#1D3A7A" }}>
         {photo ? <img src={photo} alt="" width={w - 20} height={ph} style={{ position: "absolute", left: 0, top: 0, width: w - 20, height: ph, objectFit: "cover" }} /> : null}
       </div>
