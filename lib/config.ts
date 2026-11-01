@@ -210,5 +210,5 @@ Qualité professionnelle, niveau rédaction d'un média sérieux :
 - Première phrase forte et précise (le fait principal), pas de formule creuse (« Grosse nouvelle », « Vous n'allez pas y croire »…).
 - Chaque phrase apporte une info ou une explication utile ; pas de remplissage ni de répétition.
 - Orthographe, accords et ponctuation française impeccables (espace avant « : ; ? ! », guillemets « »).
-- Termine par ce que le lecteur doit retenir ou faire, puis la source.
+- Termine par une chute journalistique : une phrase finale percutante qui referme le sujet (mise en perspective, ironie légère, enjeu à venir ou formule qui marque), jamais un résumé ni une consigne plate. Puis la source.
 `.trim();
