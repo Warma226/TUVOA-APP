@@ -81,10 +81,15 @@ export function formatMontant(valeur: number, devise: string, taux: Record<strin
 
 const BALISE = /\[\[\s*MONTANT\s*:\s*([0-9][0-9.,\s]*)\s*:\s*([A-Za-z]{3})\s*\]\]/g;
 
+// Une incise « , soit environ … FCFA » se referme par une virgule quand la phrase continue.
+function fermer(rendu: string, suite: string): string {
+  return rendu.includes(", soit ") && /^\s+[\p{L}\d«(]/u.test(suite) ? `${rendu},` : rendu;
+}
+
 export function remplacerMontants(texte: string, taux: Record<string, number>): string {
-  return texte.replace(BALISE, (_, val: string, cur: string) => {
+  return texte.replace(BALISE, (m: string, val: string, cur: string, offset: number, all: string) => {
     const n = Number(val.replace(/[\s,]/g, ""));
-    return Number.isFinite(n) ? formatMontant(n, cur, taux) : val;
+    return Number.isFinite(n) ? fermer(formatMontant(n, cur, taux), all.slice(offset + m.length)) : val;
   });
 }
 
@@ -96,12 +101,12 @@ export function aDesMontants(texte: string): boolean {
 const CLAIR = /(\d{1,3}(?:[  ]\d{3})*(?:,\d+)?|\d+(?:,\d+)?)\s*(milliards?|millions?)?\s*(?:de\s+|d['’])?(dollars?|euros?)\b(?!\s*[,(]?\s*soit\b)/gi;
 
 export function convertirMontantsEnClair(texte: string, taux: Record<string, number>): string {
-  return texte.replace(CLAIR, (m, nb: string, unite: string | undefined, dev: string) => {
+  return texte.replace(CLAIR, (m: string, nb: string, unite: string | undefined, dev: string, offset: number, all: string) => {
     const base = Number(nb.replace(/[\s  ]/g, "").replace(",", "."));
     if (!Number.isFinite(base)) return m;
     const mult = !unite ? 1 : unite.toLowerCase().startsWith("milliard") ? 1e9 : 1e6;
     const cur = dev.toLowerCase().startsWith("dollar") ? "USD" : "EUR";
-    return formatMontant(base * mult, cur, taux);
+    return fermer(formatMontant(base * mult, cur, taux), all.slice(offset + m.length));
   });
 }
 
