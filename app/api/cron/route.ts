@@ -186,7 +186,12 @@ async function weeklyRecap(log: string[], opts: { force: boolean; dry: boolean }
       periode
     );
     // Image : celle de l'actu la plus récente qui en a une (sujet de tête de la semaine).
-    const image = [...week].reverse().find((p) => p.visual.image)?.visual.image;
+    let image = [...week].reverse().find((p) => p.visual.image)?.visual.image;
+    // Secours : l'image de l'article d'une des actus de la semaine.
+    for (const p of [...week].reverse()) {
+      if (image || !p.source_url) break;
+      image = (await fetchArticle(p.source_url)).image || undefined;
+    }
     if (opts.dry) return { ...r, image, platforms, posts: week.length };
     if (!image || platforms.length === 0) {
       log.push("Récap de la semaine : pas d'image ou aucun canal connecté.");
