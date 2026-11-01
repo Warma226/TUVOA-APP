@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { renderVisual, FORMATS, type VisualFormat, type VisualData } from "@/lib/visual";
-import { archivoFonts, montserratFonts } from "@/lib/fonts";
+import { archivoFonts, montserratFonts, serifItalicFonts } from "@/lib/fonts";
 import { verifyParams, appUrl } from "@/lib/sign";
 import { renderSlide, type SlideData } from "@/lib/recap-slides";
 
@@ -43,11 +43,14 @@ async function recap(params: URLSearchParams) {
       texte: params.get("x") ?? "",
       photo: await safeImage(params.get("ph")),
       source: params.get("src") ?? undefined,
+      autres: await Promise.all(
+        Array.from({ length: 4 }, async (_, i) => ({ photo: await safeImage(params.get(`ap${i}`)), categorie: params.get(`ac${i}`) ?? "Actu tech" }))
+      ),
     };
   } else {
     data = { kind: "end", assets: appUrl() };
   }
-  const fonts = [...(await montserratFonts()), ...(await archivoFonts())];
+  const fonts = [...(await montserratFonts()), ...(await serifItalicFonts()), ...(await archivoFonts())];
   return new ImageResponse(renderSlide(data), {
     width: 1080,
     height: 1350,

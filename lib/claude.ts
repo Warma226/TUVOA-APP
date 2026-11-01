@@ -229,7 +229,7 @@ export async function generateRecap(items: RecapItem[], periode: string): Promis
   const out = await callClaude(
     STYLE_GUIDE,
     `Rédige le « Récap tech de la semaine » de TUVOA (${periode}) à partir des posts publiés cette semaine, ci-dessous.
-Sélectionne les 5 sujets les plus importants pour le public africain francophone (moins s'il y en a moins), du plus important au moins important.
+Sélectionne EXACTEMENT 5 sujets différents (tous s'il y en a moins de 5), les plus importants pour le public africain francophone, du plus important au moins important.
 Ne rien inventer : n'utilise que les informations des posts.
 
 Posts de la semaine :
@@ -251,6 +251,15 @@ Montants : écris-les sous la forme [[MONTANT:valeur numérique complète:code I
     .map((p, i) => (typeof p === "string" ? { n: i + 1, texte: p } : { n: Number(p.n ?? i + 1), texte: String(p.texte ?? "") }))
     .filter((p) => p.texte.trim())
     .slice(0, 5);
+  // Toujours 5 actus (ou toutes s'il y en a moins) : on complète avec les posts non retenus, première phrase.
+  const voulu = Math.min(5, items.length);
+  const pris = new Set(bruts.map((p) => p.n));
+  for (let i = 0; bruts.length < voulu && i < items.length; i++) {
+    if (pris.has(i + 1)) continue;
+    const phrase = items[i].text.replace(/#\S+/g, "").split(/\n+/).map((l) => l.trim()).find((l) => l.length > 40) ?? items[i].title;
+    bruts.push({ n: i + 1, texte: phrase.split(/(?<=[.!?])\s/)[0] });
+    pris.add(i + 1);
+  }
   const details = await Promise.all(bruts.map(async (p) => ({ n: p.n, texte: await convertirTout(p.texte.trim()) })));
   const points = details.map((p) => p.texte);
   if (points.length === 0) throw new Error("Récap vide");

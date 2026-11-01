@@ -10,7 +10,7 @@ const H = 1350;
 
 export type SlideData =
   | { kind: "cover"; periode: string; count: number; photos?: string[]; categories?: string[]; titres?: string[]; assets?: string }
-  | { kind: "item"; index: number; total: number; categorie: string; texte: string; photo?: string; source?: string }
+  | { kind: "item"; index: number; total: number; categorie: string; texte: string; photo?: string; source?: string; autres?: { photo?: string; categorie: string }[] }
   | { kind: "end"; assets?: string };
 
 function fit(text: string, max: number) {
@@ -26,53 +26,109 @@ export function renderSlide(d: SlideData) {
   return fin(d.assets ?? "");
 }
 
-// Fond bleu nuit avec quadrillage blanc à 5 % (même ambiance que la photo de couverture).
-function FondBleu() {
-  const lignes: string[] = [];
-  for (let x = -40; x <= W + 40; x += 112) lignes.push(`M ${x} 0 L ${x + 60} ${H}`);
-  for (let y = 20; y <= H; y += 112) lignes.push(`M 0 ${y} L ${W} ${y - 50}`);
+// ─── Slide d'actu (modèle « photo plein cadre ») : photo assombrie, logo en haut, grand texte blanc,
+// mentions en italique avec coup de pinceau bleu, carte flottante.
+const SERIF = "Instrument Serif";
+
+function Pinceau({ w, h }: { w: number; h: number }) {
+  // Trait de pinceau en zigzag, comme un surlignage à main levée
+  const pas = 26;
+  let d = `M 6 ${h * 0.62}`;
+  for (let x = 6, i = 0; x < w - 10; x += pas, i++) {
+    d += ` L ${x + pas * 0.6} ${i % 2 ? h * 0.75 : h * 0.3} L ${x + pas} ${i % 2 ? h * 0.42 : h * 0.68}`;
+  }
   return (
-    <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex" }}>
-      <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex", backgroundImage: "radial-gradient(ellipse at 50% 35%, #1747C9 0%, #0C2C8E 45%, #061648 100%)" }} />
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ position: "absolute", left: 0, top: 0 }}>
-        <path d={lignes.join(" ")} fill="none" stroke="#FFFFFF" strokeOpacity="0.05" strokeWidth="5" />
-      </svg>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ position: "absolute", left: 0, top: 0 }}>
+      <path d={d} fill="none" stroke={BLEU} strokeWidth={h * 0.32} strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.95" />
+    </svg>
+  );
+}
+
+function Mention({ text, size, pinceau }: { text: string; size: number; pinceau: number }) {
+  return (
+    <div style={{ display: "flex", position: "relative", paddingLeft: 6 }}>
+      <Pinceau w={pinceau} h={size * 1.1} />
+      <div style={{ display: "flex", position: "relative", fontFamily: SERIF, fontStyle: "italic", fontSize: size, color: "#FFFFFF", letterSpacing: -1 }}>{text}</div>
     </div>
   );
 }
 
-// ─── Slide d'actu : la feuille posée de travers sur le fond bleu, photo de l'article + l'info ───
-function item(d: { index: number; total: number; categorie: string; texte: string; photo?: string; source?: string }) {
-  const info = fit(d.texte, 240);
-  const size = autoSize(info, [[110, 46], [160, 42], [210, 38], [999, 35]]);
+function Assombri() {
   return (
-    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: M }}>
-      <FondBleu />
-      {/* En-tête : logo + numéro */}
-      <div style={{ position: "absolute", left: 70, top: 58, display: "flex" }}>
-        <LogoMark size={36} color="#FFFFFF" dot="#FFFFFF" />
+    <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex" }}>
+      {/* Assombrissement : léger partout, plus fort en haut (texte) et en bas */}
+        <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex", backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.38) 40%, rgba(0,0,0,0.22) 60%, rgba(0,0,0,0.55) 100%)" }} />
+        {/* Vignettage noir : bords et coins qui tombent au noir, centre plus lumineux */}
+        <div style={{ position: "absolute", left: -120, top: -80, width: W + 240, height: H + 160, display: "flex", backgroundImage: "radial-gradient(ellipse at 42% 46%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 32%, rgba(0,0,0,0.55) 62%, rgba(0,0,0,0.92) 85%, #000000 100%)" }} />
+        <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex", backgroundImage: "linear-gradient(90deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%)" }} />
+        <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex", backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 70%, rgba(0,0,0,0.75) 100%)" }} />
+
+    </div>
+  );
+}
+
+function Carte({ photo, titre, sous, w, h, opacity = 1, r = 0 }: { photo?: string; titre: string; sous?: string; w: number; h: number; opacity?: number; r?: number }) {
+  const ph = Math.round(h * 0.62);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", width: w, height: h, padding: 10, borderRadius: 18, background: "rgba(255,255,255,0.94)", boxShadow: "0 16px 36px rgba(0,0,0,0.45)", opacity, transform: r ? `rotate(${r}deg)` : undefined }}>
+      <div style={{ display: "flex", position: "relative", width: w - 20, height: ph, borderRadius: 12, overflow: "hidden", background: "#1D3A7A" }}>
+        {photo ? <img src={photo} alt="" width={w - 20} height={ph} style={{ position: "absolute", left: 0, top: 0, width: w - 20, height: ph, objectFit: "cover" }} /> : null}
       </div>
-      <div style={{ position: "absolute", right: 70, top: 60, display: "flex", alignItems: "center", padding: "10px 22px", borderRadius: 40, border: "2px solid rgba(255,255,255,0.8)", fontFamily: M, fontSize: 30, fontWeight: 700, color: "#FFFFFF" }}>
-        {`${d.index} / ${d.total}`}
+      <div style={{ display: "flex", marginTop: 10, fontFamily: M, fontSize: Math.round(w / 13), fontWeight: 700, color: "#111111" }}>{fit(titre, 20)}</div>
+      {sous ? (
+        <div style={{ display: "flex", alignItems: "center", marginTop: 4 }}>
+          <div style={{ display: "flex", width: 14, height: 14, borderRadius: 14, background: BLEU, marginRight: 6 }} />
+          <div style={{ display: "flex", fontFamily: M, fontSize: Math.round(w / 19), fontWeight: 600, color: "#555555" }}>{fit(sous, 24)}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function item(d: { index: number; total: number; categorie: string; texte: string; photo?: string; source?: string; autres?: { photo?: string; categorie: string }[] }) {
+  const info = fit(d.texte, 220);
+  const size = autoSize(info, [[90, 50], [130, 46], [170, 42], [999, 38]]);
+  const cat = fit(d.categorie || "Actu tech", 20);
+  return (
+    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: M, background: "#0A0F1F" }}>
+      {d.photo ? <img src={d.photo} alt="" width={W} height={H} style={{ position: "absolute", left: 0, top: 0, width: W, height: H, objectFit: "cover" }} /> : null}
+      {!d.photo ? <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex", backgroundImage: "radial-gradient(ellipse at 60% 40%, #1D3A7A 0%, #0B1633 60%, #050812 100%)" }} /> : null}
+      <Assombri />
+      {/* Logo */}
+      <div style={{ position: "absolute", left: 0, top: 66, width: W, display: "flex", justifyContent: "center" }}>
+        <LogoMark size={40} color="#FFFFFF" dot={BLEU} />
       </div>
 
-      {/* La feuille */}
-      <div style={{ position: "absolute", left: 72, top: 200, width: 936, height: 1000, display: "flex", flexDirection: "column", padding: 34, background: "#F5F5F2", borderRadius: 6, transform: "rotate(-2.2deg)", boxShadow: "0 28px 50px rgba(0,0,0,0.45)" }}>
-        <div style={{ display: "flex", position: "relative", width: 868, height: 520, overflow: "hidden", borderRadius: 4, backgroundImage: "linear-gradient(160deg, #1D3A7A 0%, #0B1633 100%)" }}>
-          {d.photo ? <img src={d.photo} alt="" width={868} height={520} style={{ position: "absolute", left: 0, top: 0, width: 868, height: 520, objectFit: "cover" }} /> : null}
-          <div style={{ position: "absolute", left: 0, bottom: 28, display: "flex", padding: "10px 26px 10px 24px", background: BLEU, fontFamily: M, fontSize: 34, fontWeight: 800, color: "#FFFFFF" }}>
-            {fit(d.categorie || "Actu tech", 24)}
+      {/* Grand texte */}
+      <div style={{ position: "absolute", left: 78, top: 290, width: 880, display: "flex", fontFamily: M, fontSize: size, fontWeight: 600, color: "#FFFFFF", lineHeight: 1.06, letterSpacing: -3 }}>
+        {info}
+      </div>
+
+      {/* Rangée de cartes flottantes : l'actu au centre, d'autres actus de la semaine autour */}
+      {(() => {
+        const o = d.autres ?? [];
+        const side = (i: number) => o[i] ?? { photo: undefined, categorie: "Actu tech" };
+        return (
+          <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex" }}>
+            <div style={{ position: "absolute", left: 120, top: 830, display: "flex" }}><Carte photo={side(1).photo} titre={side(1).categorie} w={150} h={170} opacity={0.55} r={-3} /></div>
+            <div style={{ position: "absolute", left: 250, top: 800, display: "flex" }}><Carte photo={side(0).photo} titre={side(0).categorie} w={190} h={220} opacity={0.85} r={-2} /></div>
+            <div style={{ position: "absolute", left: 690, top: 790, display: "flex" }}><Carte photo={side(2).photo} titre={side(2).categorie} w={190} h={220} opacity={0.85} r={2} /></div>
+            <div style={{ position: "absolute", left: 860, top: 815, display: "flex" }}><Carte photo={side(3).photo} titre={side(3).categorie} w={150} h={180} opacity={0.55} r={3} /></div>
+            <div style={{ position: "absolute", left: 425, top: 720, display: "flex" }}>
+              <Carte photo={d.photo} titre={cat} sous={d.source ?? "TUVOA Tech Media"} w={250} h={340} />
+            </div>
           </div>
-        </div>
-        <div style={{ display: "flex", marginTop: 36, fontFamily: M, fontSize: size, fontWeight: 700, color: "#111111", lineHeight: 1.3 }}>{info}</div>
-        <div style={{ display: "flex", position: "absolute", left: 34, bottom: 30, fontFamily: M, fontSize: 24, fontWeight: 600, color: "#6B6B6B" }}>
-          {d.source ? `Source : ${fit(d.source, 40)}` : ""}
-        </div>
-      </div>
+        );
+      })()}
 
-      {/* Pied */}
-      <div style={{ position: "absolute", left: 70, top: 1258, display: "flex", fontFamily: M, fontSize: 26, fontWeight: 600, color: "#9DB8F5" }}>Le récap de la semaine</div>
-      <div style={{ position: "absolute", right: 70, top: 1252, display: "flex", fontFamily: M, fontSize: 34, fontWeight: 800, color: "#FFFFFF" }}>www.tuvoa.media</div>
+      {/* Mentions en italique */}
+      <div style={{ position: "absolute", right: 80, top: 712, display: "flex" }}>
+        <Mention text={`« ${cat} »`} size={38} pinceau={Math.min(270, cat.length * 17 + 50)} />
+      </div>
+      <div style={{ position: "absolute", right: 110, top: 1075, display: "flex", fontFamily: SERIF, fontStyle: "italic", fontSize: 84, color: "#FFFFFF" }}>{`${d.index}/${d.total}`}</div>
+      <div style={{ position: "absolute", left: 210, top: 1150, display: "flex" }}>
+        <Mention text={d.source ? `« Source : ${fit(d.source, 26)} »` : "« TUVOA Tech Media »"} size={33} pinceau={150} />
+      </div>
     </div>
   );
 }
@@ -89,13 +145,16 @@ function fin(base: string) {
         <div style={{ display: "flex", marginTop: 50, fontFamily: M, fontSize: 56, fontWeight: 800, color: "#111111" }}>Toute l'actu tech,</div>
         <div style={{ display: "flex", fontFamily: M, fontSize: 56, fontWeight: 800, color: BLEU }}>chaque jour.</div>
         <div style={{ display: "flex", marginTop: 30, padding: "14px 30px", borderRadius: 40, background: BLEU, fontFamily: M, fontSize: 30, fontWeight: 700, color: "#FFFFFF" }}>Abonnez-vous à TUVOA Tech Media</div>
+        <div style={{ display: "flex", marginTop: 22, fontFamily: M, fontSize: 28, fontWeight: 700, color: "#151515" }}>www.tuvoa.media</div>
       </div>
       <img src={`${base}/recap/front.png`} alt="" width={W} height={H} style={{ position: "absolute", left: 0, top: 0, width: W, height: H }} />
       <div style={{ position: "absolute", left: 120, top: 1030, width: 940, display: "flex", flexDirection: "column", alignItems: "center", opacity: 0.9 }}>
         <div style={{ display: "flex", fontFamily: M, fontSize: 96, fontWeight: 800, letterSpacing: -3, lineHeight: 1, color: "#1B3FA8", textShadow: "1px 1px 0 rgba(255,255,255,0.35), -1px -1px 1px rgba(0,0,0,0.30)" }}>À la semaine</div>
         <div style={{ display: "flex", fontFamily: M, fontSize: 96, fontWeight: 800, letterSpacing: -3, lineHeight: 1.05, color: "#0F2463", textShadow: "1px 1px 0 rgba(255,255,255,0.35), -1px -1px 1px rgba(0,0,0,0.30)" }}>prochaine</div>
       </div>
-      <div style={{ position: "absolute", left: 0, top: 46, width: W, display: "flex", justifyContent: "center", fontFamily: M, fontSize: 34, fontWeight: 800, color: "#FFFFFF" }}>www.tuvoa.media</div>
+      <div style={{ position: "absolute", left: 0, top: 46, width: W, display: "flex", justifyContent: "center" }}>
+        <LogoMark size={44} color="#FFFFFF" dot="#FFFFFF" />
+      </div>
     </div>
   );
 }
