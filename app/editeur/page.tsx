@@ -19,7 +19,7 @@ const ACTIONS: { id: string; label: string }[] = [
   { id: "reformuler", label: "Reformuler" },
   { id: "expliquer", label: "Expliquer simplement" },
   { id: "ton", label: "Ton TUVOA" },
-  { id: "traduire", label: "Traduire" },
+  { id: "traduire", label: "En français" },
 ];
 
 const limitOf = (p: Platform) => PLATFORMS.find((x) => x.id === p)?.limit ?? 3000;

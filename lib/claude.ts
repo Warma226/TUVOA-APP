@@ -141,6 +141,7 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   if (input.sourceName) parts.push(`Source à citer : ${input.sourceName}${input.sourceUrl ? ` (${input.sourceUrl})` : ""}`);
   if (input.articleText) parts.push(`Texte de l'article (pour comprendre, ne jamais recopier) :\n"""\n${input.articleText.slice(0, 10000)}\n"""`);
   if (input.portrait) parts.push(`Infos fournies par l'expert : nom ${input.portrait.nom}, spécialité ${input.portrait.specialite}. ${input.portrait.infos}`);
+  parts.push("Tous les textes (accroches, posts, article, visuel) doivent être rédigés en français.");
   parts.push(`Réponds uniquement avec un objet JSON valide, sans texte autour, de la forme :
 {
   "variantes": ["accroche directe", "accroche pédagogique", "accroche sous forme de question"],
@@ -173,7 +174,7 @@ export async function rewrite(action: RewriteAction, text: string, platform: str
     reformuler: "Reformule ce texte avec une autre accroche, même sens, même longueur.",
     expliquer: "Ajoute une explication très simple de ce que ça change concrètement pour le lecteur.",
     ton: "Réécris ce texte dans le ton TUVOA (direct, tutoiement, clair).",
-    traduire: "Traduis ce texte en anglais, même ton.",
+    traduire: "Réécris ce texte entièrement en bon français (traduis tout passage dans une autre langue), même sens, même ton.",
   };
   const out = await callClaude(
     STYLE_GUIDE,
