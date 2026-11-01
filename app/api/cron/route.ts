@@ -36,7 +36,14 @@ export async function GET(req: Request) {
 async function run(log: string[], opts: { force: boolean; now: boolean } = { force: false, now: false }) {
   const settings = await getSettings();
 
-  // ─── 1. Veille : l'autopilote choisit et publie seul ─────────────
+  // ─── 1. Publication des posts arrivés à échéance ─────────────────
+  for (const post of await duePosts()) {
+    const done = await publishPost(post);
+    await savePost(done);
+    log.push(`${done.status === "publie" ? "Publié" : "Erreur de publication"} : ${post.title || post.visual.titre}`);
+  }
+
+  // ─── 2. Veille : l'autopilote choisit et publie seul ─────────────
   if (aiConfigured()) {
     const triggers = allTriggers(settings.triggers).filter((t) => isOn(settings.triggersEnabled, t.id, t.enabledByDefault));
     const sources = allSources(settings.customSources).filter((x) => isOn(settings.sourcesEnabled, x.id, x.enabledByDefault));
@@ -155,12 +162,6 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
   // ─── 1 bis. Récap tech du vendredi ───────────────────────────────
   if (aiConfigured() && settings.autopilot) await weeklyRecap(log, { force: false, dry: false });
 
-  // ─── 2. Publication des posts arrivés à échéance ─────────────────
-  for (const post of await duePosts()) {
-    const done = await publishPost(post);
-    await savePost(done);
-    log.push(`${done.status === "publie" ? "Publié" : "Erreur de publication"} : ${post.title || post.visual.titre}`);
-  }
 
   return NextResponse.json({ ok: true, log, at: new Date().toISOString() });
 }
