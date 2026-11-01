@@ -62,17 +62,26 @@ async function callAnthropic(key: string, system: string, user: string, maxToken
   return (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
 }
 
-// Modèles essayés dans l'ordre : l'offre gratuite renvoie souvent « surchargé » (503) ou « quota atteint » (429)
-// sur un modèle alors qu'un autre répond.
-function geminiModels(): string[] {
-  const list = [process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.5-flash-lite"];
-  return Array.from(new Set(list));
+// Modèles essayés dans l'ordre, du plus rapide au plus lourd. Le modèle « lite » ne réfléchit pas avant
+// d'écrire : réponse en quelques secondes. Le modèle Flash, lui, passe d'abord plus de jetons à réfléchir
+// qu'à écrire : on coupe sa réflexion (thinkingBudget 0) et on ne le garde qu'en secours, car l'offre
+// gratuite renvoie souvent « surchargé » (503) ou « quota atteint » (429) sur un modèle alors qu'un autre répond.
+type GeminiTry = { model: string; noThinking?: boolean };
+function geminiModels(): GeminiTry[] {
+  const list: GeminiTry[] = [
+    ...(process.env.GEMINI_MODEL ? [{ model: process.env.GEMINI_MODEL }] : []),
+    { model: "gemini-flash-lite-latest" },
+    { model: "gemini-flash-latest", noThinking: true },
+    { model: "gemini-3.5-flash-lite" },
+    { model: "gemini-flash-latest" },
+  ];
+  return list;
 }
 
 async function callGemini(key: string, system: string, user: string, maxTokens: number, json = false): Promise<string> {
   let lastStatus = 0;
   let lastDetail = "";
-  for (const model of geminiModels()) {
+  for (const { model, noThinking } of geminiModels()) {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": key },
@@ -84,6 +93,7 @@ async function callGemini(key: string, system: string, user: string, maxTokens: 
           maxOutputTokens: Math.max(maxTokens * 4, 8192),
           temperature: 0.7,
           ...(json ? { responseMimeType: "application/json" } : {}),
+          ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
         },
       }),
     });
@@ -98,7 +108,8 @@ async function callGemini(key: string, system: string, user: string, maxTokens: 
     lastStatus = res.status;
     lastDetail = (await res.text()).slice(0, 300);
     // Surcharge, quota ou modèle indisponible : on passe au modèle suivant.
-    if ([429, 500, 503, 404].includes(res.status)) continue;
+    // 400 : réglage non accepté par ce modèle (ex. réflexion coupée) → on essaie le suivant.
+    if ([400, 429, 500, 503, 404].includes(res.status)) continue;
     break;
   }
   if (lastStatus === 429) throw new Error("Quota gratuit de Gemini atteint pour le moment : réessaie dans une minute (ou demain si c'est le quota du jour).");
