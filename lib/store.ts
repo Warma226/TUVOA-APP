@@ -137,6 +137,15 @@ export async function recentAutoPosts(hours: number): Promise<Post[]> {
   return (data ?? []) as Post[];
 }
 
+// Articles déjà utilisés pour un post (depuis toujours, manuels compris).
+export async function postedUrls(urls: string[]): Promise<Set<string>> {
+  if (urls.length === 0) return new Set();
+  if (isDemo()) return new Set(mem().posts.map((p) => p.source_url ?? "").filter((u) => urls.includes(u)));
+  const { data, error } = await db().from("posts").select("source_url").in("source_url", urls);
+  if (error) throw new Error(error.message);
+  return new Set((data ?? []).map((r: { source_url: string | null }) => r.source_url ?? ""));
+}
+
 // Tous les posts récents (manuels compris), pour ne jamais republier un sujet déjà traité.
 export async function recentPosts(hours: number): Promise<Post[]> {
   const since = new Date(Date.now() - hours * 3.6e6).toISOString();

@@ -169,6 +169,55 @@ function extractJson<T>(text: string): T {
   return v;
 }
 
+// Mise en forme lisible des posts réseaux : paragraphes courts séparés par une ligne vide,
+// puis une ligne vide, la source, une ligne vide, les hashtags.
+export function formatSocial(text: string): string {
+  let t = text.replace(/\r/g, "").trim();
+  // Hashtags en fin de texte
+  const tagMatch = t.match(/(?:\s*#[\p{L}\p{N}_]+)+\s*$/u);
+  let tags = "";
+  if (tagMatch) {
+    tags = tagMatch[0].trim().split(/\s+/).join(" ");
+    t = t.slice(0, tagMatch.index).trim();
+  }
+  // Mention de la source (où qu'elle soit en fin de texte)
+  let source = "";
+  const srcMatch = t.match(/(?:^|\s)(\(?\s*(?:Sources?\s*:|Info relayée par)[^\n]*\)?)\s*$/i);
+  if (srcMatch && srcMatch.index !== undefined) {
+    source = srcMatch[1].replace(/^\(\s*|\s*\)$/g, "").trim().replace(/^Sources?\s*:?\s*/i, "Source : ").replace(/^Info relayée par\s*/i, "Source : ");
+    t = t.slice(0, srcMatch.index).trim();
+  }
+  // Corps : si tout est en un bloc, on regroupe les phrases deux par deux.
+  let paras = t.split(/\n\s*\n/).map((p) => p.replace(/\s*\n\s*/g, " ").trim()).filter(Boolean);
+  if (paras.length === 1) {
+    const sentences = paras[0].match(/[^.!?…]+(?:[.!?…]+|$)(?:\s+|$)/g)?.map((s) => s.trim()).filter(Boolean) ?? [paras[0]];
+    if (sentences.length > 2) {
+      paras = [];
+      // La dernière phrase (la chute) a son propre paragraphe.
+      const corps = sentences.slice(0, -1);
+      for (let i = 0; i < corps.length; i += 2) paras.push(corps.slice(i, i + 2).join(" "));
+      paras.push(sentences[sentences.length - 1]);
+    }
+  }
+  return [paras.join("\n\n"), source, tags].filter(Boolean).join("\n\n");
+}
+
+// Vérifie avec l'IA si une actu raconte le même fait qu'un post déjà publié (titres différents, autre langue…).
+export async function sameStoryAs(title: string, summary: string, recentTitles: string[]): Promise<boolean> {
+  if (recentTitles.length === 0 || !aiConfigured()) return false;
+  try {
+    const out = await callClaude(
+      "Tu compares des actualités. Réponds uniquement en JSON.",
+      `Nouvelle actu : « ${title} » — ${summary.slice(0, 300)}\n\nSujets déjà publiés :\n${recentTitles.slice(0, 40).map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\nCette nouvelle actu porte-t-elle sur le même fait ou le même événement qu'un des sujets déjà publiés (même s'il est formulé autrement ou dans une autre langue) ? Réponds {"meme_sujet": true} ou {"meme_sujet": false}.`,
+      200,
+      true
+    );
+    return extractJson<{ meme_sujet?: boolean }>(out).meme_sujet === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function generatePost(input: GenerateInput): Promise<Generated> {
   const rub = RUBRIQUES.find((r) => r.id === input.rubrique) ?? RUBRIQUES[0];
   const consignesRubrique: Record<RubriqueId, string> = {
@@ -194,11 +243,14 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   if (input.articleText) parts.push(`Texte de l'article (pour comprendre, ne jamais recopier) :\n"""\n${input.articleText.slice(0, 10000)}\n"""`);
   if (input.portrait) parts.push(`Infos fournies par l'expert : nom ${input.portrait.nom}, spécialité ${input.portrait.specialite}. ${input.portrait.infos}`);
   parts.push("Tous les textes (accroches, posts, article, visuel) doivent être rédigés en français.");
+  parts.push(
+    "Mise en forme des posts Facebook et LinkedIn (\\n dans le JSON) : paragraphes courts de 1 ou 2 phrases séparés par une ligne vide ; la chute dans son propre paragraphe ; puis une ligne vide et « Source : nom du média » seule sur sa ligne ; puis une ligne vide et les hashtags sur la dernière ligne. Jamais tout le texte en un seul bloc."
+  );
   parts.push(`Réponds uniquement avec un objet JSON valide, sans texte autour, de la forme :
 {
   "variantes": ["accroche directe", "accroche pédagogique", "accroche sous forme de question"],
   "facebook": "post Facebook complet (résumé factuel, 3 à 5 phrases, chute sobre, 2 à 4 hashtags dont ${rub.hashtag}, source citée)",
-  "linkedin": "post LinkedIn complet (ton professionnel, phrases aérées, 3 hashtags, source citée)",
+  "linkedin": "post LinkedIn complet (ton professionnel, 4 à 6 phrases, chute sobre, 3 hashtags, source citée)",
   "tiktok": "légende TikTok de 150 caractères maximum",
   "wp_title": "titre d'article WordPress",
   "wp_body": "article WordPress en HTML simple (<p>, <h2>, <ul>, <li>, <strong>), 300 à 600 mots, terminé par un paragraphe 'Source :' avec le lien",
@@ -210,8 +262,8 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   const g = extractJson<Partial<Generated>>(text);
   return {
     variantes: Array.isArray(g.variantes) ? g.variantes.slice(0, 3).map(String) : [],
-    facebook: String(g.facebook ?? ""),
-    linkedin: String(g.linkedin ?? ""),
+    facebook: formatSocial(String(g.facebook ?? "")),
+    linkedin: formatSocial(String(g.linkedin ?? "")),
     tiktok: String(g.tiktok ?? "").slice(0, 150),
     wp_title: String(g.wp_title ?? ""),
     wp_body: String(g.wp_body ?? ""),
