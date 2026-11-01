@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { fetchVeille, fetchArticle, similar } from "@/lib/veille";
 import { generatePost, generateRecap, aiConfigured, sameStoryAs } from "@/lib/claude";
 import { publishPost, connectionStatus } from "@/lib/publish";
+import { coverUrl, itemUrl, endUrl } from "@/lib/recap-url";
 import { GUARDRAILS, TOPICS, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
 import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts, postedUrls, publishedSince, recapExists } from "@/lib/store";
 
@@ -185,16 +186,39 @@ async function weeklyRecap(log: string[], opts: { force: boolean; dry: boolean }
       week.map((p) => ({ title: p.title, text: p.texts.facebook || p.texts.linkedin, source: p.source_name })),
       periode
     );
-    // Image : celle de l'actu la plus récente qui en a une (sujet de tête de la semaine).
-    let image = [...week].reverse().find((p) => p.visual.image)?.visual.image;
-    // Secours : l'image de l'article d'une des actus de la semaine.
-    for (const p of [...week].reverse()) {
-      if (image || !p.source_url) break;
-      image = (await fetchArticle(p.source_url)).image || undefined;
+    // Image de chaque actu de la semaine (celle du post, sinon celle de l'article).
+    const images = new Map<string, string>();
+    for (const p of week.slice(-12)) {
+      const img = p.visual.image || (p.source_url ? (await fetchArticle(p.source_url)).image : "");
+      if (img) images.set(p.id, img);
     }
-    if (opts.dry) return { ...r, image, platforms, posts: week.length };
-    if (!image || platforms.length === 0) {
-      log.push("Récap de la semaine : pas d'image ou aucun canal connecté.");
+    const recentes = [...week].reverse().filter((p) => images.has(p.id)).slice(0, 8);
+    const court = (d: Date) => d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" }).replace(/^1 /, "1er ");
+    const total = r.points.length;
+    const slides = [
+      coverUrl({
+        periode: `${court(monday)} – ${court(now)}`,
+        count: total,
+        photos: recentes.map((p) => images.get(p.id) ?? ""),
+        categories: recentes.map((p) => p.visual.titre || "Actu tech"),
+      }),
+      ...r.points.map((pt, i) => {
+        const src = week[pt.n - 1];
+        return itemUrl({
+          index: i + 1,
+          total,
+          categorie: src?.visual.titre || "Actu tech",
+          texte: pt.texte,
+          photo: src ? images.get(src.id) : undefined,
+          source: src?.source_name ?? undefined,
+        });
+      }),
+      endUrl(),
+    ];
+    const image = slides[0];
+    if (opts.dry) return { ...r, image, slides, platforms, posts: week.length };
+    if (platforms.length === 0) {
+      log.push("Récap de la semaine : aucun canal connecté.");
       return null;
     }
     const post = emptyPost({
@@ -203,7 +227,7 @@ async function weeklyRecap(log: string[], opts: { force: boolean; dry: boolean }
       origin: "recap",
       platforms,
       texts: { facebook: r.facebook, linkedin: r.linkedin, tiktok: "Le récap tech de la semaine #RécapTech", wp_title: r.titre, wp_body: "" },
-      visual: { titre: "Récap de la semaine", texte: r.titre, image },
+      visual: { titre: "Récap de la semaine", texte: r.titre, image, slides },
       status: "planifie",
       auto: false,
       scheduled_at: new Date(Date.now() + GUARDRAILS.delayMinutes * 60000).toISOString(),
