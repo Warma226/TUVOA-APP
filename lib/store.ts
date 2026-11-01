@@ -128,6 +128,15 @@ export async function duePosts(): Promise<Post[]> {
   return (data ?? []) as Post[];
 }
 
+// Posts automatiques récents (pour l'écart entre deux publications et éviter les doublons de sujet).
+export async function recentAutoPosts(hours: number): Promise<Post[]> {
+  const since = new Date(Date.now() - hours * 3.6e6).toISOString();
+  if (isDemo()) return mem().posts.filter((p) => p.auto && p.created_at >= since);
+  const { data, error } = await db().from("posts").select("*").eq("auto", true).gte("created_at", since).order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Post[];
+}
+
 export async function countAutoToday(): Promise<number> {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);

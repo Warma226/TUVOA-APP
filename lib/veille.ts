@@ -43,7 +43,7 @@ function words(title: string): Set<string> {
   );
 }
 
-function similar(a: string, b: string): boolean {
+export function similar(a: string, b: string): boolean {
   const A = words(a);
   const B = words(b);
   if (A.size === 0 || B.size === 0) return false;

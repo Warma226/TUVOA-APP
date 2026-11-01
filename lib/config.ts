@@ -182,14 +182,20 @@ export const GUARDRAILS = {
     "élection", "election", "président", "politique", "accusé", "accusation", "arrest", "arrêté",
     "guerre", "war ", "attentat", "terror", "suicide", "procès", "lawsuit", "sues",
   ],
-  // Nombre minimal de sources différentes qui parlent du sujet pour publier seul
-  minSourcesForAuto: 2,
+  // Autopilote : l'app choisit elle-même la meilleure actu et la publie, à intervalle régulier.
+  // Plage horaire de publication (heure UTC = heure d'Abidjan, Dakar, Ouaga ; +1 h à Lagos/Douala)
+  autoStartHour: 7,
+  autoEndHour: 21,
+  // Écart minimal entre deux publications automatiques
+  minGapMinutes: 120,
+  // Pertinence minimale (thème suivi + actu fraîche) pour être publiée seule
+  minAutoScore: 55,
   // Délai pendant lequel on peut annuler une publication automatique
   delayMinutes: 10,
   // Plafond de publications automatiques par jour
   maxAutoPerDay: 6,
   // Plafond de posts générés par passage de la tâche planifiée (maîtrise des coûts IA)
-  maxGenerationsPerRun: 3,
+  maxGenerationsPerRun: 2,
 };
 
 // Guide de style donné à l'IA à chaque rédaction
