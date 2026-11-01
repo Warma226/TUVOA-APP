@@ -174,12 +174,11 @@ function Editeur() {
       const d = await res.json().catch(() => ({ error: "Le serveur n'a pas répondu à temps. Réessaie." }));
       if (!res.ok || !d.generated) throw new Error(d.error || "Aucun texte reçu. Réessaie.");
       const g = d.generated;
-      const hook = g.variantes?.[0];
-      const facebook = hook && !g.facebook.startsWith(hook) ? `${hook}\n\n${g.facebook}` : g.facebook;
+      const facebook = g.facebook;
       update({
         ...current,
         texts: { ...current.texts, commun: facebook, facebook, linkedin: g.linkedin, tiktok: g.tiktok, wp_title: g.wp_title, wp_body: g.wp_body },
-        visual: { ...current.visual, titre: current.visual.titre || g.visuel_titre, texte: current.visual.texte || g.visuel_texte },
+        visual: { ...current.visual, titre: current.visual.titre || g.visuel_titre, texte: current.visual.texte || g.visuel_texte, image: current.visual.image || d.image || undefined },
       });
       if (d.notice) setError(d.notice);
     } catch (e) {
@@ -351,42 +350,18 @@ function Editeur() {
           </section>
         ) : null}
 
-        {current.rubrique !== "actu" ? (
-          <section className="card" style={{ padding: "12px 14px" }} aria-labelledby="ton-visuel">
-            <h2 id="ton-visuel" className="label">Ton visuel {RUBRIQUES.find((r) => r.id === current.rubrique)?.hashtag}</h2>
-            <div style={{ marginTop: 8 }}>
-              <ImageField
-                label="Image"
-                hint="Le visuel que tu as créé (PNG ou JPG, format 4:5 conseillé)."
-                disabled={locked}
-                value={current.visual.image ?? ""}
-                onChange={(url) => update({ ...current, visual: { ...current.visual, image: url || undefined } })}
-              />
-            </div>
-          </section>
-        ) : (
-          <details className="card" style={{ padding: "12px 14px" }}>
-            <summary className="label" style={{ cursor: "pointer" }}>Visuel #ActuTech</summary>
-            <div className="stack" style={{ marginTop: 12 }}>
-              <label className="field">
-                Catégorie (bandeau bleu)
-                <input type="text" disabled={locked} value={current.visual.titre} onChange={(e) => update({ ...current, visual: { ...current.visual, titre: e.target.value } })} />
-              </label>
-              <label className="field">
-                Texte du visuel (1 ou 2 phrases)
-                <textarea rows={3} disabled={locked} value={current.visual.texte} onChange={(e) => update({ ...current, visual: { ...current.visual, texte: e.target.value } })} />
-              </label>
-              <ImageField
-                label="Photo de fond"
-                hint="Image libre de droits ou fournie par la marque, crédit à citer dans le texte. Sans photo, le fond reste sombre."
-                placeholder="https://…/photo.jpg"
-                disabled={locked}
-                value={current.visual.photo ?? ""}
-                onChange={(url) => update({ ...current, visual: { ...current.visual, photo: url || undefined } })}
-              />
-            </div>
-          </details>
-        )}
+        <section className="card" style={{ padding: "12px 14px" }} aria-labelledby="ton-visuel">
+          <h2 id="ton-visuel" className="label">{current.rubrique === "actu" ? "Image de l'article" : `Ton visuel ${RUBRIQUES.find((r) => r.id === current.rubrique)?.hashtag ?? ""}`}</h2>
+          <div style={{ marginTop: 8 }}>
+            <ImageField
+              label="Image"
+              hint={current.rubrique === "actu" ? "Image publiée avec le post (récupérée depuis l'article). Tu peux la remplacer." : "Le visuel que tu as créé (PNG ou JPG, format 4:5 conseillé)."}
+              disabled={locked}
+              value={current.visual.image ?? ""}
+              onChange={(url) => update({ ...current, visual: { ...current.visual, image: url || undefined } })}
+            />
+          </div>
+        </section>
 
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
       </main>

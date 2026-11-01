@@ -1,7 +1,7 @@
 // Tâche planifiée (appelée toutes les 15 min par Supabase pg_cron) :
 // 1. autopilote : choisit la meilleure actu, la rédige et la planifie ; 2. publie les posts planifiés arrivés à échéance.
 import { NextResponse } from "next/server";
-import { fetchVeille, fetchArticleText, similar } from "@/lib/veille";
+import { fetchVeille, fetchArticle, similar } from "@/lib/veille";
 import { generatePost, aiConfigured } from "@/lib/claude";
 import { publishPost, connectionStatus } from "@/lib/publish";
 import { GUARDRAILS, TOPICS, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
@@ -83,7 +83,15 @@ async function run(log: string[]) {
           break;
         }
         try {
-          const articleText = await fetchArticleText(item.url);
+          const article = await fetchArticle(item.url);
+          const image = article.image || item.image;
+          if (!image) {
+            // Pas d'image publiable : on passe à l'actu suivante.
+            await markSeen([item.url]);
+            log.push(`Ignorée (pas d'image) : ${item.title}`);
+            continue;
+          }
+          const articleText = article.text;
           const g = await generatePost({
             rubrique: "actu",
             idea: "",
@@ -94,7 +102,6 @@ async function run(log: string[]) {
             articleText: articleText || item.summary,
             categorie: TOPICS.find((t) => t.id === item.topics[0])?.label,
           });
-          const hook = g.variantes[0];
           const post = emptyPost({
             rubrique: "actu",
             title: item.title,
@@ -104,13 +111,13 @@ async function run(log: string[]) {
             source_url: item.url,
             platforms,
             texts: {
-              facebook: hook && !g.facebook.startsWith(hook) ? `${hook}\n\n${g.facebook}` : g.facebook,
+              facebook: g.facebook,
               linkedin: g.linkedin,
               tiktok: g.tiktok,
               wp_title: g.wp_title,
               wp_body: g.wp_body,
             },
-            visual: { titre: g.visuel_titre || TOPICS.find((t) => t.id === item.topics[0])?.label || "Actu tech", texte: g.visuel_texte || item.title },
+            visual: { titre: g.visuel_titre || TOPICS.find((t) => t.id === item.topics[0])?.label || "Actu tech", texte: g.visuel_texte || item.title, image },
             status: "planifie",
             auto: true,
             scheduled_at: new Date(Date.now() + GUARDRAILS.delayMinutes * 60000).toISOString(),

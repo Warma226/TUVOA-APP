@@ -87,7 +87,7 @@ function Apercu() {
   const fmt = FORMATS[formatFor(tab, current.rubrique)];
   const when = date && time ? new Date(`${date}T${time}`) : null;
   const heure = (current.status === "planifie" && current.scheduled_at ? new Date(current.scheduled_at) : when)?.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  const ownVisual = current.rubrique !== "actu";
+  const ownVisual = true; // plus de visuel généré : image de l'article ou visuel fourni
   const missingImage = ownVisual && !current.visual.image;
   const tooLong = current.platforms.find((p) => (current.texts[TEXT_KEY[p]] ?? "").length > limitOf(p));
 
@@ -108,7 +108,7 @@ function Apercu() {
   }
 
   async function schedule() {
-    if (missingImage) return setError("Ajoute d'abord le lien de ton visuel dans l'éditeur.");
+    if (missingImage) return setError("Ajoute d'abord une image dans l'éditeur.");
     if (tooLong) return setError(`Le texte ${PLATFORM_LABEL[tooLong]} dépasse la limite de caractères. Corrige-le dans l'éditeur.`);
     if (!when || Number.isNaN(when.getTime())) return setError("Choisis une date et une heure.");
     if (when.getTime() < Date.now() - 60000) return setError("Cette date est passée. Choisis une heure à venir ou publie maintenant.");
@@ -118,7 +118,7 @@ function Apercu() {
   }
 
   async function publishNow() {
-    if (missingImage) return setError("Ajoute d'abord le lien de ton visuel dans l'éditeur.");
+    if (missingImage) return setError("Ajoute d'abord une image dans l'éditeur.");
     if (tooLong) return setError(`Le texte ${PLATFORM_LABEL[tooLong]} dépasse la limite de caractères. Corrige-le dans l'éditeur.`);
     if (!window.confirm(`Publier maintenant sur ${current.platforms.map((p) => PLATFORM_LABEL[p]).join(", ")} ?`)) return;
     const p = await run("publish", () => postAction("publish", current));
@@ -180,11 +180,11 @@ function Apercu() {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={current.visuals[tab]} alt={`Visuel ${PLATFORM_LABEL[tab]} : ${current.visual.titre}`} style={ownVisual ? undefined : { aspectRatio: `${fmt.w} / ${fmt.h}` }} />
             ) : (
-              <Link href={`/editeur?id=${current.id}`} className="no-visual">Ajoute ton visuel dans l'éditeur</Link>
+              <Link href={`/editeur?id=${current.id}`} className="no-visual">Ajoute une image dans l'éditeur</Link>
             )}
           </article>
           <div className="row" style={{ justifyContent: "space-between", fontSize: 13 }}>
-            <span className="muted">{ownVisual ? "Ton visuel" : `Format ${fmt.label.charAt(0).toLowerCase() + fmt.label.slice(1)}`}</span>
+            <span className="muted">{current.rubrique === "actu" ? "Image de l'article" : ownVisual ? "Ton visuel" : `Format ${fmt.label.charAt(0).toLowerCase() + fmt.label.slice(1)}`}</span>
             <span style={{ fontWeight: 600, color: over ? "var(--rouge)" : "var(--vert)" }}>
               {len.toLocaleString("fr-FR")} / {limit.toLocaleString("fr-FR")} caractères
             </span>
