@@ -51,3 +51,19 @@ export async function montserratFonts(): Promise<MFont[]> {
   mCache = fonts.length ? fonts : null;
   return fonts;
 }
+
+// Instrument Serif italique (licence libre SIL OFL) : mentions en italique des slides du récap.
+let sCache: { name: string; data: ArrayBuffer; weight: 400; style: "italic" }[] | null = null;
+export async function serifItalicFonts() {
+  if (sCache) return sCache;
+  try {
+    const css = await (await fetch("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@1", { cache: "force-cache" })).text();
+    const url = css.match(/src:\s*url\(([^)]+)\)\s*format\('(?:truetype|opentype)'\)/)?.[1];
+    if (!url) return [];
+    const data = await (await fetch(url, { cache: "force-cache" })).arrayBuffer();
+    sCache = [{ name: "Instrument Serif", data, weight: 400, style: "italic" }];
+    return sCache;
+  } catch {
+    return [];
+  }
+}

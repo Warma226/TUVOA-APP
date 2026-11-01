@@ -211,6 +211,7 @@ async function weeklyRecap(log: string[], opts: { force: boolean; dry: boolean }
           texte: pt.texte,
           photo: src ? images.get(src.id) : undefined,
           source: src?.source_name ?? undefined,
+          autres: recentes.filter((p) => p.id !== src?.id).slice(0, 4).map((p) => ({ photo: images.get(p.id), categorie: p.visual.titre || "Actu tech" })),
         });
       }),
       endUrl(),
