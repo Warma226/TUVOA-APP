@@ -25,7 +25,7 @@ export type Post = {
     commun?: string; // texte de base de l'éditeur (onglet « Commun »)
   };
   // image : visuel préparé par toi (lien), utilisé pour #CyberBase et #Portrait
-  visual: { titre: string; texte: string; nom?: string; specialite?: string; photo?: string; image?: string };
+  visual: { titre: string; texte: string; nom?: string; specialite?: string; photo?: string; image?: string; slides?: string[] };
   platforms: Platform[];
   status: PostStatus;
   scheduled_at: string | null;

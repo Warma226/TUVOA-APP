@@ -81,7 +81,31 @@ const wordpress: Publisher = async (post) => {
   return { ok: true, detail: "Article publié", url: json.link };
 };
 
+// Carrousel (plusieurs images à faire défiler) : chaque image est d'abord envoyée sans être publiée,
+// puis un seul post les regroupe avec le texte.
+async function facebookCarousel(post: Post, slides: string[]) {
+  const version = process.env.FB_GRAPH_VERSION || "v21.0";
+  const token = process.env.FB_PAGE_TOKEN ?? "";
+  const ids: string[] = [];
+  for (const url of slides.slice(0, 10)) {
+    const res = await fetch(`https://graph.facebook.com/${version}/${process.env.FB_PAGE_ID}/photos`, {
+      method: "POST",
+      body: new URLSearchParams({ url, published: "false", access_token: token }),
+    });
+    const json = (await res.json()) as { id?: string; error?: { message: string } };
+    if (!res.ok || json.error || !json.id) throw new Error(`Facebook (image ${ids.length + 1}) : ${json.error?.message ?? res.status}`);
+    ids.push(json.id);
+  }
+  const body = new URLSearchParams({ message: post.texts.facebook, access_token: token });
+  ids.forEach((id, i) => body.set(`attached_media[${i}]`, JSON.stringify({ media_fbid: id })));
+  const res = await fetch(`https://graph.facebook.com/${version}/${process.env.FB_PAGE_ID}/feed`, { method: "POST", body });
+  const json = (await res.json()) as { id?: string; error?: { message: string } };
+  if (!res.ok || json.error) throw new Error(`Facebook : ${json.error?.message ?? res.status}`);
+  return { ok: true, detail: `Carrousel de ${ids.length} images publié sur la Page`, url: json.id ? `https://www.facebook.com/${json.id}` : undefined };
+}
+
 const facebook: Publisher = async (post) => {
+  if (post.visual.slides && post.visual.slides.length > 1) return facebookCarousel(post, post.visual.slides);
   const version = process.env.FB_GRAPH_VERSION || "v21.0";
   const body = new URLSearchParams({
     url: imageUrl(post, "facebook"),

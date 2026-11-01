@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|api/cron|api/visuel|api/login).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|api/cron|api/visuel|api/login|recap/).*)"],
 };
 
 export async function middleware(req: NextRequest) {

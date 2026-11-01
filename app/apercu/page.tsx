@@ -182,6 +182,14 @@ function Apercu() {
             ) : (
               <Link href={`/editeur?id=${current.id}`} className="no-visual">Ajoute une image dans l'éditeur</Link>
             )}
+            {tab === "facebook" && current.visual.slides && current.visual.slides.length > 1 ? (
+              <div className="hscroll" style={{ gap: 8, padding: "8px 0" }} aria-label="Slides du carrousel">
+                {current.visual.slides.map((u, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={u} src={u} alt={`Slide ${i + 1}`} style={{ width: 120, aspectRatio: "4 / 5", borderRadius: 8, flexShrink: 0, objectFit: "cover" }} />
+                ))}
+              </div>
+            ) : null}
           </article>
           <div className="row" style={{ justifyContent: "space-between", fontSize: 13 }}>
             <span className="muted">{current.rubrique === "actu" ? "Image de l'article" : ownVisual ? "Ton visuel" : `Format ${fmt.label.charAt(0).toLowerCase() + fmt.label.slice(1)}`}</span>

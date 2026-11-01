@@ -222,7 +222,7 @@ export async function sameStoryAs(title: string, summary: string, recentTitles: 
 // ─── Récap tech de la semaine ──────────────────────────────────────
 export type RecapItem = { title: string; text: string; source: string | null };
 
-export async function generateRecap(items: RecapItem[], periode: string): Promise<{ facebook: string; linkedin: string; titre: string }> {
+export async function generateRecap(items: RecapItem[], periode: string): Promise<{ facebook: string; linkedin: string; titre: string; points: { texte: string; n: number }[] }> {
   const liste = items
     .map((it, i) => `${i + 1}. ${it.title}\n${it.text.replace(/#\S+/g, "").slice(0, 700)}\nSource : ${it.source ?? "?"}`)
     .join("\n\n");
@@ -238,7 +238,7 @@ ${liste}
 Réponds uniquement avec un objet JSON :
 {
   "intro": "une phrase d'introduction sobre",
-  "points": ["un point par sujet : une seule phrase factuelle (25 mots maximum), sans puce ni numéro"],
+  "points": [{"n": numéro du post utilisé, "texte": "une seule phrase factuelle (25 mots maximum), sans puce ni numéro"}],
   "chute": "une phrase de chute sobre qui met la semaine en perspective",
   "titre": "titre court du récap (5 mots maximum)"
 }
@@ -246,8 +246,13 @@ Montants : écris-les sous la forme [[MONTANT:valeur numérique complète:code I
     2000,
     true
   );
-  const g = extractJson<{ intro?: string; points?: string[]; chute?: string; titre?: string }>(out);
-  const points = await Promise.all((g.points ?? []).filter(Boolean).slice(0, 5).map((p) => convertirTout(String(p).trim())));
+  const g = extractJson<{ intro?: string; points?: ({ n?: number; texte?: string } | string)[]; chute?: string; titre?: string }>(out);
+  const bruts = (g.points ?? [])
+    .map((p, i) => (typeof p === "string" ? { n: i + 1, texte: p } : { n: Number(p.n ?? i + 1), texte: String(p.texte ?? "") }))
+    .filter((p) => p.texte.trim())
+    .slice(0, 5);
+  const details = await Promise.all(bruts.map(async (p) => ({ n: p.n, texte: await convertirTout(p.texte.trim()) })));
+  const points = details.map((p) => p.texte);
   if (points.length === 0) throw new Error("Récap vide");
   const sources = Array.from(new Set(items.map((i) => i.source).filter(Boolean))).join(", ");
   const corps = [
@@ -261,6 +266,7 @@ Montants : écris-les sous la forme [[MONTANT:valeur numérique complète:code I
     facebook: [...corps, "#RécapTech #ActuTech #TUVOA"].join("\n\n"),
     linkedin: [...corps, "#RécapTech #Tech #Afrique"].join("\n\n"),
     titre: String(g.titre ?? "Récap tech de la semaine"),
+    points: details,
   };
 }
 
