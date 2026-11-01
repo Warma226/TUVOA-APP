@@ -62,16 +62,16 @@ async function callAnthropic(key: string, system: string, user: string, maxToken
   return (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
 }
 
-// Modèles essayés dans l'ordre, du plus rapide au plus lourd. Le modèle « lite » ne réfléchit pas avant
-// d'écrire : réponse en quelques secondes. Le modèle Flash, lui, passe d'abord plus de jetons à réfléchir
-// qu'à écrire : on coupe sa réflexion (thinkingBudget 0) et on ne le garde qu'en secours, car l'offre
+// Modèles essayés dans l'ordre. Flash donne les textes les plus soignés ; sa réflexion préalable (plus de
+// jetons que le texte lui-même) est coupée (thinkingBudget 0) pour répondre en quelques secondes.
+// Le modèle « lite », sans réflexion lui aussi, sert de secours rapide, car l'offre
 // gratuite renvoie souvent « surchargé » (503) ou « quota atteint » (429) sur un modèle alors qu'un autre répond.
 type GeminiTry = { model: string; noThinking?: boolean };
 function geminiModels(): GeminiTry[] {
   const list: GeminiTry[] = [
     ...(process.env.GEMINI_MODEL ? [{ model: process.env.GEMINI_MODEL }] : []),
-    { model: "gemini-flash-lite-latest" },
     { model: "gemini-flash-latest", noThinking: true },
+    { model: "gemini-flash-lite-latest" },
     { model: "gemini-3.5-flash-lite" },
     { model: "gemini-flash-latest" },
   ];
