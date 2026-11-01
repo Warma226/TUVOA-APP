@@ -137,6 +137,15 @@ export async function recentAutoPosts(hours: number): Promise<Post[]> {
   return (data ?? []) as Post[];
 }
 
+// Tous les posts récents (manuels compris), pour ne jamais republier un sujet déjà traité.
+export async function recentPosts(hours: number): Promise<Post[]> {
+  const since = new Date(Date.now() - hours * 3.6e6).toISOString();
+  if (isDemo()) return mem().posts.filter((p) => p.created_at >= since);
+  const { data, error } = await db().from("posts").select("id,title,source_url,created_at").gte("created_at", since);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Post[];
+}
+
 export async function countAutoToday(): Promise<number> {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);

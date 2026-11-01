@@ -5,7 +5,7 @@ import { fetchVeille, fetchArticle, similar } from "@/lib/veille";
 import { generatePost, aiConfigured } from "@/lib/claude";
 import { publishPost, connectionStatus } from "@/lib/publish";
 import { GUARDRAILS, TOPICS, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
-import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts } from "@/lib/store";
+import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -59,6 +59,7 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
       log.push(`Autopilote en attente : ${why}.`);
     } else {
       const { items, errors } = await fetchVeille(sources, triggers);
+      const already = await recentPosts(72);
       errors.forEach((e) => log.push(e));
       // Actus fraîches (moins de 24 h), sur un thème suivi, sans sujet sensible ni doublon d'un post récent.
       const fresh = items.filter(
@@ -67,7 +68,7 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
           (!it.publishedAt || Date.now() - new Date(it.publishedAt).getTime() < 24 * 3.6e6) &&
           (it.triggers.length > 0 || it.topics.some((t) => (TOPICS.find((x) => x.id === t)?.poids ?? 0) > 0)) &&
           it.score >= GUARDRAILS.minAutoScore &&
-          !recent.some((p) => p.source_url === it.url || similar(p.title, it.title))
+          !already.some((p) => p.source_url === it.url || similar(p.title ?? "", it.title))
       );
       const unseen = await filterUnseen(fresh.map((c) => c.url));
       const candidates = fresh.filter((it) => unseen.has(it.url)).sort((a, b) => b.score - a.score);
