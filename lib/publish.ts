@@ -5,6 +5,20 @@ import { imageFor } from "./visual-url";
 
 type Publisher = (post: Post) => Promise<Omit<PublishResult, "at">>;
 
+// Auteur des posts LinkedIn : LINKEDIN_AUTHOR si renseigné (Page entreprise : urn:li:organization:…),
+// sinon le profil personnel du titulaire du jeton (urn:li:person:…), retrouvé via OpenID Connect.
+let personUrn: string | null = null;
+async function linkedinAuthor(): Promise<string> {
+  if (process.env.LINKEDIN_AUTHOR) return process.env.LINKEDIN_AUTHOR;
+  if (personUrn) return personUrn;
+  const res = await fetch("https://api.linkedin.com/v2/userinfo", { headers: { Authorization: `Bearer ${process.env.LINKEDIN_TOKEN}` }, signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`LinkedIn (profil) ${res.status} : le jeton doit inclure les autorisations openid et profile.`);
+  const me = (await res.json()) as { sub?: string };
+  if (!me.sub) throw new Error("LinkedIn n'a pas renvoyé l'identifiant du profil.");
+  personUrn = `urn:li:person:${me.sub}`;
+  return personUrn;
+}
+
 // LinkedIn date ses versions d'API (AAAAMM) et retire les plus anciennes au bout d'un an environ :
 // on prend la version d'il y a deux mois, toujours disponible, sauf si LINKEDIN_VERSION est fixée.
 function linkedinVersion(): string {
@@ -26,8 +40,8 @@ export function connectionStatus(): Record<Platform, { configured: boolean; deta
       detail: process.env.FB_PAGE_ID ? `Page ${process.env.FB_PAGE_ID}` : "FB_PAGE_ID, FB_PAGE_TOKEN",
     },
     linkedin: {
-      configured: Boolean(process.env.LINKEDIN_TOKEN && process.env.LINKEDIN_AUTHOR),
-      detail: process.env.LINKEDIN_AUTHOR ?? "LINKEDIN_TOKEN, LINKEDIN_AUTHOR",
+      configured: Boolean(process.env.LINKEDIN_TOKEN),
+      detail: process.env.LINKEDIN_AUTHOR?.startsWith("urn:li:organization:") ? "Page entreprise" : "Profil personnel",
     },
     tiktok: {
       configured: false,
@@ -101,7 +115,7 @@ const linkedin: Publisher = async (post) => {
     "X-Restli-Protocol-Version": "2.0.0",
     "Content-Type": "application/json",
   };
-  const author = process.env.LINKEDIN_AUTHOR as string;
+  const author = await linkedinAuthor();
   // 1. Réserve l'emplacement de l'image
   const init = await fetch("https://api.linkedin.com/rest/images?action=initializeUpload", {
     method: "POST",
@@ -185,7 +199,14 @@ async function testFacebook(): Promise<ConnectionTest> {
 async function testLinkedin(): Promise<ConnectionTest> {
   const author = process.env.LINKEDIN_AUTHOR ?? "";
   const id = author.match(/^urn:li:organization:(\d+)$/)?.[1];
-  if (!id) return { ok: false, detail: "LINKEDIN_AUTHOR doit avoir la forme urn:li:organization:123456." };
+  if (!id) {
+    // Profil personnel : on vérifie le jeton et on récupère le nom.
+    const res = await fetch("https://api.linkedin.com/v2/userinfo", { headers: { Authorization: `Bearer ${process.env.LINKEDIN_TOKEN}` }, signal: AbortSignal.timeout(15000) });
+    if (res.status === 401) return { ok: false, detail: "Jeton LinkedIn refusé ou expiré : génère-en un nouveau." };
+    if (!res.ok) return { ok: false, detail: `LinkedIn a répondu ${res.status} : le jeton doit inclure openid, profile et w_member_social.` };
+    const me = (await res.json()) as { name?: string };
+    return { ok: true, detail: `Publication sur le profil de ${me.name ?? "ton compte"}.` };
+  }
   const res = await fetch(`https://api.linkedin.com/rest/organizations/${id}`, {
     headers: { Authorization: `Bearer ${process.env.LINKEDIN_TOKEN}`, "LinkedIn-Version": linkedinVersion(), "X-Restli-Protocol-Version": "2.0.0" },
     signal: AbortSignal.timeout(15000),

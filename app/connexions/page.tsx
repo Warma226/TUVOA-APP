@@ -19,9 +19,10 @@ const HELP: Record<Platform, string[]> = {
     "Dans Vercel : FB_PAGE_ID et FB_PAGE_TOKEN, puis redéploie.",
   ],
   linkedin: [
-    "Crée une application sur developer.linkedin.com reliée à ta Page entreprise.",
-    "Demande l'accès à la publication pour les organisations.",
-    "Dans Vercel : LINKEDIN_TOKEN et LINKEDIN_AUTHOR (urn:li:organization:…), puis redéploie. Le jeton expire : pense à le renouveler.",
+    "Sur linkedin.com/developers, crée une app « TUVOA Studio » (elle demande une Page LinkedIn associée).",
+    "Onglet Products : ajoute « Share on LinkedIn » et « Sign In with LinkedIn using OpenID Connect » (accès immédiat).",
+    "Onglet Auth › OAuth 2.0 tools › Create token : coche openid, profile et w_member_social, puis copie le jeton (valable 60 jours).",
+    "Dans Vercel : LINKEDIN_TOKEN, puis redéploie. Les posts partent de ton profil personnel.",
   ],
   tiktok: [
     "Demande l'accès « Content Posting API » sur developers.tiktok.com.",

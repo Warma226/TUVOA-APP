@@ -63,10 +63,10 @@ Dans ton WordPress : **Utilisateurs › Profil › Mots de passe d'application**
 2. Obtiens un jeton de Page longue durée avec les permissions `pages_manage_posts` et `pages_read_engagement`.
 3. Dans Vercel : `FB_PAGE_ID`, `FB_PAGE_TOKEN`.
 
-**LinkedIn (Page entreprise)**
-1. Crée une application sur developer.linkedin.com reliée à ta Page, et demande l'accès à la publication pour les organisations.
-2. Dans Vercel : `LINKEDIN_TOKEN`, `LINKEDIN_AUTHOR` (forme `urn:li:organization:123456`).
-3. Le jeton LinkedIn expire : il faudra le renouveler périodiquement.
+**LinkedIn**
+- *Profil personnel (sans validation)* : sur developer.linkedin.com, crée une app, ajoute les produits « Share on LinkedIn » et « Sign In with LinkedIn using OpenID Connect », puis génère un jeton (Auth › OAuth 2.0 tools) avec `openid`, `profile` et `w_member_social`. Dans Vercel : `LINKEDIN_TOKEN` seulement.
+- *Page entreprise* : demande l'accès « Community Management API » (réservé aux organisations enregistrées, e-mail professionnel exigé), jeton avec `w_organization_social`, et ajoute `LINKEDIN_AUTHOR` (forme `urn:li:organization:123456`).
+- Le jeton LinkedIn expire au bout de 60 jours : il faut le renouveler.
 
 **TikTok**
 Demande l'accès « Content Posting API » sur developers.tiktok.com. La publication sera branchée une fois l'application validée par TikTok.
