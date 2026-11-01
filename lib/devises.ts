@@ -1,5 +1,5 @@
-// Conversion des montants en XOF (franc CFA BCEAO). L'IA écrit les montants sous forme de balise
-// [[MONTANT:valeur:DEVISE]] ; ce module les remplace par « 6,43 milliards de dollars soit 3 698 milliards XOF ».
+// Conversion des montants en francs CFA (XOF, BCEAO). L'IA écrit les montants sous forme de balise
+// [[MONTANT:valeur:DEVISE]] ; ce module les remplace par « 6,43 milliards de dollars, soit environ 3 777 milliards FCFA ».
 
 const EUR_XOF = 655.957; // parité fixe
 
@@ -71,11 +71,12 @@ export function formatMontant(valeur: number, devise: string, taux: Record<strin
   const nom = NOMS[cur] ? NOMS[cur][src.unite || Math.abs(valeur) >= 2 ? 1 : 0] : cur;
   const de = /^[aeiouyéè]/i.test(nom) ? "d'" : "de ";
   const original = src.unite ? `${src.nombre} ${src.unite} ${de}${nom}` : `${src.nombre} ${nom}`;
-  if (cur === "XOF") return src.unite ? `${src.nombre} ${src.unite} XOF` : `${src.nombre} XOF`;
+  if (cur === "XOF") return src.unite ? `${src.nombre} ${src.unite} FCFA` : `${src.nombre} FCFA`;
   const t = taux[cur];
   if (!t) return original;
   const x = enLettres(valeur * t);
-  return `${original} soit ${x.unite ? `${x.nombre} ${x.unite}` : x.nombre} XOF`;
+  // Parité fixe avec l'euro : montant exact ; autres devises : taux du jour, donc « environ ».
+  return `${original}, soit ${cur === "EUR" ? "" : "environ "}${x.unite ? `${x.nombre} ${x.unite}` : x.nombre} FCFA`;
 }
 
 const BALISE = /\[\[\s*MONTANT\s*:\s*([0-9][0-9.,\s]*)\s*:\s*([A-Za-z]{3})\s*\]\]/g;
@@ -92,7 +93,7 @@ export function aDesMontants(texte: string): boolean {
 }
 
 // Secours si l'IA a écrit un montant en clair : « 2,7 millions de dollars » → « … soit 1 553 millions XOF ».
-const CLAIR = /(\d{1,3}(?:[  ]\d{3})*(?:,\d+)?|\d+(?:,\d+)?)\s*(milliards?|millions?)?\s*(?:de\s+|d['’])?(dollars?|euros?)\b(?!\s*\(?\s*soit\b)/gi;
+const CLAIR = /(\d{1,3}(?:[  ]\d{3})*(?:,\d+)?|\d+(?:,\d+)?)\s*(milliards?|millions?)?\s*(?:de\s+|d['’])?(dollars?|euros?)\b(?!\s*[,(]?\s*soit\b)/gi;
 
 export function convertirMontantsEnClair(texte: string, taux: Record<string, number>): string {
   return texte.replace(CLAIR, (m, nb: string, unite: string | undefined, dev: string) => {

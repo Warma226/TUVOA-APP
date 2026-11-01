@@ -213,7 +213,7 @@ Règles :
 - Distinguer clairement ce qui est officiel, une fuite ou une rumeur.
 - Pas de sensationnalisme, pas de point d'exclamation, pas d'émoji.
 - Les chiffres en chiffres, les noms de marques avec leur casse officielle.
-- Tout montant en devise étrangère est suivi de sa conversion en XOF : « … dollars soit … XOF ».
+- Tout montant en devise étrangère est suivi de sa conversion en francs CFA : « … dollars, soit environ … FCFA ».
 Qualité professionnelle, niveau rédaction d'un média sérieux :
 - Première phrase forte et précise (le fait principal), pas de formule creuse (« Grosse nouvelle », « Vous n'allez pas y croire »…).
 - Chaque phrase apporte une info ou une explication utile ; pas de remplissage ni de répétition.
