@@ -182,16 +182,19 @@ async function weeklyRecap(log: string[], opts: { force: boolean; dry: boolean }
   const fmt = (d: Date) => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
   const periode = `semaine du ${fmt(monday)} au ${fmt(now)}`;
   try {
-    const r = await generateRecap(
-      week.map((p) => ({ title: p.title, text: p.texts.facebook || p.texts.linkedin, source: p.source_name })),
-      periode
-    );
     // Image de chaque actu de la semaine (celle du post, sinon celle de l'article).
     const images = new Map<string, string>();
-    for (const p of week.slice(-12)) {
+    for (const p of week.slice(-15)) {
       const img = p.visual.image || (p.source_url ? (await fetchArticle(p.source_url)).image : "");
       if (img) images.set(p.id, img);
     }
+    // Toutes les slides ont une photo : le récap ne retient que les actus illustrées (s'il y en a assez).
+    const illustrees = week.filter((p) => images.has(p.id));
+    const base = illustrees.length >= Math.min(3, week.length) ? illustrees : week;
+    const r = await generateRecap(
+      base.map((p) => ({ title: p.title, text: p.texts.facebook || p.texts.linkedin, source: p.source_name })),
+      periode
+    );
     const recentes = [...week].reverse().filter((p) => images.has(p.id)).slice(0, 8);
     const court = (d: Date) => d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" }).replace(/^1 /, "1er ");
     const total = r.points.length;
@@ -203,18 +206,21 @@ async function weeklyRecap(log: string[], opts: { force: boolean; dry: boolean }
         categories: recentes.map((p) => p.visual.titre || "Actu tech"),
       }),
       ...r.points.map((pt, i) => {
-        const src = week[pt.n - 1];
+        const src = base[pt.n - 1];
         return itemUrl({
           index: i + 1,
           total,
           categorie: src?.visual.titre || "Actu tech",
           texte: pt.texte,
-          photo: src ? images.get(src.id) : undefined,
+          photo: (src ? images.get(src.id) : undefined) ?? images.get(recentes[i % Math.max(1, recentes.length)]?.id ?? ""),
           source: src?.source_name ?? undefined,
           autres: recentes.filter((p) => p.id !== src?.id).slice(0, 4).map((p) => ({ photo: images.get(p.id), categorie: p.visual.titre || "Actu tech" })),
         });
       }),
-      endUrl(),
+      endUrl(
+        images.get(recentes[0]?.id ?? ""),
+        recentes.slice(0, 5).map((p) => ({ photo: images.get(p.id), categorie: p.visual.titre || "Actu tech" }))
+      ),
     ];
     const image = slides[0];
     if (opts.dry) return { ...r, image, slides, platforms, posts: week.length };

@@ -27,6 +27,12 @@ export function itemUrl(it: ItemParams): string {
   return signed(p);
 }
 
-export function endUrl(): string {
-  return signed(new URLSearchParams({ r: "recap", k: "end", v: "1" }));
+export function endUrl(photo?: string, autres: { photo?: string; categorie: string }[] = []): string {
+  const p = new URLSearchParams({ r: "recap", k: "end", v: "2" });
+  if (photo) p.set("ph", photo);
+  autres.slice(0, 5).forEach((a, i) => {
+    if (a.photo) p.set(`ap${i}`, a.photo);
+    p.set(`ac${i}`, a.categorie);
+  });
+  return signed(p);
 }
