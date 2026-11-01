@@ -217,10 +217,7 @@ async function weeklyRecap(log: string[], opts: { force: boolean; dry: boolean }
           autres: recentes.filter((p) => p.id !== src?.id).slice(0, 4).map((p) => ({ photo: images.get(p.id), categorie: p.visual.titre || "Actu tech" })),
         });
       }),
-      endUrl(
-        images.get(recentes[0]?.id ?? ""),
-        recentes.slice(0, 5).map((p) => ({ photo: images.get(p.id), categorie: p.visual.titre || "Actu tech" }))
-      ),
+      endUrl(),
     ];
     const image = slides[0];
     if (opts.dry) return { ...r, image, slides, platforms, posts: week.length };

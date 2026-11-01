@@ -11,7 +11,7 @@ const H = 1350;
 export type SlideData =
   | { kind: "cover"; periode: string; count: number; photos?: string[]; categories?: string[]; titres?: string[]; assets?: string }
   | { kind: "item"; index: number; total: number; categorie: string; texte: string; photo?: string; source?: string; autres?: { photo?: string; categorie: string }[] }
-  | { kind: "end"; assets?: string; photo?: string; autres?: { photo?: string; categorie: string }[] };
+  | { kind: "end"; assets?: string };
 
 function fit(text: string, max: number) {
   return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
@@ -23,7 +23,7 @@ function autoSize(text: string, steps: [number, number][]): number {
 export function renderSlide(d: SlideData) {
   if (d.kind === "cover") return cover(d);
   if (d.kind === "item") return item(d);
-  return fin(d);
+  return fin(d.assets ?? "");
 }
 
 // ─── Slide d'actu (modèle « photo plein cadre ») : photo assombrie, logo en haut, grand texte blanc,
@@ -133,38 +133,27 @@ function item(d: { index: number; total: number; categorie: string; texte: strin
   );
 }
 
-// ─── Slide de fin : même format que les slides d'actu (photo plein cadre, vignettage, cartes, mentions) ───
-function fin(d: { photo?: string; autres?: { photo?: string; categorie: string }[] }) {
-  const o = d.autres ?? [];
-  const side = (i: number) => o[i] ?? { photo: undefined, categorie: "Actu tech" };
+// ─── Slide de fin : la même photo, la feuille porte l'appel à s'abonner ───
+function fin(base: string) {
   return (
-    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: M, background: "#0A0F1F" }}>
-      {d.photo ? <img src={d.photo} alt="" width={W} height={H} style={{ position: "absolute", left: 0, top: 0, width: W, height: H, objectFit: "cover" }} /> : null}
-      {!d.photo ? <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex", backgroundImage: "radial-gradient(ellipse at 60% 40%, #1D3A7A 0%, #0B1633 60%, #050812 100%)" }} /> : null}
-      <Assombri />
-      <div style={{ position: "absolute", left: 0, top: 66, width: W, display: "flex", justifyContent: "center" }}>
-        <LogoMark size={40} color="#FFFFFF" dot={BLEU} />
-      </div>
-      <div style={{ position: "absolute", left: 78, top: 290, width: 880, display: "flex", flexDirection: "column", fontFamily: M, fontSize: 64, fontWeight: 600, color: "#FFFFFF", lineHeight: 1.06, letterSpacing: -3 }}>
-        <div style={{ display: "flex" }}>Toute l'actu tech qui compte,</div>
-        <div style={{ display: "flex" }}>chaque jour.</div>
-        <div style={{ display: "flex", color: "#9DB8F5" }}>À la semaine prochaine.</div>
-      </div>
-      <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, display: "flex" }}>
-        <div style={{ position: "absolute", left: 120, top: 830, display: "flex" }}><Carte photo={side(3).photo} titre={side(3).categorie} w={150} h={170} opacity={0.55} r={-3} /></div>
-        <div style={{ position: "absolute", left: 250, top: 800, display: "flex" }}><Carte photo={side(1).photo} titre={side(1).categorie} w={190} h={220} opacity={0.85} r={-2} /></div>
-        <div style={{ position: "absolute", left: 690, top: 790, display: "flex" }}><Carte photo={side(2).photo} titre={side(2).categorie} w={190} h={220} opacity={0.85} r={2} /></div>
-        <div style={{ position: "absolute", left: 860, top: 815, display: "flex" }}><Carte photo={side(4).photo} titre={side(4).categorie} w={150} h={180} opacity={0.55} r={3} /></div>
-        <div style={{ position: "absolute", left: 425, top: 720, display: "flex" }}>
-          <Carte photo={side(0).photo} titre="TUVOA Tech Media" sous="www.tuvoa.media" w={250} h={340} />
+    <div style={{ width: W, height: H, display: "flex", position: "relative", overflow: "hidden", fontFamily: M, background: "#0B2A8A" }}>
+      <img src={`${base}/recap/base.jpg`} alt="" width={W} height={H} style={{ position: "absolute", left: 0, top: 0, width: W, height: H }} />
+      <div style={{ position: "absolute", left: FEUILLE.left, top: FEUILLE.top, width: FEUILLE.w, height: FEUILLE.h, display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 70, transform: `rotate(${FEUILLE.angle}deg)` }}>
+        <div style={{ display: "flex", padding: "26px 40px", background: "#FFFFFF", borderRadius: 18, boxShadow: "0 6px 16px rgba(0,0,0,0.12)" }}>
+          <LogoMark size={70} color="#1A1A1A" />
         </div>
+        <div style={{ display: "flex", marginTop: 50, fontFamily: M, fontSize: 56, fontWeight: 800, color: "#111111" }}>Toute l'actu tech,</div>
+        <div style={{ display: "flex", fontFamily: M, fontSize: 56, fontWeight: 800, color: BLEU }}>chaque jour.</div>
+        <div style={{ display: "flex", marginTop: 30, padding: "14px 30px", borderRadius: 40, background: BLEU, fontFamily: M, fontSize: 30, fontWeight: 700, color: "#FFFFFF" }}>Abonnez-vous à TUVOA Tech Media</div>
+        <div style={{ display: "flex", marginTop: 22, fontFamily: M, fontSize: 28, fontWeight: 700, color: "#151515" }}>www.tuvoa.media</div>
       </div>
-      <div style={{ position: "absolute", right: 40, top: 712, display: "flex" }}>
-        <Mention text="« Abonnez-vous »" size={46} pinceau={300} />
+      <img src={`${base}/recap/front.png`} alt="" width={W} height={H} style={{ position: "absolute", left: 0, top: 0, width: W, height: H }} />
+      <div style={{ position: "absolute", left: 120, top: 1030, width: 940, display: "flex", flexDirection: "column", alignItems: "center", opacity: 0.9 }}>
+        <div style={{ display: "flex", fontFamily: M, fontSize: 96, fontWeight: 800, letterSpacing: -3, lineHeight: 1, color: "#1B3FA8", textShadow: "1px 1px 0 rgba(255,255,255,0.35), -1px -1px 1px rgba(0,0,0,0.30)" }}>À la semaine</div>
+        <div style={{ display: "flex", fontFamily: M, fontSize: 96, fontWeight: 800, letterSpacing: -3, lineHeight: 1.05, color: "#0F2463", textShadow: "1px 1px 0 rgba(255,255,255,0.35), -1px -1px 1px rgba(0,0,0,0.30)" }}>prochaine</div>
       </div>
-      <div style={{ position: "absolute", right: 110, top: 1075, display: "flex", fontFamily: SERIF, fontStyle: "italic", fontSize: 100, color: "#FFFFFF" }}>fin</div>
-      <div style={{ position: "absolute", left: 210, top: 1150, display: "flex" }}>
-        <Mention text="« www.tuvoa.media »" size={40} pinceau={180} />
+      <div style={{ position: "absolute", left: 0, top: 46, width: W, display: "flex", justifyContent: "center" }}>
+        <LogoMark size={44} color="#FFFFFF" dot="#FFFFFF" />
       </div>
     </div>
   );

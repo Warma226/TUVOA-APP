@@ -48,14 +48,7 @@ async function recap(params: URLSearchParams) {
       ),
     };
   } else {
-    data = {
-      kind: "end",
-      assets: appUrl(),
-      photo: await safeImage(params.get("ph")),
-      autres: await Promise.all(
-        Array.from({ length: 5 }, async (_, i) => ({ photo: await safeImage(params.get(`ap${i}`)), categorie: params.get(`ac${i}`) ?? "Actu tech" }))
-      ),
-    };
+    data = { kind: "end", assets: appUrl() };
   }
   const fonts = [...(await montserratFonts()), ...(await serifItalicFonts()), ...(await archivoFonts())];
   return new ImageResponse(renderSlide(data), {
