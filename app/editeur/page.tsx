@@ -277,7 +277,7 @@ function Editeur() {
         {empty && !locked ? (
           <div className="card" style={{ padding: 16, gap: 10 }}>
             <strong>Ce brouillon est vide</strong>
-            <span className="muted small">{busy === "tout" ? "L'IA rédige toutes les versions… (jusqu'à une minute)" : "L'IA peut rédiger toutes les versions (Facebook, LinkedIn, TikTok, article) à partir de l'article."}</span>
+            <span className="muted small">{busy === "tout" ? "L'IA rédige toutes les versions… (quelques secondes)" : "L'IA peut rédiger toutes les versions (Facebook, LinkedIn, TikTok, article) à partir de l'article."}</span>
             <button type="button" className="btn dark" onClick={draftAll} disabled={Boolean(busy)}>
               <Icon name="etincelle" size={18} />
               {busy === "tout" ? "Rédaction…" : "Rédiger avec l'IA"}

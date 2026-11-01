@@ -216,7 +216,7 @@ function Creer() {
         {busy && !gen ? (
           <div className="card" role="status" style={{ gap: 6, padding: 16 }}>
             <strong>L'IA rédige ton post…</strong>
-            <span className="muted small">Facebook, LinkedIn, TikTok et article, en français. Ça peut prendre jusqu'à une minute.</span>
+            <span className="muted small">Facebook, LinkedIn, TikTok et article, en français. Quelques secondes.</span>
           </div>
         ) : null}
 

@@ -120,7 +120,7 @@ export async function fetchArticleText(url: string): Promise<string> {
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "TUVOA-Veille/0.1 (+https://www.tuvoa.media)" },
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return "";
     const html = await res.text();
