@@ -5,6 +5,16 @@ import { imageFor } from "./visual-url";
 
 type Publisher = (post: Post) => Promise<Omit<PublishResult, "at">>;
 
+// LinkedIn date ses versions d'API (AAAAMM) et retire les plus anciennes au bout d'un an environ :
+// on prend la version d'il y a deux mois, toujours disponible, sauf si LINKEDIN_VERSION est fixée.
+function linkedinVersion(): string {
+  if (process.env.LINKEDIN_VERSION) return process.env.LINKEDIN_VERSION;
+  const d = new Date();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() - 2);
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 export function connectionStatus(): Record<Platform, { configured: boolean; detail: string }> {
   return {
     wordpress: {
@@ -87,7 +97,7 @@ const facebook: Publisher = async (post) => {
 const linkedin: Publisher = async (post) => {
   const headers = {
     Authorization: `Bearer ${process.env.LINKEDIN_TOKEN}`,
-    "LinkedIn-Version": process.env.LINKEDIN_VERSION || "202504",
+    "LinkedIn-Version": linkedinVersion(),
     "X-Restli-Protocol-Version": "2.0.0",
     "Content-Type": "application/json",
   };
@@ -146,4 +156,57 @@ export async function publishPost(post: Post): Promise<Post> {
   const all = post.platforms.map((p) => results[p]);
   const allOk = all.every((r) => r?.ok);
   return { ...post, results, status: allOk ? "publie" : "erreur" };
+}
+
+// ─── Test des connexions (sans rien publier) ─────────────────────────
+export type ConnectionTest = { ok: boolean; detail: string };
+
+async function testWordpress(): Promise<ConnectionTest> {
+  const base = (process.env.WP_URL ?? "").replace(/\/$/, "");
+  const auth = "Basic " + Buffer.from(`${process.env.WP_USER}:${process.env.WP_APP_PASSWORD}`).toString("base64");
+  const res = await fetch(`${base}/wp-json/wp/v2/users/me?context=edit`, { headers: { Authorization: auth }, signal: AbortSignal.timeout(15000) });
+  if (res.status === 401 || res.status === 403) return { ok: false, detail: "Identifiant ou mot de passe d'application refusé par WordPress." };
+  if (res.status === 404) return { ok: false, detail: "API WordPress introuvable : vérifie WP_URL (adresse exacte du site)." };
+  if (!res.ok) return { ok: false, detail: `WordPress a répondu ${res.status}.` };
+  const me = (await res.json()) as { name?: string; capabilities?: Record<string, boolean> };
+  if (me.capabilities && !me.capabilities.publish_posts) return { ok: false, detail: `Connecté en tant que ${me.name}, mais ce compte ne peut pas publier d'articles.` };
+  return { ok: true, detail: `Connecté en tant que ${me.name ?? process.env.WP_USER}, peut publier.` };
+}
+
+async function testFacebook(): Promise<ConnectionTest> {
+  const version = process.env.FB_GRAPH_VERSION || "v21.0";
+  const url = `https://graph.facebook.com/${version}/${process.env.FB_PAGE_ID}?fields=name&access_token=${encodeURIComponent(process.env.FB_PAGE_TOKEN ?? "")}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  const json = (await res.json().catch(() => ({}))) as { name?: string; error?: { message?: string } };
+  if (!res.ok || json.error) return { ok: false, detail: `Facebook : ${json.error?.message ?? res.status}` };
+  return { ok: true, detail: `Page « ${json.name} » accessible.` };
+}
+
+async function testLinkedin(): Promise<ConnectionTest> {
+  const author = process.env.LINKEDIN_AUTHOR ?? "";
+  const id = author.match(/^urn:li:organization:(\d+)$/)?.[1];
+  if (!id) return { ok: false, detail: "LINKEDIN_AUTHOR doit avoir la forme urn:li:organization:123456." };
+  const res = await fetch(`https://api.linkedin.com/rest/organizations/${id}`, {
+    headers: { Authorization: `Bearer ${process.env.LINKEDIN_TOKEN}`, "LinkedIn-Version": linkedinVersion(), "X-Restli-Protocol-Version": "2.0.0" },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (res.status === 401) return { ok: false, detail: "Jeton LinkedIn refusé ou expiré : génère-en un nouveau." };
+  if (res.status === 403) return { ok: false, detail: "Jeton valide, mais sans droit sur cette Page (il faut être administrateur et avoir l'accès Community Management)." };
+  if (!res.ok) return { ok: false, detail: `LinkedIn a répondu ${res.status} : ${(await res.text()).slice(0, 160)}` };
+  const org = (await res.json()) as { localizedName?: string };
+  return { ok: true, detail: `Page « ${org.localizedName ?? id} » accessible.` };
+}
+
+export async function testConnections(): Promise<Record<Platform, ConnectionTest>> {
+  const status = connectionStatus();
+  const run = async (p: Platform, fn: () => Promise<ConnectionTest>): Promise<ConnectionTest> => {
+    if (!status[p].configured) return { ok: false, detail: "Pas encore relié." };
+    try {
+      return await fn();
+    } catch (e) {
+      return { ok: false, detail: `Injoignable : ${(e as Error).message}` };
+    }
+  };
+  const [wordpress, facebook, linkedin] = await Promise.all([run("wordpress", testWordpress), run("facebook", testFacebook), run("linkedin", testLinkedin)]);
+  return { wordpress, facebook, linkedin, tiktok: { ok: false, detail: status.tiktok.detail } };
 }
