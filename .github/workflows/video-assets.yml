@@ -1,0 +1,24 @@
+# Télécharge les photos libres de droits (Unsplash) de la vidéo de promo, sur la branche assets-video uniquement.
+name: video-assets
+on:
+  push:
+    branches: [assets-video]
+    paths: [video-assets/list.txt]
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          while read -r name url; do
+            [ -z "$name" ] && continue
+            curl -fsSL -o "video-assets/$name.jpg" "$url"
+          done < video-assets/list.txt
+          ls -la video-assets
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add video-assets/*.jpg
+          git commit -m "Photos Unsplash pour la vidéo [skip ci]" || exit 0
+          git push
