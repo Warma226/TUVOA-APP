@@ -24,9 +24,18 @@ export async function POST(req: Request) {
         notice: "Brouillon préparé sans IA : complète les passages entre crochets dans l'éditeur. Ajoute GEMINI_API_KEY (gratuit) ou ANTHROPIC_API_KEY dans Vercel pour la rédaction automatique.",
       });
     }
-    if (input.sourceUrl && !input.articleText) input.articleText = await fetchArticleText(input.sourceUrl);
-    const generated = await generatePost(input);
-    return NextResponse.json({ generated });
+    if (input.sourceUrl && !input.articleText) input.articleText = await fetchArticleText(input.sourceUrl).catch(() => "");
+    try {
+      const generated = await generatePost(input);
+      return NextResponse.json({ generated });
+    } catch (e) {
+      // L'IA est indisponible (surcharge, quota…) : on propose quand même un brouillon prêt à compléter.
+      return NextResponse.json({
+        generated: draftWithoutAI(input),
+        fallback: true,
+        notice: `${(e as Error).message} En attendant, voici un brouillon prêt à compléter (passages entre crochets) ; tu peux aussi relancer l'IA.`,
+      });
+    }
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

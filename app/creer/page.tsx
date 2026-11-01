@@ -1,12 +1,12 @@
 "use client";
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/BottomNav";
 import { Icon } from "@/components/Icon";
 import { ImageField } from "@/components/ImageField";
 import { RUBRIQUES, PLATFORMS, type Platform, type RubriqueId } from "@/lib/config";
-import type { Generated } from "@/lib/claude";
+import { draftWithoutAI, type Generated } from "@/lib/claude";
 import type { Post } from "@/lib/store";
 import { savePost } from "@/lib/client";
 
@@ -43,6 +43,16 @@ function Creer() {
   const [error, setError] = useState("");
   const [gen, setGen] = useState<Generated | null>(null);
   const [picked, setPicked] = useState(0);
+  const autoStarted = useRef(false);
+
+  // Depuis la veille : l'IA rédige le post tout de suite, sans clic supplémentaire.
+  useEffect(() => {
+    if (sourceUrl && !autoStarted.current) {
+      autoStarted.current = true;
+      void generate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceUrl]);
 
   const togglePlatform = (p: Platform) => setPlatforms(platforms.includes(p) ? platforms.filter((x) => x !== p) : [...platforms, p]);
 
@@ -62,6 +72,7 @@ function Creer() {
     setError(v);
     if (v) return;
     setBusy(true);
+    setNotice("");
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -77,8 +88,8 @@ function Creer() {
           portrait: rubrique === "portrait" ? { nom, specialite, infos } : undefined,
         }),
       });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error);
+      const d = await res.json().catch(() => ({ error: "Le serveur n'a pas répondu à temps. Réessaie." }));
+      if (!res.ok || !d.generated) throw new Error(d.error || "Aucun texte reçu. Réessaie.");
       setGen(d.generated);
       setNotice(d.notice ?? "");
       setPicked(0);
@@ -94,28 +105,33 @@ function Creer() {
     setError(v);
     if (v) return;
     setBusy(true);
+    // Sans génération : brouillon structuré à partir de l'article (jamais de textes vides).
+    const g: Generated | null =
+      gen ?? (sourceUrl || idea.trim() || rubrique === "portrait"
+        ? draftWithoutAI({ rubrique, idea, sourceUrl, sourceName, articleTitle, articleSummary, categorie, portrait: rubrique === "portrait" ? { nom, specialite, infos } : undefined })
+        : null);
     const accroche = gen?.variantes[picked];
     const post: Partial<Post> = {
       rubrique,
       idea,
-      title: articleTitle || gen?.visuel_titre || (rubrique === "portrait" ? nom : idea),
+      title: articleTitle || g?.wp_title || g?.visuel_titre || (rubrique === "portrait" ? nom : idea),
       source_name: sourceName,
       source_url: sourceUrl,
       origin: sourceUrl ? "veille" : "manuel",
       platforms,
       status: "brouillon",
-      texts: !gen
+      texts: !g
         ? { facebook: idea, linkedin: idea, tiktok: idea.slice(0, 150), wp_title: idea, wp_body: idea ? `<p>${idea}</p>` : "" }
         : {
-            facebook: accroche && !gen.facebook.startsWith(accroche) ? `${accroche}\n\n${gen.facebook}` : gen.facebook,
-            linkedin: gen.linkedin,
-            tiktok: gen.tiktok,
-            wp_title: gen.wp_title,
-            wp_body: gen.wp_body,
+            facebook: withHook(g.facebook, accroche),
+            linkedin: g.linkedin,
+            tiktok: g.tiktok,
+            wp_title: g.wp_title,
+            wp_body: g.wp_body,
           },
       visual: {
-        titre: rubrique === "portrait" ? nom : gen?.visuel_titre || idea,
-        texte: rubrique === "portrait" ? specialite : gen?.visuel_texte || "",
+        titre: rubrique === "portrait" ? nom : g?.visuel_titre || idea,
+        texte: rubrique === "portrait" ? specialite : g?.visuel_texte || "",
         nom: rubrique === "portrait" ? nom : undefined,
         specialite: rubrique === "portrait" ? specialite : undefined,
         image: rubrique !== "actu" && photo.trim() ? photo.trim() : undefined,
@@ -197,9 +213,16 @@ function Creer() {
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
         {notice ? <p className="notice ambre" role="status">{notice}</p> : null}
 
-        <button type="button" className="btn dark" onClick={generate} disabled={busy}>
+        {busy && !gen ? (
+          <div className="card" role="status" style={{ gap: 6, padding: 16 }}>
+            <strong>L'IA rédige ton post…</strong>
+            <span className="muted small">Facebook, LinkedIn, TikTok et article, en français. Ça peut prendre jusqu'à une minute.</span>
+          </div>
+        ) : null}
+
+        <button type="button" className={gen ? "btn" : "btn dark"} onClick={generate} disabled={busy}>
           <Icon name="etincelle" size={18} />
-          {busy && !gen ? "Rédaction…" : gen ? "Régénérer avec l'IA" : "Générer avec l'IA"}
+          {busy ? "Rédaction…" : gen ? "Régénérer avec l'IA" : "Générer avec l'IA"}
         </button>
 
         {gen ? (
@@ -213,16 +236,31 @@ function Creer() {
             ))}
           </section>
         ) : null}
+
+        {gen ? (
+          <section className="stack" aria-labelledby="propose">
+            <h2 id="propose" className="label">Post proposé · Facebook</h2>
+            <div className="card" style={{ padding: 16, whiteSpace: "pre-wrap", fontSize: 15, lineHeight: 1.5 }}>
+              {withHook(gen.facebook, gen.variantes[picked])}
+            </div>
+            <p className="muted small">LinkedIn, TikTok et l'article WordPress sont aussi prêts : tu les verras dans l'éditeur avant de publier.</p>
+          </section>
+        ) : null}
       </main>
       <div className="actionbar">
         <div className="btn-row">
           <button type="button" className="btn" onClick={() => saveAndEdit(true)} disabled={busy}>Brouillon</button>
           <button type="button" className="btn primary" style={{ flex: 2 }} onClick={() => saveAndEdit(false)} disabled={busy}>
             <Icon name="creer" size={18} />
-            {gen ? "Éditer le texte" : "Écrire moi-même"}
+            {gen ? "Relire et publier" : "Écrire moi-même"}
           </button>
         </div>
       </div>
     </>
   );
+}
+
+function withHook(text: string, hook?: string): string {
+  if (!hook || text.startsWith(hook)) return text;
+  return `${hook}\n\n${text}`;
 }

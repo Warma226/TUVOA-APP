@@ -152,6 +152,43 @@ function Editeur() {
     update({ ...current, texts: { ...current.texts, ...adapt(c, current.texts.wp_title) } });
   }
 
+  const empty = !["facebook", "linkedin", "tiktok", "wp_body", "commun"].some((k) => (current.texts[k as TextKey] ?? "").trim());
+
+  // Brouillon vide (ex. créé avant la rédaction) : l'IA rédige toutes les versions d'un coup.
+  async function draftAll() {
+    setBusy("tout");
+    setError("");
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "post",
+          rubrique: current.rubrique,
+          idea: current.idea ?? "",
+          sourceUrl: current.source_url,
+          sourceName: current.source_name,
+          articleTitle: current.title,
+          categorie: current.visual.titre || undefined,
+        }),
+      });
+      const d = await res.json().catch(() => ({ error: "Le serveur n'a pas répondu à temps. Réessaie." }));
+      if (!res.ok || !d.generated) throw new Error(d.error || "Aucun texte reçu. Réessaie.");
+      const g = d.generated;
+      const hook = g.variantes?.[0];
+      const facebook = hook && !g.facebook.startsWith(hook) ? `${hook}\n\n${g.facebook}` : g.facebook;
+      update({
+        ...current,
+        texts: { ...current.texts, commun: facebook, facebook, linkedin: g.linkedin, tiktok: g.tiktok, wp_title: g.wp_title, wp_body: g.wp_body },
+        visual: { ...current.visual, titre: current.visual.titre || g.visuel_titre, texte: current.visual.texte || g.visuel_texte },
+      });
+      if (d.notice) setError(d.notice);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function rewrite(action: string) {
     if (!text.trim()) return setError("Écris d'abord un texte à retravailler.");
     setBusy(action);
@@ -236,6 +273,17 @@ function Editeur() {
       />
       <main className="page sub" style={{ paddingTop: 4, gap: 14 }}>
         {locked ? <p className="notice">Ce post est publié : le texte n'est plus modifiable.</p> : null}
+
+        {empty && !locked ? (
+          <div className="card" style={{ padding: 16, gap: 10 }}>
+            <strong>Ce brouillon est vide</strong>
+            <span className="muted small">{busy === "tout" ? "L'IA rédige toutes les versions… (jusqu'à une minute)" : "L'IA peut rédiger toutes les versions (Facebook, LinkedIn, TikTok, article) à partir de l'article."}</span>
+            <button type="button" className="btn dark" onClick={draftAll} disabled={Boolean(busy)}>
+              <Icon name="etincelle" size={18} />
+              {busy === "tout" ? "Rédaction…" : "Rédiger avec l'IA"}
+            </button>
+          </div>
+        ) : null}
 
         <div className="hscroll" role="tablist" aria-label="Version du texte">
           {tabs.map((t) => (
