@@ -186,14 +186,14 @@ export const GUARDRAILS = {
   // Plage horaire de publication (heure UTC = heure d'Abidjan, Dakar, Ouaga ; +1 h à Lagos/Douala)
   autoStartHour: 7,
   autoEndHour: 21,
-  // Écart minimal entre deux publications automatiques (un post toutes les 15 min, au rythme de la tâche planifiée)
-  minGapMinutes: 12,
+  // Écart minimal entre deux publications automatiques (un post toutes les 30 min ; marge pour le passage toutes les 15 min)
+  minGapMinutes: 27,
   // Pertinence minimale (thème suivi + actu fraîche) pour être publiée seule
   minAutoScore: 55,
   // Délai pendant lequel on peut annuler une publication automatique
   delayMinutes: 10,
   // Plafond de publications automatiques par jour
-  maxAutoPerDay: 56,
+  maxAutoPerDay: 28,
   // Récap tech de la semaine : vendredi (5) à 17 h (UTC), avec au moins 3 actus publiées dans la semaine
   recapDay: 5,
   recapHour: 17,
