@@ -13,7 +13,7 @@ export type RubriqueId = "actu" | "cyberbase" | "portrait";
 // `heure` : rubrique publiée chaque jour à heure fixe (heure locale du téléphone).
 export const RUBRIQUES: { id: RubriqueId; label: string; hashtag: string; description: string; alwaysManual: boolean; heure?: number }[] = [
   { id: "actu", label: "Actualité tech", hashtag: "#ActuTech", description: "Les infos du moment, résumées et sourcées.", alwaysManual: false },
-  { id: "cyberbase", label: "CyberBase", hashtag: "#CyberBase", description: "Comprendre les notions basiques de la tech. Une notion chaque jour à 8 h.", alwaysManual: false, heure: 8 },
+  { id: "cyberbase", label: "CyberBase", hashtag: "#CyberBase", description: "Comprendre les notions basiques de la tech. Une notion chaque jour à 7 h.", alwaysManual: false, heure: 7 },
   { id: "portrait", label: "Portrait", hashtag: "#Portrait", description: "Les experts tech d'ici et d'ailleurs. Accord de la personne obligatoire.", alwaysManual: true },
 ];
 
