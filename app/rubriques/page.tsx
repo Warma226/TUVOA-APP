@@ -14,6 +14,7 @@ const EXEMPLES: Record<RubriqueId, { titre: string; texte: string; nom?: string;
       "L'ingénierie sociale est une méthode d'attaque qui exploite la psychologie humaine plutôt que la technologie.\n\nLes cybercriminels manipulent leurs cibles pour obtenir des accès ou des informations confidentielles (par exemple, en se faisant passer pour un collègue ou un service légitime).",
   },
   portrait: { titre: "Nom de l'expert", texte: "Spécialité de l'expert", nom: "Nom de l'expert", specialite: "Spécialité de l'expert" },
+  citation: { titre: "Prénom Nom", texte: "La citation exacte de la personne, **les mots forts en bleu**, telle qu'elle a été prononcée.", nom: "Prénom Nom", specialite: "Fonction de la personne" },
 };
 
 export default function Rubriques() {
@@ -21,14 +22,14 @@ export default function Rubriques() {
     <>
       <TopBar title="Rubriques" back="/creer" wide />
       <main className="page sub wide" style={{ paddingTop: 4 }}>
-        <p className="muted">Chaque rubrique a son rythme et ses règles. L'Actualité a un visuel généré ; pour #CyberBase et #Portrait, tu ajoutes ton propre visuel.</p>
+        <p className="muted">Chaque rubrique a son rythme et ses règles. L'Actualité et la Citation ont un visuel généré ; pour #CyberBase et #Portrait, tu ajoutes ton propre visuel.</p>
         <div className="cards">
         {RUBRIQUES.map((r) => {
           const ex = EXEMPLES[r.id];
           const src = visualUrl({ rubrique: r.id, visual: { titre: ex.titre, texte: ex.texte, nom: ex.nom, specialite: ex.specialite }, source_name: ex.source ?? null }, "portrait");
           return (
             <Link key={r.id} href={`/creer?rubrique=${r.id}`} className="card link" style={{ flexDirection: "row", gap: 14, padding: 12 }} aria-label={`Créer un post ${r.hashtag}`}>
-              {r.id === "actu" ? (
+              {r.id === "actu" || r.id === "citation" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={src} alt="" loading="lazy" style={{ width: 112, aspectRatio: "4 / 5", objectFit: "cover", borderRadius: 10, background: "var(--gris-1)", flexShrink: 0 }} />
               ) : (
@@ -40,10 +41,11 @@ export default function Rubriques() {
                 <span style={{ fontFamily: "var(--font-archivo)", fontWeight: 800, fontSize: 17 }}>{r.id === "actu" ? r.label : r.hashtag}</span>
                 <span className="small" style={{ fontSize: 13, color: "var(--texte-3)", lineHeight: 1.45 }}>{r.description}</span>
                 <span className="wrap">
-                  <span className="badge">{r.id === "actu" ? "Visuel généré" : "Ton visuel"}</span>
+                  <span className="badge">{r.id === "actu" || r.id === "citation" ? "Visuel généré" : "Ton visuel"}</span>
                   {r.heure !== undefined ? <span className="badge bleu">Chaque jour à {r.heure} h</span> : null}
                   {r.alwaysManual ? <span className="badge vert">Toujours manuel</span> : <span className="badge bleu">Suit le mode général</span>}
                   {r.id === "portrait" ? <span className="badge ambre">Accord de la personne</span> : null}
+                  {r.id === "citation" ? <span className="badge ambre">Source obligatoire</span> : null}
                 </span>
               </span>
             </Link>

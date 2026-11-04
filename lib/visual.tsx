@@ -6,7 +6,7 @@ export { FORMATS, type VisualFormat } from "./formats";
 import { FORMATS, type VisualFormat } from "./formats";
 
 export type VisualData = {
-  rubrique: "actu" | "cyberbase" | "portrait";
+  rubrique: "actu" | "cyberbase" | "portrait" | "citation";
   titre: string;
   texte: string;
   nom?: string;
@@ -65,10 +65,65 @@ function at(st: Stage, x: number, y: number, extra: Record<string, unknown> = {}
   return { position: "absolute" as const, left: st.ox + x * st.s, top: st.oy + y * st.s, display: "flex", ...extra };
 }
 
-// Seule l'Actualité a un gabarit : #CyberBase et #Portrait utilisent tes propres visuels.
+// L'Actualité et la Citation ont un gabarit : #CyberBase et #Portrait utilisent tes propres visuels.
 export function renderVisual(d: VisualData, format: VisualFormat) {
   const { w, h } = FORMATS[format];
-  return actu(d, w, h);
+  return d.rubrique === "citation" ? citation(d, w, h) : actu(d, w, h);
+}
+
+// Découpe « texte **mis en avant** texte » en mots, chacun marqué s'il est entre ** (affiché en bleu).
+function motsCitation(texte: string): { mot: string; fort: boolean }[] {
+  const out: { mot: string; fort: boolean }[] = [];
+  texte
+    .replace(/^[\s«“"]+|[\s»”"]+$/g, "")
+    .split("**")
+    .forEach((part, i) => {
+      for (const mot of part.split(/\s+/)) if (mot) out.push({ mot, fort: i % 2 === 1 });
+    });
+  return out;
+}
+
+// ─── #Citation : logo carré en haut à gauche, photo en haut fondue dans le noir, citation blanche
+// entre guillemets, filet, carré bleu devant l'auteur, bande bleue en pied ───
+function citation(d: VisualData, w: number, h: number) {
+  const st = stage(w, h);
+  const s = st.s;
+  const texte = fit(d.texte || "La citation", 300);
+  const mots = motsCitation(texte);
+  const size = autoSize(texte.replace(/\*\*/g, ""), [[90, 54], [150, 50], [210, 46], [260, 42], [999, 38]]);
+  return (
+    <div style={{ width: w, height: h, display: "flex", position: "relative", background: "#000000", fontFamily: "Montserrat" }}>
+      {d.photo ? <img src={d.photo} alt="" width={w} height={h * 0.72} style={{ position: "absolute", left: 0, top: 0, width: w, height: h * 0.72, objectFit: "cover" }} /> : null}
+      <div style={{ position: "absolute", left: 0, top: 0, width: w, height: h, display: "flex", backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 38%, rgba(0,0,0,0.75) 50%, #000000 62%)" }} />
+      <div style={at(st, 50, 50, { width: 100 * s, height: 100 * s, alignItems: "center", justifyContent: "center", background: BLEU })}>
+        <LogoMark size={20 * s} color="#FFFFFF" dot="#FFFFFF" />
+      </div>
+      <div style={at(st, 50, 480, { width: 980 * s, height: 690 * s, flexDirection: "column", justifyContent: "flex-end" })}>
+        <div style={{ display: "flex", height: 92 * s, fontSize: 190 * s, fontWeight: 800, color: "#FFFFFF", lineHeight: 1 }}>“</div>
+        <div style={{ display: "flex", flexWrap: "wrap", width: 960 * s, fontSize: size * s, fontWeight: 500, color: "#FFFFFF", lineHeight: 1.2 }}>
+          {mots.map((m, i) => (
+            <span key={i} style={{ marginRight: size * 0.26 * s, color: m.fort ? "#6E9BFF" : "#FFFFFF" }}>{m.mot}</span>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-start", marginTop: 34 * s }}>
+          <div style={{ display: "flex", width: 700 * s, height: 3 * s, background: "#FFFFFF", marginTop: 14 * s }} />
+          <div style={{ display: "flex", height: 60 * s, fontSize: 130 * s, fontWeight: 800, color: "#FFFFFF", lineHeight: 0.8, marginLeft: 34 * s }}>”</div>
+        </div>
+      </div>
+      <div style={at(st, 50, 1198, { width: 540 * s, alignItems: "flex-start" })}>
+        <div style={{ display: "flex", width: 24 * s, height: 24 * s, background: BLEU, marginTop: 8 * s, marginRight: 30 * s }} />
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#FFFFFF" }}>{`${fit(d.nom || d.titre || "Auteur", 28)},`}</div>
+          {d.specialite ? <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#FFFFFF", marginTop: 2 * s }}>{fit(d.specialite, 34)}</div> : null}
+        </div>
+      </div>
+      <div style={at(st, 600, 1200, { width: 430 * s, flexDirection: "column", alignItems: "flex-end" })}>
+        {d.source ? <div style={{ display: "flex", fontSize: 22 * s, fontWeight: 600, color: "#8C96AA" }}>{`Source : ${fit(d.source, 30)}`}</div> : null}
+        <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#6E9BFF", marginTop: 8 * s }}>www.tuvoa.media</div>
+      </div>
+      <div style={{ position: "absolute", left: 0, top: h - 18 * s, width: w, height: 18 * s, display: "flex", background: BLEU }} />
+    </div>
+  );
 }
 
 // ─── #ActuTech : photo plein cadre, bandeau catégorie bleu, texte blanc ───

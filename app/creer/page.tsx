@@ -30,7 +30,7 @@ function Creer() {
 
   const initialRubrique = q.get("rubrique");
   const [rubrique, setRubrique] = useState<RubriqueId>(
-    initialRubrique === "cyberbase" || initialRubrique === "portrait" ? initialRubrique : "actu"
+    initialRubrique === "cyberbase" || initialRubrique === "portrait" || initialRubrique === "citation" ? initialRubrique : "actu"
   );
   const [idea, setIdea] = useState("");
   const [platforms, setPlatforms] = useState<Platform[]>(["facebook", "linkedin", "wordpress"]);
@@ -39,6 +39,17 @@ function Creer() {
   const [photo, setPhoto] = useState("");
   const [infos, setInfos] = useState("");
   const [consent, setConsent] = useState(false);
+  // Citation
+  const [citTexte, setCitTexte] = useState("");
+  const [auteur, setAuteur] = useState("");
+  const [fonction, setFonction] = useState("");
+  const [contexte, setContexte] = useState("");
+  const [srcName, setSrcName] = useState("");
+  const [srcUrl, setSrcUrl] = useState("");
+  const isCitation = rubrique === "citation";
+  const srcNameFinal = sourceName || (isCitation ? srcName.trim() || null : null);
+  const srcUrlFinal = sourceUrl || (isCitation ? srcUrl.trim() || null : null);
+  const citationInput = isCitation ? { texte: citTexte.trim(), auteur: auteur.trim(), fonction: fonction.trim(), contexte: contexte.trim() } : undefined;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [gen, setGen] = useState<Generated | null>(null);
@@ -58,7 +69,10 @@ function Creer() {
 
   function validate(): string {
     if (platforms.length === 0) return "Choisis au moins une plateforme.";
-    if (rubrique === "portrait") {
+    if (isCitation) {
+      if (!citTexte.trim() || !auteur.trim() || !fonction.trim()) return "Indique la citation exacte, son auteur et sa fonction.";
+      if (!srcNameFinal) return "Indique la source de la citation (média, discours, réseau social…).";
+    } else if (rubrique === "portrait") {
       if (!nom.trim() || !specialite.trim()) return "Indique le nom et la spécialité de l'expert.";
       if (!consent) return "Confirme l'accord de la personne avant de continuer.";
     } else if (!idea.trim() && !sourceUrl) {
@@ -80,18 +94,19 @@ function Creer() {
           mode: "post",
           rubrique,
           idea,
-          sourceUrl,
-          sourceName,
+          sourceUrl: srcUrlFinal,
+          sourceName: srcNameFinal,
           articleTitle,
           articleSummary,
           categorie,
           portrait: rubrique === "portrait" ? { nom, specialite, infos } : undefined,
+          citation: citationInput,
         }),
       });
       const d = await res.json().catch(() => ({ error: "Le serveur n'a pas répondu à temps. Réessaie." }));
       if (!res.ok || !d.generated) throw new Error(d.error || "Aucun texte reçu. Réessaie.");
       setGen(d.generated);
-      if (d.image && !photo.trim()) setPhoto(d.image);
+      if (d.image && !photo.trim() && !isCitation) setPhoto(d.image);
       setNotice(d.notice ?? "");
       setPicked(0);
     } catch (e) {
@@ -108,16 +123,16 @@ function Creer() {
     setBusy(true);
     // Sans génération : brouillon structuré à partir de l'article (jamais de textes vides).
     const g: Generated | null =
-      gen ?? (sourceUrl || idea.trim() || rubrique === "portrait"
-        ? draftWithoutAI({ rubrique, idea, sourceUrl, sourceName, articleTitle, articleSummary, categorie, portrait: rubrique === "portrait" ? { nom, specialite, infos } : undefined })
+      gen ?? (sourceUrl || idea.trim() || rubrique === "portrait" || isCitation
+        ? draftWithoutAI({ rubrique, idea, sourceUrl: srcUrlFinal, sourceName: srcNameFinal, articleTitle, articleSummary, categorie, portrait: rubrique === "portrait" ? { nom, specialite, infos } : undefined, citation: citationInput })
         : null);
     const accroche = gen && picked > 0 ? gen.variantes[picked] : undefined;
     const post: Partial<Post> = {
       rubrique,
       idea,
-      title: articleTitle || g?.wp_title || g?.visuel_titre || (rubrique === "portrait" ? nom : idea),
-      source_name: sourceName,
-      source_url: sourceUrl,
+      title: isCitation ? `${auteur.trim()} : « ${citTexte.replace(/\*\*/g, "").trim().slice(0, 80)} »` : articleTitle || g?.wp_title || g?.visuel_titre || (rubrique === "portrait" ? nom : idea),
+      source_name: srcNameFinal,
+      source_url: srcUrlFinal,
       origin: sourceUrl ? "veille" : "manuel",
       platforms,
       status: "brouillon",
@@ -130,7 +145,13 @@ function Creer() {
             wp_title: g.wp_title,
             wp_body: g.wp_body,
           },
-      visual: {
+      visual: isCitation ? {
+        titre: auteur.trim(),
+        texte: citTexte.trim(),
+        nom: auteur.trim(),
+        specialite: fonction.trim(),
+        photo: photo.trim() || undefined,
+      } : {
         titre: rubrique === "portrait" ? nom : g?.visuel_titre || idea,
         texte: rubrique === "portrait" ? specialite : g?.visuel_texte || "",
         nom: rubrique === "portrait" ? nom : undefined,
@@ -161,7 +182,7 @@ function Creer() {
           </div>
         ) : null}
 
-        {rubrique === "portrait" ? null : (
+        {rubrique === "portrait" || isCitation ? null : (
           <label className="field">
             {rubrique === "cyberbase" ? "Notion à expliquer" : sourceUrl ? "Ton angle (facultatif)" : "Ton idée"}
             <textarea rows={3} value={idea} onChange={(e) => setIdea(e.target.value)} placeholder={rubrique === "cyberbase" ? "Social engineering" : "Comment repérer une arnaque au mobile money"} />
@@ -173,7 +194,7 @@ function Creer() {
             <p id="rub" className="label">Rubrique</p>
             <Link href="/rubriques" style={{ fontSize: 14, fontWeight: 600, textDecoration: "none" }}>Gérer</Link>
           </div>
-          <div className="grid3" role="radiogroup" aria-labelledby="rub">
+          <div className="grid2" role="radiogroup" aria-labelledby="rub">
             {RUBRIQUES.map((r) => (
               <button key={r.id} type="button" role="radio" aria-checked={rubrique === r.id} className="seg" onClick={() => setRubrique(r.id)}>
                 {r.id === "actu" ? "Actualité" : r.id === "cyberbase" ? "Cyberbase" : r.label}
@@ -195,7 +216,20 @@ function Creer() {
           </div>
         ) : null}
 
-        {rubrique !== "actu" ? (
+        {isCitation ? (
+          <div className="stack">
+            <label className="field">
+              Citation exacte
+              <textarea rows={4} value={citTexte} onChange={(e) => setCitTexte(e.target.value)} placeholder="Mot pour mot, sans guillemets. Mets **entre deux étoiles** les mots à afficher en bleu." />
+            </label>
+            <label className="field">Auteur<input type="text" value={auteur} onChange={(e) => setAuteur(e.target.value)} placeholder="Prénom Nom" /></label>
+            <label className="field">Fonction<input type="text" value={fonction} onChange={(e) => setFonction(e.target.value)} placeholder="Ministre de la Transition digitale" /></label>
+            <label className="field">Source<input type="text" value={srcName} onChange={(e) => setSrcName(e.target.value)} placeholder="Média, discours, compte officiel…" /></label>
+            <label className="field">Lien de la source (facultatif)<input type="url" value={srcUrl} onChange={(e) => setSrcUrl(e.target.value)} placeholder="https://…" /></label>
+            <label className="field">Contexte (facultatif)<textarea rows={2} value={contexte} onChange={(e) => setContexte(e.target.value)} placeholder="Où et quand la phrase a été prononcée." /></label>
+            <ImageField label="Photo de l'auteur" hint="Une photo dont TUVOA a le droit d'usage (fournie par la personne, son service de presse ou libre de droits). Le visuel est généré automatiquement : tu le vois dans l'aperçu." value={photo} onChange={setPhoto} />
+          </div>
+        ) : rubrique !== "actu" ? (
           <ImageField label="Ton visuel" hint="Le visuel que tu as créé. Tu peux aussi l'ajouter plus tard dans l'éditeur." value={photo} onChange={setPhoto} />
         ) : sourceUrl || photo ? (
           <ImageField label="Image de l'article" hint="Récupérée automatiquement depuis l'article. Tu peux la remplacer." value={photo} onChange={setPhoto} />

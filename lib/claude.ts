@@ -25,6 +25,8 @@ export type GenerateInput = {
   categorie?: string; // thème détecté par la veille (bandeau du visuel #ActuTech)
   // Pour les portraits : infos fournies et validées par la personne
   portrait?: { nom: string; specialite: string; infos: string };
+  // Pour les citations : texte exact, auteur, fonction, contexte donné par l'éditeur
+  citation?: { texte: string; auteur: string; fonction: string; contexte: string };
 };
 
 export type RewriteAction = "raccourcir" | "reformuler" | "expliquer" | "ton" | "traduire";
@@ -287,6 +289,8 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
       "Rubrique #CyberBase (comprendre les notions basiques de la tech) : définis la notion en 2 courts paragraphes, simples et concrets, avec un exemple du quotidien. visuel_titre = le nom de la notion (2 à 4 mots), visuel_texte = la définition (2 paragraphes, 60 mots maximum au total).",
     portrait:
       "Rubrique #Portrait (experts tech) : présente la personne uniquement à partir des infos fournies, sans rien inventer. visuel_titre = son nom, visuel_texte = sa spécialité en une ligne.",
+    citation:
+      "Rubrique #Citation : reprends la citation mot pour mot, entre guillemets « », sans la modifier ni la raccourcir (retire seulement les ** de mise en forme), suivie de « — Auteur, fonction ». Ajoute ensuite 1 ou 2 phrases de contexte, uniquement à partir du contexte fourni et de l'article source : n'invente ni date, ni lieu, ni circonstance, et ne prends pas position. visuel_titre = le nom de l'auteur, visuel_texte = la citation exacte.",
   };
   const format =
     input.format === "explication"
@@ -302,6 +306,10 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   if (input.categorie) parts.push(`Thème détecté par la veille : ${input.categorie}`);
   if (input.sourceName) parts.push(`Source à citer : ${input.sourceName}${input.sourceUrl ? ` (${input.sourceUrl})` : ""}`);
   if (input.articleText) parts.push(`Texte de l'article (pour comprendre, ne jamais recopier) :\n"""\n${input.articleText.slice(0, 10000)}\n"""`);
+  if (input.citation)
+    parts.push(
+      `Citation exacte : « ${input.citation.texte.replace(/\*\*/g, "")} »\nAuteur : ${input.citation.auteur}, ${input.citation.fonction}${input.citation.contexte ? `\nContexte fourni par l'éditeur : ${input.citation.contexte}` : ""}`
+    );
   if (input.portrait) parts.push(`Infos fournies par l'expert : nom ${input.portrait.nom}, spécialité ${input.portrait.specialite}. ${input.portrait.infos}`);
   parts.push("Tous les textes (accroches, posts, article, visuel) doivent être rédigés en français.");
   parts.push(
@@ -373,6 +381,21 @@ export function draftWithoutAI(input: GenerateInput): Generated {
       wp_body: `<p>${base.replace(/\n\n/g, "</p><p>")}</p>`,
       visuel_titre: nom,
       visuel_texte: specialite,
+    };
+  }
+  if (input.rubrique === "citation" && input.citation) {
+    const { auteur, fonction, contexte } = input.citation;
+    const texte = input.citation.texte.replace(/\*\*/g, "").trim();
+    const corps = `« ${texte} »\n— ${auteur}, ${fonction}${contexte ? `\n\n${contexte}` : ""}${source ? `\n\n${source}${lien}` : ""}`;
+    return {
+      variantes: [`« ${texte} »`, `${auteur} : « ${texte} »`, `Que pensez-vous de cette déclaration de ${auteur} ?`],
+      facebook: `${corps}\n\n#Citation #Tech #TUVOA`,
+      linkedin: `${corps}\n\n#Citation #Tech #TUVOA`,
+      tiktok: `« ${texte} » — ${auteur}`.slice(0, 150),
+      wp_title: `${auteur} : « ${texte.length > 80 ? texte.slice(0, 79).trimEnd() + "…" : texte} »`,
+      wp_body: `<blockquote><p>${texte}</p></blockquote><p>— ${auteur}, ${fonction}</p>${contexte ? `<p>${contexte}</p>` : ""}${input.sourceName ? `<p>Source : ${input.sourceName}${input.sourceUrl ? ` (<a href="${input.sourceUrl}">${input.sourceUrl}</a>)` : ""}</p>` : ""}`,
+      visuel_titre: auteur,
+      visuel_texte: input.citation.texte,
     };
   }
   if (input.rubrique === "cyberbase") {
