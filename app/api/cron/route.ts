@@ -38,6 +38,16 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
 
   // ─── 1. Publication des posts arrivés à échéance ─────────────────
   for (const post of await duePosts()) {
+    // #Citation : jamais publiée sans la photo de l'auteur. On attend la photo jusqu'au créneau suivant (2 h),
+    // puis le post passe en erreur pour être replanifié à la main.
+    if (post.rubrique === "citation" && !post.visual.photo && !post.visual.image) {
+      const retard = Date.now() - new Date(post.scheduled_at as string).getTime();
+      if (retard > 2 * 3.6e6) {
+        await savePost({ ...post, status: "erreur" });
+        log.push(`Citation non publiée (photo manquante) : ${post.title || post.visual.titre}`);
+      } else log.push(`Citation en attente de photo : ${post.title || post.visual.titre}`);
+      continue;
+    }
     const done = await publishPost(post);
     await savePost(done);
     log.push(`${done.status === "publie" ? "Publié" : "Erreur de publication"} : ${post.title || post.visual.titre}`);
