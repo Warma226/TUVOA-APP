@@ -72,7 +72,7 @@ export async function GET(req: Request) {
   const format: VisualFormat = f in FORMATS ? f : "portrait";
   const r = params.get("r");
   const data: VisualData = {
-    rubrique: r === "cyberbase" || r === "portrait" ? r : "actu",
+    rubrique: r === "cyberbase" || r === "portrait" || r === "citation" ? r : "actu",
     titre: params.get("t") ?? "",
     texte: params.get("x") ?? "",
     nom: params.get("n") ?? undefined,
@@ -80,8 +80,10 @@ export async function GET(req: Request) {
     photo: params.get("ph") ?? undefined,
     source: params.get("src") ?? undefined,
   };
+  // Citation : photo chargée ici (formats non pris en charge → visuel sans photo), police Montserrat.
+  if (data.rubrique === "citation") data.photo = await safeImage(data.photo ?? null);
   const { w, h } = FORMATS[format];
-  const fonts = await archivoFonts();
+  const fonts = data.rubrique === "citation" ? [...(await montserratFonts()), ...(await archivoFonts())] : await archivoFonts();
   return new ImageResponse(renderVisual(data, format), {
     width: w,
     height: h,

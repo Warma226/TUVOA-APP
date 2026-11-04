@@ -87,7 +87,8 @@ function Apercu() {
   const fmt = FORMATS[formatFor(tab, current.rubrique)];
   const when = date && time ? new Date(`${date}T${time}`) : null;
   const heure = (current.status === "planifie" && current.scheduled_at ? new Date(current.scheduled_at) : when)?.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  const ownVisual = true; // plus de visuel généré : image de l'article ou visuel fourni
+  // Visuel généré pour la #Citation (sauf visuel fourni) ; sinon image de l'article ou visuel fourni.
+  const ownVisual = !(current.rubrique === "citation" && !current.visual.image);
   const missingImage = ownVisual && !current.visual.image;
   const tooLong = current.platforms.find((p) => (current.texts[TEXT_KEY[p]] ?? "").length > limitOf(p));
 

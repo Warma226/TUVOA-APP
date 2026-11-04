@@ -169,6 +169,10 @@ function Editeur() {
           sourceName: current.source_name,
           articleTitle: current.title,
           categorie: current.visual.titre || undefined,
+          citation:
+            current.rubrique === "citation"
+              ? { texte: current.visual.texte, auteur: current.visual.nom ?? current.visual.titre, fonction: current.visual.specialite ?? "", contexte: current.idea ?? "" }
+              : undefined,
         }),
       });
       const d = await res.json().catch(() => ({ error: "Le serveur n'a pas répondu à temps. Réessaie." }));
@@ -350,12 +354,38 @@ function Editeur() {
           </section>
         ) : null}
 
+        {current.rubrique === "citation" ? (
+          <section className="card stack" style={{ padding: "12px 14px", gap: 10 }} aria-labelledby="visuel-citation">
+            <h2 id="visuel-citation" className="label">Visuel #Citation (généré)</h2>
+            <label className="field">
+              Citation exacte
+              <textarea rows={4} value={current.visual.texte} disabled={locked} onChange={(e) => update({ ...current, visual: { ...current.visual, texte: e.target.value } })} />
+            </label>
+            <span className="muted small">Mets **entre deux étoiles** les mots à afficher en bleu.</span>
+            <label className="field">
+              Auteur
+              <input type="text" value={current.visual.nom ?? ""} disabled={locked} onChange={(e) => update({ ...current, visual: { ...current.visual, nom: e.target.value, titre: e.target.value } })} />
+            </label>
+            <label className="field">
+              Fonction
+              <input type="text" value={current.visual.specialite ?? ""} disabled={locked} onChange={(e) => update({ ...current, visual: { ...current.visual, specialite: e.target.value } })} />
+            </label>
+            <ImageField
+              label="Photo de l'auteur"
+              hint="Placée en haut du visuel. Utilise une photo dont TUVOA a le droit d'usage."
+              disabled={locked}
+              value={current.visual.photo ?? ""}
+              onChange={(url) => update({ ...current, visual: { ...current.visual, photo: url || undefined } })}
+            />
+          </section>
+        ) : null}
+
         <section className="card" style={{ padding: "12px 14px" }} aria-labelledby="ton-visuel">
-          <h2 id="ton-visuel" className="label">{current.rubrique === "actu" ? "Image de l'article" : `Ton visuel ${RUBRIQUES.find((r) => r.id === current.rubrique)?.hashtag ?? ""}`}</h2>
+          <h2 id="ton-visuel" className="label">{current.rubrique === "actu" ? "Image de l'article" : current.rubrique === "citation" ? "Remplacer par ton propre visuel (facultatif)" : `Ton visuel ${RUBRIQUES.find((r) => r.id === current.rubrique)?.hashtag ?? ""}`}</h2>
           <div style={{ marginTop: 8 }}>
             <ImageField
               label="Image"
-              hint={current.rubrique === "actu" ? "Image publiée avec le post (récupérée depuis l'article). Tu peux la remplacer." : "Le visuel que tu as créé (PNG ou JPG, format 4:5 conseillé)."}
+              hint={current.rubrique === "actu" ? "Image publiée avec le post (récupérée depuis l'article). Tu peux la remplacer." : current.rubrique === "citation" ? "Laisse vide pour publier le visuel généré." : "Le visuel que tu as créé (PNG ou JPG, format 4:5 conseillé)."}
               disabled={locked}
               value={current.visual.image ?? ""}
               onChange={(url) => update({ ...current, visual: { ...current.visual, image: url || undefined } })}
