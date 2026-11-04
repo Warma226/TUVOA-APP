@@ -71,6 +71,18 @@ export function renderVisual(d: VisualData, format: VisualFormat) {
   return d.rubrique === "citation" ? citation(d, w, h) : actu(d, w, h);
 }
 
+// Guillemets TUVOA : deux blocs géométriques à queue oblique (ouvrant = retourné).
+function Guillemets({ width, color, ouvrant = false }: { width: number; color: string; ouvrant?: boolean }) {
+  const d = ouvrant
+    ? "M92 68H54V32L68 0H82L74 32H92Z M40 68H2V32L16 0H30L22 32H40Z"
+    : "M0 0H38V36L24 68H10L18 36H0Z M52 0H90V36L76 68H62L70 36H52Z";
+  return (
+    <svg width={width} height={(width * 68) / 92} viewBox="0 0 92 68">
+      <path d={d} fill={color} />
+    </svg>
+  );
+}
+
 // Découpe « texte **mis en avant** texte » en mots, chacun marqué s'il est entre ** (affiché en bleu).
 function motsCitation(texte: string): { mot: string; fort: boolean }[] {
   const out: { mot: string; fort: boolean }[] = [];
@@ -99,7 +111,9 @@ function citation(d: VisualData, w: number, h: number) {
         <LogoMark size={20 * s} color="#FFFFFF" dot="#FFFFFF" />
       </div>
       <div style={at(st, 50, 480, { width: 980 * s, height: 690 * s, flexDirection: "column", justifyContent: "flex-end" })}>
-        <div style={{ display: "flex", height: 92 * s, fontSize: 190 * s, fontWeight: 800, color: "#FFFFFF", lineHeight: 1 }}>“</div>
+        <div style={{ display: "flex", height: 82 * s, marginBottom: 26 * s }}>
+          <Guillemets ouvrant width={110 * s} color={BLEU} />
+        </div>
         <div style={{ display: "flex", flexWrap: "wrap", width: 960 * s, fontSize: size * s, fontWeight: 500, color: "#FFFFFF", lineHeight: 1.2 }}>
           {mots.map((m, i) => (
             <span key={i} style={{ marginRight: size * 0.26 * s, color: m.fort ? "#6E9BFF" : "#FFFFFF" }}>{m.mot}</span>
@@ -107,19 +121,17 @@ function citation(d: VisualData, w: number, h: number) {
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", marginTop: 34 * s }}>
           <div style={{ display: "flex", width: 700 * s, height: 3 * s, background: "#FFFFFF", marginTop: 14 * s }} />
-          <div style={{ display: "flex", height: 60 * s, fontSize: 130 * s, fontWeight: 800, color: "#FFFFFF", lineHeight: 0.8, marginLeft: 34 * s }}>”</div>
+          <div style={{ display: "flex", marginLeft: 34 * s, marginTop: -6 * s }}>
+            <Guillemets width={78 * s} color="#FFFFFF" />
+          </div>
         </div>
       </div>
-      <div style={at(st, 50, 1198, { width: 540 * s, alignItems: "flex-start" })}>
+      <div style={at(st, 50, 1198, { width: 980 * s, alignItems: "flex-start" })}>
         <div style={{ display: "flex", width: 24 * s, height: 24 * s, background: BLEU, marginTop: 8 * s, marginRight: 30 * s }} />
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#FFFFFF" }}>{`${fit(d.nom || d.titre || "Auteur", 28)},`}</div>
-          {d.specialite ? <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#FFFFFF", marginTop: 2 * s }}>{fit(d.specialite, 34)}</div> : null}
+          <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#FFFFFF" }}>{`${fit(d.nom || d.titre || "Auteur", 44)},`}</div>
+          {d.specialite ? <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#FFFFFF", marginTop: 2 * s }}>{fit(d.specialite, 56)}</div> : null}
         </div>
-      </div>
-      <div style={at(st, 600, 1200, { width: 430 * s, flexDirection: "column", alignItems: "flex-end" })}>
-        {d.source ? <div style={{ display: "flex", fontSize: 22 * s, fontWeight: 600, color: "#8C96AA" }}>{`Source : ${fit(d.source, 30)}`}</div> : null}
-        <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#6E9BFF", marginTop: 8 * s }}>www.tuvoa.media</div>
       </div>
       <div style={{ position: "absolute", left: 0, top: h - 18 * s, width: w, height: 18 * s, display: "flex", background: BLEU }} />
     </div>
