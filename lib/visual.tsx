@@ -100,13 +100,13 @@ function motsCitation(texte: string): { mot: string; fort: boolean }[] {
 function citation(d: VisualData, w: number, h: number) {
   const st = stage(w, h);
   const s = st.s;
-  const texte = fit(d.texte || "La citation", 300);
+  const texte = fit(d.texte || "La citation", 360);
   const mots = motsCitation(texte);
-  const size = autoSize(texte.replace(/\*\*/g, ""), [[90, 54], [150, 50], [210, 46], [260, 42], [999, 38]]);
+  const size = autoSize(texte.replace(/\*\*/g, ""), [[90, 56], [150, 52], [210, 47], [260, 43], [320, 39], [999, 36]]);
   return (
     <div style={{ width: w, height: h, display: "flex", position: "relative", background: "#000000", fontFamily: "Montserrat" }}>
       {d.photo ? <img src={d.photo} alt="" width={w} height={h * 0.72} style={{ position: "absolute", left: 0, top: 0, width: w, height: h * 0.72, objectFit: "cover" }} /> : null}
-      <div style={{ position: "absolute", left: 0, top: 0, width: w, height: h, display: "flex", backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 38%, rgba(0,0,0,0.75) 50%, #000000 62%)" }} />
+      <div style={{ position: "absolute", left: 0, top: 0, width: w, height: h, display: "flex", backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0.8) 44%, #000000 56%)" }} />
       <div style={at(st, 50, 50, { width: 100 * s, height: 100 * s, alignItems: "center", justifyContent: "center", background: BLEU })}>
         <LogoMark size={20 * s} color="#FFFFFF" dot="#FFFFFF" />
       </div>
