@@ -110,16 +110,12 @@ function citation(d: VisualData, w: number, h: number) {
           <div style={{ display: "flex", height: 60 * s, fontSize: 130 * s, fontWeight: 800, color: "#FFFFFF", lineHeight: 0.8, marginLeft: 34 * s }}>”</div>
         </div>
       </div>
-      <div style={at(st, 50, 1198, { width: 540 * s, alignItems: "flex-start" })}>
+      <div style={at(st, 50, 1198, { width: 980 * s, alignItems: "flex-start" })}>
         <div style={{ display: "flex", width: 24 * s, height: 24 * s, background: BLEU, marginTop: 8 * s, marginRight: 30 * s }} />
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#FFFFFF" }}>{`${fit(d.nom || d.titre || "Auteur", 28)},`}</div>
-          {d.specialite ? <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#FFFFFF", marginTop: 2 * s }}>{fit(d.specialite, 34)}</div> : null}
+          <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#FFFFFF" }}>{`${fit(d.nom || d.titre || "Auteur", 44)},`}</div>
+          {d.specialite ? <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#FFFFFF", marginTop: 2 * s }}>{fit(d.specialite, 56)}</div> : null}
         </div>
-      </div>
-      <div style={at(st, 600, 1200, { width: 430 * s, flexDirection: "column", alignItems: "flex-end" })}>
-        {d.source ? <div style={{ display: "flex", fontSize: 22 * s, fontWeight: 600, color: "#8C96AA" }}>{`Source : ${fit(d.source, 30)}`}</div> : null}
-        <div style={{ display: "flex", fontSize: 30 * s, fontWeight: 800, color: "#6E9BFF", marginTop: 8 * s }}>www.tuvoa.media</div>
       </div>
       <div style={{ position: "absolute", left: 0, top: h - 18 * s, width: w, height: 18 * s, display: "flex", background: BLEU }} />
     </div>
