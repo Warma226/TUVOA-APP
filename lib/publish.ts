@@ -84,24 +84,34 @@ async function wpTagIds(names: string[]): Promise<number[]> {
   return ids;
 }
 // Envoie une image dans la médiathèque avec sa légende et son texte alternatif.
-async function wpMedia(url: string, name: string, legende: string, alt: string): Promise<{ id: number; src: string } | null> {
-  const r = await fetch(url);
+// Image allégée avant envoi : 1200 px de large au plus, WebP qualité 78 (souvent 5 à 10 fois plus léger qu'une photo d'origine).
+async function optimise(bytes: ArrayBuffer, type: string): Promise<{ body: ArrayBuffer | Uint8Array; type: string; ext: string; width?: number; height?: number }> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const { data, info } = await sharp(Buffer.from(bytes)).rotate().resize({ width: 1200, withoutEnlargement: true }).webp({ quality: 78 }).toBuffer({ resolveWithObject: true });
+    return { body: new Uint8Array(data), type: "image/webp", ext: "webp", width: info.width, height: info.height };
+  } catch {
+    return { body: bytes, type, ext: type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg" };
+  }
+}
+
+async function wpMedia(url: string, name: string, legende: string, alt: string): Promise<{ id: number; src: string; width?: number; height?: number } | null> {
+  const r = await fetch(url, { headers: { "User-Agent": "TUVOA-APP/1.0" } });
   if (!r.ok) return null;
-  const type = (r.headers.get("content-type") ?? "image/jpeg").split(";")[0];
-  const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
+  const img = await optimise(await r.arrayBuffer(), (r.headers.get("content-type") ?? "image/jpeg").split(";")[0]);
   const up = await fetch(`${wpBase()}/wp-json/wp/v2/media`, {
     method: "POST",
-    headers: { Authorization: wpAuth(), "Content-Type": type, "Content-Disposition": `attachment; filename="${name}.${ext}"` },
-    body: await r.arrayBuffer(),
+    headers: { Authorization: wpAuth(), "Content-Type": img.type, "Content-Disposition": `attachment; filename="${name}.${img.ext}"` },
+    body: img.body as BodyInit,
   });
   if (!up.ok) throw new Error(`WordPress (image) ${up.status} : ${(await up.text()).slice(0, 200)}`);
-  const m = (await up.json()) as { id: number; source_url: string };
+  const m = (await up.json()) as { id: number; source_url: string; media_details?: { width?: number; height?: number } };
   await fetch(`${wpBase()}/wp-json/wp/v2/media/${m.id}`, {
     method: "POST",
     headers: { Authorization: wpAuth(), "Content-Type": "application/json" },
     body: JSON.stringify({ caption: legende, alt_text: alt, title: alt }),
   });
-  return { id: m.id, src: m.source_url };
+  return { id: m.id, src: m.source_url, width: m.media_details?.width ?? img.width, height: m.media_details?.height ?? img.height };
 }
 // Photos Wikimedia Commons (lien Special:FilePath) : auteur et licence lus sur Commons, ajoutés à la légende.
 async function commonsCredit(url: string): Promise<string | null> {
@@ -121,8 +131,9 @@ async function commonsCredit(url: string): Promise<string | null> {
     return "Photo : Wikimedia Commons";
   }
 }
-const figure = (src: string, alt: string, legende: string) =>
-  `<!-- wp:image {"sizeSlug":"large"} -->\n<figure class="wp-block-image size-large"><img src="${src}" alt="${escapeHtml(alt)}"/><figcaption class="wp-element-caption">${escapeHtml(legende)}</figcaption></figure>\n<!-- /wp:image -->`;
+// Bloc image WordPress avec l'identifiant du média : WordPress ajoute alors les tailles adaptées (srcset) et le chargement différé.
+const figure = (m: { id: number; src: string; width?: number; height?: number }, alt: string, legende: string) =>
+  `<!-- wp:image {"id":${m.id},"sizeSlug":"large","linkDestination":"none"} -->\n<figure class="wp-block-image size-large"><img src="${m.src}" alt="${escapeHtml(alt)}" class="wp-image-${m.id}"${m.width ? ` width="${m.width}"` : ""}${m.height ? ` height="${m.height}"` : ""} loading="lazy" decoding="async"/><figcaption class="wp-element-caption">${escapeHtml(legende)}</figcaption></figure>\n<!-- /wp:image -->`;
 const slugify = (t: string) => norm(t).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70);
 
 const wordpress: Publisher = async (post) => {
@@ -145,7 +156,7 @@ const wordpress: Publisher = async (post) => {
     const credit = await commonsCredit(im.url);
     const legende = [im.legende, credit].filter(Boolean).join(" · ");
     const m = await wpMedia(im.url, `tuvoa-${slug}-${i + 1}`, legende, im.alt || im.legende).catch(() => null);
-    const html = m ? figure(m.src, im.alt || im.legende, legende) : "";
+    const html = m ? figure(m, im.alt || im.legende, legende) : "";
     content = content.includes(`[[IMAGE${i + 1}]]`) ? content.replace(`[[IMAGE${i + 1}]]`, html) : content + html;
   }
   content = content.replace(/\[\[IMAGE\d+\]\]/g, "");
