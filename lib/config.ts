@@ -73,6 +73,16 @@ export const SOURCES: Source[] = [
     note: "Le site bloque la lecture automatique : à brancher via un flux RSS ou une newsletter s'ils en proposent.",
   },
   {
+    id: "digitalmag",
+    name: "Digital Mag Côte d'Ivoire",
+    domain: "digitalmag.ci",
+    lang: "fr",
+    theme: "Numérique · Afrique de l'Ouest",
+    feed: "https://digitalmag.ci/feed/",
+    enabledByDefault: true,
+    note: "Média ivoirien 100 % digital : cybersécurité, fintech, télécoms et startups en Afrique.",
+  },
+  {
     id: "sikafinance",
     name: "Sikafinance",
     domain: "sikafinance.com",
