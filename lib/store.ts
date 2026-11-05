@@ -22,10 +22,16 @@ export type Post = {
     tiktok: string;
     wp_title: string;
     wp_body: string;
+    wp_excerpt?: string; // extrait WordPress, repris comme méta-description
     commun?: string; // texte de base de l'éditeur (onglet « Commun »)
   };
   // image : visuel préparé par toi (lien), utilisé pour #CyberBase et #Portrait
-  visual: { titre: string; texte: string; nom?: string; specialite?: string; photo?: string; image?: string; slides?: string[] };
+  visual: {
+    titre: string; texte: string; nom?: string; specialite?: string; photo?: string; image?: string; slides?: string[];
+    // WordPress : légende et texte alternatif de l'image à la une, catégories, étiquettes, adresse, images supplémentaires
+    legende?: string; alt?: string; wp_categories?: string[]; wp_tags?: string[]; wp_slug?: string;
+    wp_images?: { url: string; legende: string; alt?: string }[];
+  };
   platforms: Platform[];
   status: PostStatus;
   scheduled_at: string | null;

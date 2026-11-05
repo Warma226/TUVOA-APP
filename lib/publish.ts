@@ -54,28 +54,99 @@ function escapeHtml(t: string) {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-const wordpress: Publisher = async (post) => {
-  const base = (process.env.WP_URL ?? "").replace(/\/$/, "");
-  const auth = "Basic " + Buffer.from(`${process.env.WP_USER}:${process.env.WP_APP_PASSWORD}`).toString("base64");
-  // 1. Image à la une
-  const img = await imageBytes(post, "wordpress");
-  const media = await fetch(`${base}/wp-json/wp/v2/media`, {
+// ─── WordPress : article complet (catégories, étiquettes, extrait SEO, images légendées) ───
+function wpAuth() {
+  return "Basic " + Buffer.from(`${process.env.WP_USER}:${process.env.WP_APP_PASSWORD}`).toString("base64");
+}
+function wpBase() {
+  return (process.env.WP_URL ?? "").replace(/\/$/, "");
+}
+const norm = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+// Identifiants des catégories (par nom, sans accents ni casse) : seules les catégories existantes sont utilisées.
+async function wpCategoryIds(names: string[]): Promise<number[]> {
+  if (!names.length) return [];
+  const res = await fetch(`${wpBase()}/wp-json/wp/v2/categories?per_page=100`, { headers: { Authorization: wpAuth() } });
+  if (!res.ok) return [];
+  const all = (await res.json()) as { id: number; name: string; slug: string }[];
+  return names.map((n) => all.find((c) => norm(c.name) === norm(n) || c.slug === norm(n).replace(/\s+/g, "-"))?.id).filter((x): x is number => typeof x === "number");
+}
+// Étiquettes : créées si elles n'existent pas encore.
+async function wpTagIds(names: string[]): Promise<number[]> {
+  const ids: number[] = [];
+  for (const name of names.slice(0, 8)) {
+    const q = await fetch(`${wpBase()}/wp-json/wp/v2/tags?search=${encodeURIComponent(name)}&per_page=20`, { headers: { Authorization: wpAuth() } });
+    const found = q.ok ? ((await q.json()) as { id: number; name: string }[]).find((t) => norm(t.name) === norm(name)) : undefined;
+    if (found) { ids.push(found.id); continue; }
+    const c = await fetch(`${wpBase()}/wp-json/wp/v2/tags`, { method: "POST", headers: { Authorization: wpAuth(), "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+    if (c.ok) ids.push(((await c.json()) as { id: number }).id);
+  }
+  return ids;
+}
+// Envoie une image dans la médiathèque avec sa légende et son texte alternatif.
+async function wpMedia(url: string, name: string, legende: string, alt: string): Promise<{ id: number; src: string } | null> {
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  const type = (r.headers.get("content-type") ?? "image/jpeg").split(";")[0];
+  const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
+  const up = await fetch(`${wpBase()}/wp-json/wp/v2/media`, {
     method: "POST",
-    headers: { Authorization: auth, "Content-Type": img.type, "Content-Disposition": `attachment; filename="tuvoa-${post.id.slice(0, 8)}.${img.ext}"` },
-    body: img.bytes,
+    headers: { Authorization: wpAuth(), "Content-Type": type, "Content-Disposition": `attachment; filename="${name}.${ext}"` },
+    body: await r.arrayBuffer(),
   });
-  if (!media.ok) throw new Error(`WordPress (image) ${media.status} : ${(await media.text()).slice(0, 200)}`);
-  const mediaJson = (await media.json()) as { id: number };
-  // 2. Article
+  if (!up.ok) throw new Error(`WordPress (image) ${up.status} : ${(await up.text()).slice(0, 200)}`);
+  const m = (await up.json()) as { id: number; source_url: string };
+  await fetch(`${wpBase()}/wp-json/wp/v2/media/${m.id}`, {
+    method: "POST",
+    headers: { Authorization: wpAuth(), "Content-Type": "application/json" },
+    body: JSON.stringify({ caption: legende, alt_text: alt, title: alt }),
+  });
+  return { id: m.id, src: m.source_url };
+}
+const figure = (src: string, alt: string, legende: string) =>
+  `<!-- wp:image {"sizeSlug":"large"} -->\n<figure class="wp-block-image size-large"><img src="${src}" alt="${escapeHtml(alt)}"/><figcaption class="wp-element-caption">${escapeHtml(legende)}</figcaption></figure>\n<!-- /wp:image -->`;
+const slugify = (t: string) => norm(t).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70);
+
+const wordpress: Publisher = async (post) => {
+  const v = post.visual;
+  const titre = post.texts.wp_title || post.title;
+  const slug = post.id.slice(0, 8);
+  // 1. Image à la une (légendée) puis images de l'article
+  const une = imageFor(post, "wordpress", true);
+  if (!une) throw new Error("Aucun visuel : ajoute l'image de l'article dans l'éditeur.");
+  const legendeUne = v.legende || (post.source_name ? `Illustration · ${post.source_name}` : titre);
+  const altUne = v.alt || titre;
+  const media = await wpMedia(une, `tuvoa-${slug}`, legendeUne, altUne);
   let content = post.texts.wp_body || `<p>${escapeHtml(post.texts.facebook)}</p>`;
+  const extras = v.wp_images ?? [];
+  for (let i = 0; i < extras.length; i++) {
+    const im = extras[i];
+    const m = await wpMedia(im.url, `tuvoa-${slug}-${i + 1}`, im.legende, im.alt || im.legende).catch(() => null);
+    const html = m ? figure(m.src, im.alt || im.legende, im.legende) : "";
+    content = content.includes(`[[IMAGE${i + 1}]]`) ? content.replace(`[[IMAGE${i + 1}]]`, html) : content + html;
+  }
+  content = content.replace(/\[\[IMAGE\d+\]\]/g, "");
   if (post.source_url && !content.includes(post.source_url)) {
     content += `<p>Source : <a href="${post.source_url}" rel="noopener">${escapeHtml(post.source_name ?? post.source_url)}</a></p>`;
   }
-  const res = await fetch(`${base}/wp-json/wp/v2/posts`, {
+  // 2. Catégories, étiquettes, extrait (méta-description) et adresse lisible
+  const categories = await wpCategoryIds(v.wp_categories ?? []);
+  const tags = await wpTagIds(v.wp_tags ?? []);
+  const excerpt = post.texts.wp_excerpt || "";
+  const res = await fetch(`${wpBase()}/wp-json/wp/v2/posts`, {
     method: "POST",
-    headers: { Authorization: auth, "Content-Type": "application/json" },
+    headers: { Authorization: wpAuth(), "Content-Type": "application/json" },
     // Post de test de connexion : envoyé en brouillon, jamais publié en ligne.
-    body: JSON.stringify({ title: post.texts.wp_title || post.title, content, status: post.origin === "test" ? "draft" : "publish", featured_media: mediaJson.id }),
+    body: JSON.stringify({
+      title: titre,
+      content,
+      excerpt,
+      slug: v.wp_slug || slugify(titre),
+      status: post.origin === "test" ? "draft" : "publish",
+      ...(media ? { featured_media: media.id } : {}),
+      ...(categories.length ? { categories } : {}),
+      ...(tags.length ? { tags } : {}),
+    }),
   });
   if (!res.ok) throw new Error(`WordPress ${res.status} : ${(await res.text()).slice(0, 200)}`);
   const json = (await res.json()) as { link?: string };
