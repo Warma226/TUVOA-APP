@@ -14,7 +14,7 @@ export type Post = {
   title: string;
   source_name: string | null;
   source_url: string | null;
-  origin: "manuel" | "veille" | "recap";
+  origin: "manuel" | "veille" | "recap" | "test";
   trigger_id: string | null;
   texts: {
     facebook: string;
