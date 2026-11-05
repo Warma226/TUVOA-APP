@@ -1,5 +1,5 @@
 // Publication sur les canaux de TUVOA.
-import type { Platform } from "./config";
+import { categorieWp, type Platform } from "./config";
 import type { Post, PublishResult } from "./store";
 import { imageFor } from "./visual-url";
 import { publishPhotos, tiktokConfigured, tiktokUser } from "./tiktok";
@@ -140,6 +140,22 @@ const slugify = (t: string) => norm(t).replace(/[^a-z0-9]+/g, "-").replace(/^-|-
 const wordpress: Publisher = async (post) => {
   const v = post.visual;
   const titre = post.texts.wp_title || post.title;
+  // Article déjà en ligne : seules ses catégories et étiquettes sont corrigées (ni nouvelle image ni nouveau texte).
+  if (v.wp_maj === "categories" && v.wp_slug) {
+    const f = await fetch(`${wpBase()}/wp-json/wp/v2/posts?slug=${encodeURIComponent(v.wp_slug)}&status=any&_fields=id,link`, { headers: { Authorization: wpAuth() } });
+    const ex = f.ok ? ((await f.json()) as { id: number; link: string }[])[0] : undefined;
+    if (ex) {
+      const categories = await wpCategoryIds(v.wp_categories?.length ? v.wp_categories : [categorieWp(titre, post.texts.wp_body)]);
+      const tags = await wpTagIds(v.wp_tags ?? []);
+      const r = await fetch(`${wpBase()}/wp-json/wp/v2/posts/${ex.id}`, {
+        method: "POST",
+        headers: { Authorization: wpAuth(), "Content-Type": "application/json" },
+        body: JSON.stringify({ categories, ...(tags.length ? { tags } : {}), ...(post.texts.wp_excerpt ? { excerpt: post.texts.wp_excerpt } : {}) }),
+      });
+      if (!r.ok) throw new Error(`WordPress ${r.status} : ${(await r.text()).slice(0, 200)}`);
+      return { ok: true, detail: "Catégorie mise à jour", url: ex.link };
+    }
+  }
   const slug = post.id.slice(0, 8);
   // 1. Image à la une (légendée) puis images de l'article
   const une = imageFor(post, "wordpress", true);
@@ -165,7 +181,8 @@ const wordpress: Publisher = async (post) => {
     content += `<p>Source : <a href="${post.source_url}" rel="noopener">${escapeHtml(post.source_name ?? post.source_url)}</a></p>`;
   }
   // 2. Catégories, étiquettes, extrait (méta-description) et adresse lisible
-  const categories = await wpCategoryIds(v.wp_categories ?? []);
+  // Jamais « Uncategorized » : sans catégorie choisie, elle est déduite du titre et du texte.
+  const categories = await wpCategoryIds(v.wp_categories?.length ? v.wp_categories : [categorieWp(titre, post.texts.wp_body)]);
   const tags = await wpTagIds(v.wp_tags ?? []);
   const excerpt = post.texts.wp_excerpt || "";
   // Un article déjà publié avec la même adresse est mis à jour au lieu d'être dupliqué.
