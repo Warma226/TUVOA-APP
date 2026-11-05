@@ -101,6 +101,15 @@ export default function Dashboard() {
           Nouveau post
         </Link>
 
+        <Link href="/communaute" className="card link" style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Icon name="bulle" size={24} />
+          <span style={{ flex: 1 }}>
+            <strong style={{ display: "block", fontSize: 15 }}>Community manager</strong>
+            <span className="muted">Commentaires, messages, modération et rapport du jour</span>
+          </span>
+          <Icon name="retour" size={18} />
+        </Link>
+
         <section className="stack">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <h2 className="section-title">Prochaines publications</h2>

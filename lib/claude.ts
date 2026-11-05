@@ -131,6 +131,11 @@ async function callClaude(system: string, user: string, maxTokens = 2500, json =
   throw new Error("Ajoute GEMINI_API_KEY (gratuit) ou ANTHROPIC_API_KEY dans Vercel pour activer la rédaction par l'IA.");
 }
 
+// Appel générique de l'IA avec réponse JSON (agent community manager).
+export async function aiJson<T>(system: string, user: string, maxTokens = 3000): Promise<T> {
+  return extractJson<T>(await callClaude(system, user, maxTokens, true));
+}
+
 // Retours à la ligne bruts dans les chaînes : erreur fréquente des modèles, on les échappe.
 function escapeRawNewlines(s: string): string {
   let out = "";
