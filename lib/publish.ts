@@ -152,21 +152,6 @@ const wordpress: Publisher = async (post) => {
   const json = (await res.json()) as { link?: string };
   return { ok: true, detail: post.origin === "test" ? "Brouillon de test créé (non publié)" : "Article publié", url: json.link };
 };
-  // 2. Article
-  let content = post.texts.wp_body || `<p>${escapeHtml(post.texts.facebook)}</p>`;
-  if (post.source_url && !content.includes(post.source_url)) {
-    content += `<p>Source : <a href="${post.source_url}" rel="noopener">${escapeHtml(post.source_name ?? post.source_url)}</a></p>`;
-  }
-  const res = await fetch(`${base}/wp-json/wp/v2/posts`, {
-    method: "POST",
-    headers: { Authorization: auth, "Content-Type": "application/json" },
-    // Post de test de connexion : envoyé en brouillon, jamais publié en ligne.
-    body: JSON.stringify({ title: post.texts.wp_title || post.title, content, status: post.origin === "test" ? "draft" : "publish", featured_media: mediaJson.id }),
-  });
-  if (!res.ok) throw new Error(`WordPress ${res.status} : ${(await res.text()).slice(0, 200)}`);
-  const json = (await res.json()) as { link?: string };
-  return { ok: true, detail: post.origin === "test" ? "Brouillon de test créé (non publié)" : "Article publié", url: json.link };
-};
 
 // Carrousel (plusieurs images à faire défiler) : chaque image est d'abord envoyée sans être publiée,
 // puis un seul post les regroupe avec le texte.
