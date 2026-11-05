@@ -1,5 +1,5 @@
 // Rédaction des posts avec Claude (API Messages d'Anthropic).
-import { STYLE_GUIDE, RUBRIQUES, type RubriqueId, type TriggerFormat } from "./config";
+import { STYLE_GUIDE, RUBRIQUES, WP_CATEGORIES_AUTO, type RubriqueId, type TriggerFormat } from "./config";
 import { convertirTout } from "./devises";
 
 export type Generated = {
@@ -9,6 +9,9 @@ export type Generated = {
   tiktok: string;
   wp_title: string;
   wp_body: string;
+  wp_categorie?: string;
+  wp_excerpt?: string;
+  wp_tags?: string[];
   visuel_titre: string;
   visuel_texte: string;
 };
@@ -326,6 +329,9 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   "tiktok": "légende TikTok de 150 caractères maximum",
   "wp_title": "titre d'article WordPress",
   "wp_body": "article WordPress en HTML simple (<p>, <h2>, <ul>, <li>, <strong>), 300 à 600 mots, terminé par un paragraphe 'Source :' avec le lien",
+  "wp_categorie": "une seule catégorie du site, exactement parmi : CyberActu (cybersécurité, piratage, fraude), IA (intelligence artificielle), Robotique (robots, drones), Réseaux Sociaux (Facebook, TikTok, WhatsApp, X…), Apps (applications, services numériques, télécoms, paiement mobile, appareils)",
+  "wp_excerpt": "méta-description de 140 à 160 caractères, factuelle",
+  "wp_tags": ["3 à 5 étiquettes courtes"],
   "visuel_titre": "titre court pour le visuel",
   "visuel_texte": "texte court pour le visuel (40 mots maximum)"
 }`);
@@ -342,6 +348,9 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
     tiktok: (await cv(g.tiktok)).slice(0, 150),
     wp_title: await cv(g.wp_title),
     wp_body: await cv(g.wp_body),
+    wp_categorie: WP_CATEGORIES_AUTO.find((c) => c.toLowerCase() === String(g.wp_categorie ?? "").trim().toLowerCase()),
+    wp_excerpt: String(g.wp_excerpt ?? "").slice(0, 170),
+    wp_tags: Array.isArray(g.wp_tags) ? g.wp_tags.map(String).filter(Boolean).slice(0, 5) : [],
     visuel_titre: String(g.visuel_titre ?? ""),
     visuel_texte: await cv(g.visuel_texte),
   };

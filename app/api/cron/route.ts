@@ -5,7 +5,7 @@ import { fetchVeille, fetchArticle, similar } from "@/lib/veille";
 import { generatePost, generateRecap, aiConfigured, sameStoryAs } from "@/lib/claude";
 import { publishPost, connectionStatus } from "@/lib/publish";
 import { coverUrl, itemUrl, endUrl } from "@/lib/recap-url";
-import { GUARDRAILS, TOPICS, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
+import { GUARDRAILS, TOPICS, categorieWp, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
 import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts, postedUrls, publishedSince, recapExists } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -149,8 +149,16 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
               tiktok: g.tiktok,
               wp_title: g.wp_title,
               wp_body: g.wp_body,
+              wp_excerpt: g.wp_excerpt,
             },
-            visual: { titre: g.visuel_titre || TOPICS.find((t) => t.id === item.topics[0])?.label || "Actu tech", texte: g.visuel_texte || item.title, image },
+            visual: {
+              titre: g.visuel_titre || TOPICS.find((t) => t.id === item.topics[0])?.label || "Actu tech",
+              texte: g.visuel_texte || item.title,
+              image,
+              // Catégorie WordPress choisie par l'IA, sinon déduite du titre et du texte.
+              wp_categories: [g.wp_categorie || categorieWp(item.title, g.wp_title, g.wp_body)],
+              wp_tags: g.wp_tags,
+            },
             status: "planifie",
             auto: true,
             scheduled_at: new Date(Date.now() + (opts.now ? 0 : GUARDRAILS.delayMinutes) * 60000).toISOString(),

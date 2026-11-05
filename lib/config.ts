@@ -242,3 +242,18 @@ Qualité professionnelle, niveau rédaction d'un média sérieux :
 - Orthographe, accords et ponctuation française impeccables (espace avant « : ; ? ! », guillemets « »).
 - Termine par une chute journalistique sobre : une phrase qui met l'info en perspective ou pose l'enjeu à venir, sans ironie ni familiarité, jamais un résumé ni une consigne. Puis la source.
 `.trim();
+
+// Catégories du site WordPress pour l'actualité (Portrait et Exclusivité restent manuelles).
+export const WP_CATEGORIES_AUTO = ["CyberActu", "IA", "Robotique", "Réseaux Sociaux", "Apps"] as const;
+const sansAccent = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const MOTS_CATEGORIE: [string, RegExp][] = [
+  ["CyberActu", /cyber|pirat|hacker|ransomware|rancongiciel|malware|logiciel malveillant|phishing|hameconnage|faille|vulnerab|fuite de donnees|breach|escroquer|arnaque|fraude|europol|interpol|threat/],
+  ["Robotique", /robot|humanoide|drone|automate/],
+  ["IA", /intelligence artificielle|\bia\b|\bai\b|chatgpt|openai|gemini|\bllm\b|anthropic|claude|deepseek|mistral|copilot|apprentissage automatique/],
+  ["Réseaux Sociaux", /reseaux? sociaux|facebook|instagram|tiktok|whatsapp|twitter|\bx\b \(|linkedin|youtube|snapchat|threads|telegram|\bmeta\b|influenceu/],
+];
+// Choisit une catégorie à partir du titre et du texte (secours si l'IA n'en a pas donné).
+export function categorieWp(...textes: string[]): string {
+  const t = sansAccent(textes.join(" "));
+  return MOTS_CATEGORIE.find(([, re]) => re.test(t))?.[0] ?? "Apps";
+}
