@@ -25,8 +25,12 @@ const HELP: Record<Platform, string[]> = {
     "Ajoute « HTTP › Get a file » (URL : image_url) puis « LinkedIn › Create an Organization Image Post » (Page TUVOA, texte : text, image : le fichier). Active le scénario.",
   ],
   tiktok: [
-    "Demande l'accès « Content Posting API » sur developers.tiktok.com.",
-    "La publication sera branchée une fois l'application validée par TikTok.",
+    "Sur developers.tiktok.com, crée une application « TUVOA » et ajoute les produits « Login Kit » et « Content Posting API » (avec « Direct Post »).",
+    "Adresse de redirection (Login Kit) : https://tuvoa-app.vercel.app/api/tiktok/callback. Autorisations : user.info.basic et video.publish.",
+    "Vérifie l'adresse https://tuvoa-app.vercel.app/ comme préfixe d'URL (Content Posting API › URL properties) : envoie-moi le fichier de vérification, je le mets en ligne.",
+    "Dans Vercel : TIKTOK_CLIENT_KEY et TIKTOK_CLIENT_SECRET (onglet « Credentials » de l'app TikTok), puis redéploie.",
+    "Ouvre https://tuvoa-app.vercel.app/api/tiktok/login et autorise le compte TikTok de TUVOA.",
+    "Tant que TikTok n'a pas validé l'app (audit), les publications sont visibles par toi seul. Demande l'audit dans le portail pour publier en public.",
   ],
 };
 
