@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cmDiagnostic, cmEtat, cmMarquerTraite, cmPassage, cmRapport, cmSauverReglages, type CmReglages } from "@/lib/cm";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 // GET → état de l'agent (réglages, à traiter, journal, dernier rapport) ; ?diag=1 → ce que le jeton Facebook permet.
 export async function GET(req: Request) {
