@@ -85,11 +85,11 @@ async function wpTagIds(names: string[]): Promise<number[]> {
 }
 // Envoie une image dans la médiathèque avec sa légende et son texte alternatif.
 // Image allégée avant envoi : 1200 px de large au plus, WebP qualité 78 (souvent 5 à 10 fois plus léger qu'une photo d'origine).
-async function optimise(bytes: ArrayBuffer, type: string): Promise<{ body: ArrayBuffer | Buffer; type: string; ext: string; width?: number; height?: number }> {
+async function optimise(bytes: ArrayBuffer, type: string): Promise<{ body: ArrayBuffer | Uint8Array; type: string; ext: string; width?: number; height?: number }> {
   try {
     const sharp = (await import("sharp")).default;
     const { data, info } = await sharp(Buffer.from(bytes)).rotate().resize({ width: 1200, withoutEnlargement: true }).webp({ quality: 78 }).toBuffer({ resolveWithObject: true });
-    return { body: data, type: "image/webp", ext: "webp", width: info.width, height: info.height };
+    return { body: new Uint8Array(data), type: "image/webp", ext: "webp", width: info.width, height: info.height };
   } catch {
     return { body: bytes, type, ext: type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg" };
   }
@@ -102,7 +102,7 @@ async function wpMedia(url: string, name: string, legende: string, alt: string):
   const up = await fetch(`${wpBase()}/wp-json/wp/v2/media`, {
     method: "POST",
     headers: { Authorization: wpAuth(), "Content-Type": img.type, "Content-Disposition": `attachment; filename="${name}.${img.ext}"` },
-    body: img.body,
+    body: img.body as BodyInit,
   });
   if (!up.ok) throw new Error(`WordPress (image) ${up.status} : ${(await up.text()).slice(0, 200)}`);
   const m = (await up.json()) as { id: number; source_url: string; media_details?: { width?: number; height?: number } };
