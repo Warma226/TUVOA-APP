@@ -74,11 +74,12 @@ const wordpress: Publisher = async (post) => {
   const res = await fetch(`${base}/wp-json/wp/v2/posts`, {
     method: "POST",
     headers: { Authorization: auth, "Content-Type": "application/json" },
-    body: JSON.stringify({ title: post.texts.wp_title || post.title, content, status: "publish", featured_media: mediaJson.id }),
+    // Post de test de connexion : envoyé en brouillon, jamais publié en ligne.
+    body: JSON.stringify({ title: post.texts.wp_title || post.title, content, status: post.origin === "test" ? "draft" : "publish", featured_media: mediaJson.id }),
   });
   if (!res.ok) throw new Error(`WordPress ${res.status} : ${(await res.text()).slice(0, 200)}`);
   const json = (await res.json()) as { link?: string };
-  return { ok: true, detail: "Article publié", url: json.link };
+  return { ok: true, detail: post.origin === "test" ? "Brouillon de test créé (non publié)" : "Article publié", url: json.link };
 };
 
 // Carrousel (plusieurs images à faire défiler) : chaque image est d'abord envoyée sans être publiée,
