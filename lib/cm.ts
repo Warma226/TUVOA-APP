@@ -45,7 +45,8 @@ async function graph<T>(path: string, params: Record<string, string> = {}, body?
   const u = new URL(`https://graph.facebook.com/${V()}/${path}`);
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   u.searchParams.set("access_token", process.env.FB_PAGE_TOKEN ?? "");
-  const res = await fetch(u, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : { cache: "no-store" });
+  const signal = AbortSignal.timeout(15000); // jamais plus de 15 s par appel Facebook
+  const res = await fetch(u, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal } : { cache: "no-store", signal });
   const j = (await res.json().catch(() => ({}))) as T & { error?: { message?: string; code?: number } };
   if (!res.ok || j.error) throw new Error(traduire(j.error?.message ?? `Facebook a répondu ${res.status}`, j.error?.code));
   return j;
@@ -113,11 +114,13 @@ async function collecter(log: string[]): Promise<Candidat[]> {
   // Commentaires des publications des 7 derniers jours
   try {
     const posts = await graph<{ data: FbPost[] }>(`${page}/posts`, { fields: "id,message,created_time,permalink_url", limit: "15", since: String(Math.floor((Date.now() - 7 * 864e5) / 1000)) });
-    for (const p of posts.data) {
-      const c = await graph<{ data: FbComment[] }>(`${p.id}/comments`, {
-        filter: "stream", order: "reverse_chronological", limit: "50",
-        fields: "id,message,from{id,name},created_time,parent{id},permalink_url,comments.limit(10){from{id}}",
-      }).catch((e) => { log.push(`Commentaires illisibles (${p.id}) : ${(e as Error).message}`); return { data: [] as FbComment[] }; });
+    // Commentaires de toutes les publications lus en parallèle
+    const lots = await Promise.all(posts.data.map((p) => graph<{ data: FbComment[] }>(`${p.id}/comments`, {
+      filter: "stream", order: "reverse_chronological", limit: "50",
+      fields: "id,message,from{id,name},created_time,parent{id},permalink_url,comments.limit(10){from{id}}",
+    }).catch((e) => { log.push(`Commentaires illisibles (${p.id}) : ${(e as Error).message}`); return { data: [] as FbComment[] }; })));
+    for (const [n, p] of posts.data.entries()) {
+      const c = lots[n];
       const tous = c.data;
       for (const cm of tous) {
         if (!cm.message?.trim() || !cm.from || cm.from.id === page) continue;
@@ -238,11 +241,17 @@ export async function cmPassage(opts: { force?: boolean } = {}): Promise<string[
   if (!r.actif && !opts.force) return ["Agent en pause."];
   if (!fbConfigure()) return ["Page Facebook non reliée."];
   if (!aiConfigured()) return ["IA non configurée."];
+  const t0 = Date.now();
   const cands = await collecter(log);
+  console.log(`cm: ${cands.length} élément(s) à traiter, collecte ${Date.now() - t0} ms`);
   if (cands.length) {
     let decisions: Map<string, Decision>;
     try {
-      decisions = await decider(cands);
+      decisions = await Promise.race([
+        decider(cands),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error("délai de 150 s dépassé")), 150000)),
+      ]);
+      console.log(`cm: décisions de l'IA ${Date.now() - t0} ms`);
     } catch (e) {
       log.push(`IA indisponible, nouvel essai au prochain passage : ${(e as Error).message}`);
       decisions = new Map();
