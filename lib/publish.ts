@@ -2,6 +2,7 @@
 import type { Platform } from "./config";
 import type { Post, PublishResult } from "./store";
 import { imageFor } from "./visual-url";
+import { publishPhotos, tiktokConfigured, tiktokUser } from "./tiktok";
 
 type Publisher = (post: Post) => Promise<Omit<PublishResult, "at">>;
 
@@ -30,8 +31,8 @@ export function connectionStatus(): Record<Platform, { configured: boolean; deta
       detail: process.env.LINKEDIN_WEBHOOK_URL ? "Page TUVOA via Make" : process.env.LINKEDIN_AUTHOR ?? "LINKEDIN_WEBHOOK_URL (Make)",
     },
     tiktok: {
-      configured: false,
-      detail: "En attente de la validation de l'application par TikTok",
+      configured: tiktokConfigured(),
+      detail: tiktokConfigured() ? "Compte TUVOA via Content Posting API" : "TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET",
     },
   };
 }
@@ -292,8 +293,11 @@ const linkedin: Publisher = async (post) => {
   return { ok: true, detail: "Post publié sur LinkedIn" };
 };
 
-const tiktok: Publisher = async () => {
-  throw new Error("TikTok : publication disponible après la validation de l'application par TikTok.");
+const tiktok: Publisher = async (post) => {
+  const images = post.visual.slides && post.visual.slides.length > 1 ? post.visual.slides : [imageUrl(post, "tiktok")];
+  const legende = post.texts.tiktok || post.texts.facebook || post.title;
+  const { publish_id, privacy } = await publishPhotos(images, post.visual.titre || post.title, legende);
+  return { ok: true, detail: privacy === "PUBLIC_TO_EVERYONE" ? `Photo publiée sur TikTok (${publish_id})` : `Photo envoyée sur TikTok en privé (${privacy}) : l'app n'est pas encore validée par TikTok` };
 };
 
 const PUBLISHERS: Record<Platform, Publisher> = { wordpress, facebook, linkedin, tiktok };
@@ -379,6 +383,11 @@ export async function testConnections(): Promise<Record<Platform, ConnectionTest
       return { ok: false, detail: `Injoignable : ${(e as Error).message}` };
     }
   };
-  const [wordpress, facebook, linkedin] = await Promise.all([run("wordpress", testWordpress), run("facebook", testFacebook), run("linkedin", testLinkedin)]);
-  return { wordpress, facebook, linkedin, tiktok: { ok: false, detail: status.tiktok.detail } };
+  const testTiktok = async (): Promise<ConnectionTest> => {
+    const u = await tiktokUser();
+    const pub = u.privacy.includes("PUBLIC_TO_EVERYONE");
+    return { ok: true, detail: `Connecté à ${u.name}${pub ? ", publication publique possible." : " : publication en privé tant que TikTok n'a pas validé l'app."}` };
+  };
+  const [wordpress, facebook, linkedin, tiktok] = await Promise.all([run("wordpress", testWordpress), run("facebook", testFacebook), run("linkedin", testLinkedin), run("tiktok", testTiktok)]);
+  return { wordpress, facebook, linkedin, tiktok };
 }
