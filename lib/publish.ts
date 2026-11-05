@@ -103,6 +103,24 @@ async function wpMedia(url: string, name: string, legende: string, alt: string):
   });
   return { id: m.id, src: m.source_url };
 }
+// Photos Wikimedia Commons (lien Special:FilePath) : auteur et licence lus sur Commons, ajoutés à la légende.
+async function commonsCredit(url: string): Promise<string | null> {
+  const m = url.match(/commons\.wikimedia\.org\/wiki\/Special:FilePath\/([^?#]+)/);
+  if (!m) return null;
+  try {
+    const name = decodeURIComponent(m[1]).replace(/_/g, " ");
+    const api = `https://commons.wikimedia.org/w/api.php?action=query&format=json&prop=imageinfo&iiprop=extmetadata&titles=${encodeURIComponent("File:" + name)}`;
+    const r = await fetch(api, { headers: { "User-Agent": "TUVOA-APP/1.0" }, signal: AbortSignal.timeout(10000) });
+    const j = (await r.json()) as { query?: { pages?: Record<string, { imageinfo?: { extmetadata?: Record<string, { value?: string }> }[] }> } };
+    const meta = Object.values(j.query?.pages ?? {})[0]?.imageinfo?.[0]?.extmetadata ?? {};
+    const strip = (h?: string) => (h ?? "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    const auteur = strip(meta.Artist?.value);
+    const licence = strip(meta.LicenseShortName?.value);
+    return `Photo : ${auteur ? auteur + " / " : ""}Wikimedia Commons${licence ? ", " + licence : ""}`;
+  } catch {
+    return "Photo : Wikimedia Commons";
+  }
+}
 const figure = (src: string, alt: string, legende: string) =>
   `<!-- wp:image {"sizeSlug":"large"} -->\n<figure class="wp-block-image size-large"><img src="${src}" alt="${escapeHtml(alt)}"/><figcaption class="wp-element-caption">${escapeHtml(legende)}</figcaption></figure>\n<!-- /wp:image -->`;
 const slugify = (t: string) => norm(t).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70);
@@ -114,15 +132,20 @@ const wordpress: Publisher = async (post) => {
   // 1. Image à la une (légendée) puis images de l'article
   const une = imageFor(post, "wordpress", true);
   if (!une) throw new Error("Aucun visuel : ajoute l'image de l'article dans l'éditeur.");
-  const legendeUne = v.legende || (post.source_name ? `Illustration · ${post.source_name}` : titre);
+  const creditUne = await commonsCredit(une);
+  const legendeUne = [v.legende || (post.source_name ? `Illustration · ${post.source_name}` : titre), creditUne].filter(Boolean).join(" · ");
   const altUne = v.alt || titre;
-  const media = await wpMedia(une, `tuvoa-${slug}`, legendeUne, altUne);
+  let media = await wpMedia(une, `tuvoa-${slug}`, legendeUne, altUne).catch(() => null);
+  // Photo indisponible : visuel de secours (visuel TUVOA).
+  if (!media && v.image_secours) media = await wpMedia(v.image_secours, `tuvoa-${slug}`, v.legende || titre, altUne);
   let content = post.texts.wp_body || `<p>${escapeHtml(post.texts.facebook)}</p>`;
   const extras = v.wp_images ?? [];
   for (let i = 0; i < extras.length; i++) {
     const im = extras[i];
-    const m = await wpMedia(im.url, `tuvoa-${slug}-${i + 1}`, im.legende, im.alt || im.legende).catch(() => null);
-    const html = m ? figure(m.src, im.alt || im.legende, im.legende) : "";
+    const credit = await commonsCredit(im.url);
+    const legende = [im.legende, credit].filter(Boolean).join(" · ");
+    const m = await wpMedia(im.url, `tuvoa-${slug}-${i + 1}`, legende, im.alt || im.legende).catch(() => null);
+    const html = m ? figure(m.src, im.alt || im.legende, legende) : "";
     content = content.includes(`[[IMAGE${i + 1}]]`) ? content.replace(`[[IMAGE${i + 1}]]`, html) : content + html;
   }
   content = content.replace(/\[\[IMAGE\d+\]\]/g, "");
@@ -133,7 +156,11 @@ const wordpress: Publisher = async (post) => {
   const categories = await wpCategoryIds(v.wp_categories ?? []);
   const tags = await wpTagIds(v.wp_tags ?? []);
   const excerpt = post.texts.wp_excerpt || "";
-  const res = await fetch(`${wpBase()}/wp-json/wp/v2/posts`, {
+  // Un article déjà publié avec la même adresse est mis à jour au lieu d'être dupliqué.
+  const wpSlug = v.wp_slug || slugify(titre);
+  const exist = await fetch(`${wpBase()}/wp-json/wp/v2/posts?slug=${encodeURIComponent(wpSlug)}&status=any&_fields=id`, { headers: { Authorization: wpAuth() } });
+  const existing = exist.ok ? ((await exist.json()) as { id: number }[])[0] : undefined;
+  const res = await fetch(`${wpBase()}/wp-json/wp/v2/posts${existing ? `/${existing.id}` : ""}`, {
     method: "POST",
     headers: { Authorization: wpAuth(), "Content-Type": "application/json" },
     // Post de test de connexion : envoyé en brouillon, jamais publié en ligne.
@@ -141,7 +168,7 @@ const wordpress: Publisher = async (post) => {
       title: titre,
       content,
       excerpt,
-      slug: v.wp_slug || slugify(titre),
+      slug: wpSlug,
       status: post.origin === "test" ? "draft" : "publish",
       ...(media ? { featured_media: media.id } : {}),
       ...(categories.length ? { categories } : {}),
@@ -150,7 +177,7 @@ const wordpress: Publisher = async (post) => {
   });
   if (!res.ok) throw new Error(`WordPress ${res.status} : ${(await res.text()).slice(0, 200)}`);
   const json = (await res.json()) as { link?: string };
-  return { ok: true, detail: post.origin === "test" ? "Brouillon de test créé (non publié)" : "Article publié", url: json.link };
+  return { ok: true, detail: post.origin === "test" ? "Brouillon de test créé (non publié)" : existing ? "Article mis à jour" : "Article publié", url: json.link };
 };
 
 // Carrousel (plusieurs images à faire défiler) : chaque image est d'abord envoyée sans être publiée,

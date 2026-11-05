@@ -29,7 +29,7 @@ export type Post = {
   visual: {
     titre: string; texte: string; nom?: string; specialite?: string; photo?: string; image?: string; slides?: string[];
     // WordPress : légende et texte alternatif de l'image à la une, catégories, étiquettes, adresse, images supplémentaires
-    legende?: string; alt?: string; wp_categories?: string[]; wp_tags?: string[]; wp_slug?: string;
+    legende?: string; alt?: string; image_secours?: string; wp_categories?: string[]; wp_tags?: string[]; wp_slug?: string;
     wp_images?: { url: string; legende: string; alt?: string }[];
   };
   platforms: Platform[];
