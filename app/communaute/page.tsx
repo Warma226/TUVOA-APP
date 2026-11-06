@@ -246,6 +246,17 @@ export default function Grin() {
             </div>
           </section>
 
+          {/* Studio de VOA */}
+          <Link href="/studio" style={{ ...carte, flexDirection: "row", alignItems: "center", gap: 18, textDecoration: "none", color: C.encre, background: C.encre, borderColor: C.encre }}>
+            <Voa humeur="parle" taille={78} decor />
+            <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ ...surtitre, color: "#6E9BFF" }}>Nouveau</span>
+              <span style={{ fontFamily: TITRE, fontWeight: 800, fontSize: 28, color: "#FFFFFF" }}>Le Studio de VOA</span>
+              <span style={{ fontSize: 15, color: "#C7CBD6" }}>Visuels « pub » prêts à publier : photo, cartes flottantes, effet waouh. VOA écrit les textes.</span>
+            </span>
+            <span style={{ ...bouton(true, C.bleu, "#FFFFFF") }}>Créer un visuel</span>
+          </Link>
+
           {/* Le pagne du jour */}
           <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 12 }}>

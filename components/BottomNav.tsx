@@ -15,7 +15,7 @@ const items: { href: string; label: string; icon: IconName }[] = [
   { href: "/connexions", label: "Connexions", icon: "connexions" },
 ];
 
-const SECONDAIRES = ["/communaute", "/creer", "/editeur", "/apercu", "/declencheurs", "/rubriques", "/sources"];
+const SECONDAIRES = ["/studio", "/communaute", "/creer", "/editeur", "/apercu", "/declencheurs", "/rubriques", "/sources"];
 
 export function BottomNav() {
   const path = usePathname();
@@ -49,6 +49,10 @@ export function BottomNav() {
         <Link href="/communaute" className="desktop-only" aria-current={path.startsWith("/communaute") ? "page" : undefined}>
           <Icon name="bulle" />
           Le Grin
+        </Link>
+        <Link href="/studio" className="desktop-only" aria-current={path.startsWith("/studio") ? "page" : undefined}>
+          <Icon name="bulle" />
+          Studio
         </Link>
       </div>
       <p className="nav-foot">www.tuvoa.media</p>
