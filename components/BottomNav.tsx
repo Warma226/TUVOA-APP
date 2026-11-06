@@ -48,7 +48,7 @@ export function BottomNav() {
         </Link>
         <Link href="/communaute" className="desktop-only" aria-current={path.startsWith("/communaute") ? "page" : undefined}>
           <Icon name="bulle" />
-          Communauté
+          Le Grin
         </Link>
       </div>
       <p className="nav-foot">www.tuvoa.media</p>
