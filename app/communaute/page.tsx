@@ -45,14 +45,12 @@ function Switch({ on, label, onClick }: { on: boolean; label: string; onClick: (
 
 function Ligne({ l, onTraite, onAnnuler }: { l: CmLigne; onTraite?: () => void; onAnnuler?: () => void }) {
   const a = ACTION[l.action] ?? { label: l.action, cls: "" };
-  const vraiFaux = l.raison?.startsWith("Vrai ou faux :") && l.action === "repondu";
   return (
     <div className="card" style={{ gap: 6 }}>
       <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
         <div className="wrap" style={{ alignItems: "center" }}>
           <span className={`badge ${a.cls}`}>{a.label}</span>
           <span className="badge">{CANAL[l.canal] ?? l.canal}</span>
-          {vraiFaux ? <span className="badge bleu">Vrai ou faux</span> : null}
           {l.ton === "negatif" ? <span className="badge ambre">Mécontent</span> : null}
           <strong style={{ fontSize: 14 }}>{l.auteur}</strong>
         </div>
@@ -100,7 +98,7 @@ export default function Communaute() {
     <>
       <TopBar title="VOA · Community manager" back="/" wide />
       <main className="page sub wide" style={{ paddingTop: 4 }}>
-        <p className="muted">VOA lit toutes les 15 minutes les commentaires, les messages privés et les mentions de TUVOA ailleurs sur Facebook. Elle répond, vérifie les infos tech douteuses (« Vrai ou faux ? » avec source), aime, masque le spam et les insultes, et te garde les cas sensibles. Chaque soir, elle rédige un rapport.</p>
+        <p className="muted">VOA lit toutes les 15 minutes les commentaires, les messages privés et les mentions de TUVOA ailleurs sur Facebook. Elle répond, aime, masque le spam et les insultes, et te garde les cas sensibles. Chaque soir, elle rédige un rapport.</p>
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
 
         {e ? (
@@ -140,7 +138,7 @@ export default function Communaute() {
                   <Switch on={e.reglages[cle]} label={titre} onClick={() => regler({ [cle]: !e.reglages[cle] } as Partial<CmReglages>)} />
                 </div>
               ))}
-              <p className="muted" style={{ borderTop: "1px solid var(--gris-2)", paddingTop: 10 }}>Toujours actifs : réponses aux mentions de TUVOA ailleurs sur Facebook, « Vrai ou faux ? » sourcé sur les infos tech douteuses, et mode crise automatique.</p>
+              <p className="muted" style={{ borderTop: "1px solid var(--gris-2)", paddingTop: 10 }}>Toujours actifs : réponses aux mentions de TUVOA ailleurs sur Facebook et mode crise automatique.</p>
               <div className="btn-row">
                 <button type="button" className="btn small primary" disabled={!!busy} onClick={() => action("lancer", { lancer: true })}>{busy === "lancer" ? "Passage en cours…" : "Lancer un passage"}</button>
                 <button type="button" className="btn small ghost" disabled={!!busy} onClick={() => action("rapport", { rapport: true })}>{busy === "rapport" ? "Rédaction…" : "Rapport maintenant"}</button>
