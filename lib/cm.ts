@@ -279,20 +279,33 @@ export async function cmAnnuler(id: string): Promise<string> {
 }
 
 // ─── Lien de l'article en premier commentaire ────────────────────────
+// Un seul lien par publication : avant d'en poster un, VOA regarde ce que la Page a déjà commenté,
+// et supprime les doublons éventuels (on garde le plus ancien).
+const PHRASE_LIEN = "L'article complet est à lire sur notre site";
 async function lienArticles(log: string[]) {
-  const since = new Date(Date.now() - 24 * 3.6e6).toISOString();
-  const { data } = await db().from("posts").select("id,results,texts").eq("status", "publie").gte("scheduled_at", since).limit(20);
+  const since = new Date(Date.now() - 48 * 3.6e6).toISOString();
+  const { data } = await db().from("posts").select("id,results,texts").eq("status", "publie").gte("scheduled_at", since).limit(40);
   for (const p of (data ?? []) as Pick<Post, "id" | "results" | "texts">[]) {
     const fb = p.results.facebook?.url?.match(/facebook\.com\/(\d+_\d+)/)?.[1];
     const wp = p.results.wordpress?.url;
     if (!fb || !wp || !p.results.facebook?.ok) continue;
     const cle = `lien-${p.id}`;
-    if ((await dejaTraites([cle])).size) continue;
-    const texte = `L'article complet est à lire sur notre site : ${wp}`;
+    const existants = (await graph<{ data: FbComment[] }>(`${fb}/comments`, { fields: "id,message,from{id},created_time", order: "chronological", limit: "100", filter: "toplevel" })).data
+      .filter((c) => c.from?.id === PAGE() && (c.message ?? "").includes(PHRASE_LIEN));
+    for (const doublon of existants.slice(1)) {
+      await graph(doublon.id, {}, undefined, "DELETE");
+      log.push(`Lien en double retiré : ${p.texts.wp_title}`);
+    }
+    const garde = existants[0];
+    if ((await dejaTraites([cle])).size) {
+      if (garde) await db().from("cm_journal").update({ reply_id: garde.id }).eq("external_id", cle).is("reply_id", null);
+      continue;
+    }
+    const texte = `${PHRASE_LIEN} : ${wp}`;
     try {
-      const r = await graph<{ id?: string }>(`${fb}/comments`, {}, { message: texte });
-      await noter({ canal: "lien", external_id: cle, fil: fb, lien: `https://www.facebook.com/${fb}`, auteur: "TUVOA", texte: p.texts.wp_title, action: "lien", reponse: texte, raison: "Lien de l'article en commentaire", reply_id: r.id ?? null });
-      log.push(`Lien de l'article ajouté en commentaire : ${p.texts.wp_title}`);
+      const id = garde?.id ?? (await graph<{ id?: string }>(`${fb}/comments`, {}, { message: texte })).id ?? null;
+      await noter({ canal: "lien", external_id: cle, fil: fb, lien: `https://www.facebook.com/${fb}`, auteur: "TUVOA", texte: p.texts.wp_title, action: "lien", reponse: texte, raison: "Lien de l'article en commentaire", reply_id: id });
+      if (!garde) log.push(`Lien de l'article ajouté en commentaire : ${p.texts.wp_title}`);
     } catch (e) {
       log.push(`Lien en commentaire impossible : ${(e as Error).message}`);
       await noter({ canal: "lien", external_id: cle, fil: fb, auteur: "TUVOA", texte: p.texts.wp_title, action: "erreur", reponse: texte, raison: (e as Error).message });
