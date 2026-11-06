@@ -73,21 +73,36 @@ function rrect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) 
   ctx.roundRect(x, y, w, h, rr);
 }
 
-// Fond : « #2563EB », « lin:#a,#b[,angle] », « rad:#a,#b[,#c] »
+// Coupe « a,b,c » sur les virgules hors parenthèses (pour garder « rgba(0,0,0,0.5) » entier).
+function decouper(x: string): string[] {
+  const out: string[] = []; let cur = "", prof = 0;
+  for (const ch of x) {
+    if (ch === "(") prof++;
+    if (ch === ")") prof--;
+    if (ch === "," && prof === 0) { out.push(cur.trim()); cur = ""; } else cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+function arret(g: CanvasGradient, pos: number, c: string) { try { g.addColorStop(pos, c); } catch { g.addColorStop(pos, "#000000"); } }
+
+// Fond : « #2563EB », « lin:#a,#b[,angle] », « rad:#a,#b[,#c] ». Une couleur illisible devient noire au lieu de bloquer le rendu.
 function peinture(ctx: Ctx, spec: string | undefined, x: number, y: number, w: number, h: number): string | CanvasGradient {
   if (!spec) return "transparent";
   if (spec.startsWith("lin:")) {
-    const [a, b, ang] = spec.slice(4).split(",");
-    const t = ((Number(ang) || 180) - 90) * (Math.PI / 180);
+    const parts = decouper(spec.slice(4));
+    const dernier = parts[parts.length - 1];
+    const angle = /^-?\d+(\.\d+)?$/.test(dernier) ? Number(parts.pop()) : 180;
+    const t = (angle - 90) * (Math.PI / 180);
     const cx = x + w / 2, cy = y + h / 2, L = Math.abs(w * Math.cos(t)) / 2 + Math.abs(h * Math.sin(t)) / 2;
     const g = ctx.createLinearGradient(cx - Math.cos(t) * L, cy - Math.sin(t) * L, cx + Math.cos(t) * L, cy + Math.sin(t) * L);
-    g.addColorStop(0, a); g.addColorStop(1, b ?? a);
+    parts.forEach((c, i) => arret(g, i / Math.max(1, parts.length - 1), c));
     return g;
   }
   if (spec.startsWith("rad:")) {
-    const cs = spec.slice(4).split(",");
+    const cs = decouper(spec.slice(4));
     const g = ctx.createRadialGradient(x + w / 2, y + h * 0.4, 0, x + w / 2, y + h * 0.4, Math.max(w, h) * 0.75);
-    cs.forEach((c, i) => g.addColorStop(i / Math.max(1, cs.length - 1), c));
+    cs.forEach((c, i) => arret(g, i / Math.max(1, cs.length - 1), c));
     return g;
   }
   return spec;
@@ -176,7 +191,7 @@ export function dessinerElement(ctx: Ctx, el: El, t: number, images: Map<string,
     const n = 24, R = Math.max(w, h) * 0.75;
     const g = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, R);
     const c = el.couleur ?? "rgba(255,240,190,0.4)";
-    g.addColorStop(0, c); g.addColorStop(0.55, c.replace(/[\d.]+\)$/, (m) => `${Number(m.slice(0, -1)) * 0.5})`)); g.addColorStop(1, "rgba(255,255,255,0)");
+    arret(g, 0, c); arret(g, 0.55, c.replace(/[\d.]+\)$/, (m) => `${Number(m.slice(0, -1)) * 0.5})`)); arret(g, 1, "rgba(255,255,255,0)");
     ctx.fillStyle = g; ctx.beginPath();
     for (let i = 0; i < n; i++) {
       const a0 = (i / n) * Math.PI * 2, a1 = a0 + (Math.PI * 2) / n / 2.6;
@@ -206,10 +221,18 @@ export function dessinerElement(ctx: Ctx, el: El, t: number, images: Map<string,
   }
 
   if (el.type === "texte") {
-    const taille = el.police ?? 60, lh = (el.interligne ?? 1.1) * taille, marge = el.marge ?? 0;
+    let taille = el.police ?? 60;
+    const marge = el.marge ?? 0;
+    const txt = el.majuscules ? (el.texte ?? "").toUpperCase() : el.texte ?? "";
     ctx.font = police(taille, el.graisse ?? 800);
     if ("letterSpacing" in ctx) (ctx as Ctx & { letterSpacing: string }).letterSpacing = `${el.espacement ?? 0}px`;
-    const txt = el.majuscules ? (el.texte ?? "").toUpperCase() : el.texte ?? "";
+    // Pastille : le texte tient sur une ligne (la taille diminue si besoin, jusqu'à la moitié).
+    if (el.fond && !txt.includes("\n")) {
+      const dispo = Math.max(10, w - marge * 2 - 8);
+      const mesure = ctx.measureText(txt).width;
+      if (mesure > dispo) { taille = Math.max(taille * 0.5, taille * (dispo / mesure)); ctx.font = police(taille, el.graisse ?? 800); }
+    }
+    const lh = (el.interligne ?? 1.1) * taille;
     const ls = lignes(ctx, txt, Math.max(10, w - marge * 2));
     const hTexte = ls.length * lh;
     if (el.fond) {
@@ -287,7 +310,7 @@ export const nouveau = {
   pastille: (p: Partial<El> = {}) => base({ type: "texte", nom: "Pastille", texte: "Mot clé", police: 46, graisse: 700, couleur: "#FFFFFF", fond: "#2563EB", rayon: 16, marge: 18, align: "center", w: 520, h: 84, ...p }),
   image: (p: Partial<El> = {}) => base({ type: "image", nom: "Photo", x: 0, y: 0, w: 1080, h: 1350, ajustement: "cover", ...p }),
   forme: (p: Partial<El> = {}) => base({ type: "forme", nom: "Forme", forme: "rect", fond: "#2563EB", rayon: 24, w: 300, h: 200, ...p }),
-  carte: (p: Partial<El> = {}, c: Partial<Carte> = {}) => base({ type: "carte", nom: "Carte", w: 320, h: 190, ombre: "verre", carte: { titre: "Titre", etat: "État", texte: "Une phrase courte.", bouton: "Bouton", icone: "bouclier", couleur: "#2563EB", ...c }, ...p }),
+  carte: (p: Partial<El> = {}, c: Partial<Carte> = {}) => base({ type: "carte", nom: "Carte", w: 320, h: 214, ombre: "verre", carte: { titre: "Titre", etat: "État", texte: "Une phrase courte.", bouton: "Bouton", icone: "bouclier", couleur: "#2563EB", ...c }, ...p }),
   icone: (p: Partial<El> = {}) => base({ type: "icone", nom: "Icône", icone: "ia", w: 90, h: 90, fond: "#2563EB", rayon: 20, couleur: "#FFFFFF", ...p }),
   rayons: (p: Partial<El> = {}) => base({ type: "rayons", nom: "Rayons de lumière", x: -410, y: -480, w: 1900, h: 1900, couleur: "rgba(255,240,190,0.38)", anim: { entree: "fondu", delai: 0, duree: 1, boucle: "tourner" }, ...p }),
 };
@@ -319,9 +342,9 @@ export const MODELES: Modele[] = [
       nouveau.carte({ role: "carte4", x: 30, y: 470, w: 300, anim: anim("pop", 0.84, "flotter") }, { titre: "Sauvegarde", etat: "Faite", texte: "Photos et discussions à l'abri.", bouton: "Lancer", icone: "nuage", couleur: "#1D4ED8" }),
       nouveau.carte({ role: "carte5", x: 750, y: 470, w: 300, anim: anim("pop", 1.02, "flotter") }, { titre: "Lien suspect", etat: "Évité", texte: "« Vous avez gagné » ? On ne clique pas.", bouton: "Signaler", icone: "lien", couleur: "#0A0A0A" }),
       nouveau.texte({ role: "titre", x: 60, y: 900, w: 960, h: 100, texte: "Nouvelle semaine", police: 92, align: "center", anim: anim("glisser-haut", 1.2) }),
-      nouveau.pastille({ role: "fort", x: 230, y: 1010, w: 620, h: 110, texte: "bons réflexes", police: 88, graisse: 800, fond: "lin:#2563EB,#6E9BFF,90", rayon: 12, marge: 6, ombre: "neon", anim: anim("pop", 1.45) }),
+      nouveau.pastille({ role: "fort", x: 160, y: 1010, w: 760, h: 110, texte: "bons réflexes", police: 88, graisse: 800, fond: "lin:#2563EB,#6E9BFF,90", rayon: 12, marge: 6, ombre: "neon", anim: anim("pop", 1.45) }),
       nouveau.texte({ role: "sous", x: 60, y: 1150, w: 960, h: 50, texte: "Activez la vérification en deux étapes sur WhatsApp", police: 32, graisse: 600, align: "center", anim: anim("fondu", 1.7) }),
-      nouveau.pastille({ role: "bouton", x: 380, y: 1225, w: 320, h: 64, texte: "Voir l'astuce", police: 30, rayon: 12, marge: 10, ombre: "neon", anim: anim("pop", 1.95, "pulser") }),
+      nouveau.pastille({ role: "bouton", x: 360, y: 1225, w: 360, h: 64, texte: "Voir l'astuce", police: 30, rayon: 12, marge: 10, ombre: "neon", anim: anim("pop", 1.95, "pulser") }),
     ])] }),
   },
   {
@@ -330,6 +353,7 @@ export const MODELES: Modele[] = [
       nouveau.rayons(),
       nouveau.forme({ nom: "Halo", forme: "cercle", x: 250, y: 150, w: 580, h: 580, fond: "rad:rgba(255,248,215,0.95),rgba(255,240,190,0.4),rgba(255,240,190,0)", anim: anim("fondu", 0, "pulser", 1) }),
       nouveau.image({ nom: "Photo", y: 320, h: 1030, anim: anim("zoom", 0, "aucune", 1.4) }),
+      nouveau.forme({ nom: "Fondu de la photo", x: 0, y: 318, w: 1080, h: 110, rayon: 0, fond: "lin:rgba(232,160,26,1),rgba(232,160,26,0),180" }),
       nouveau.forme({ nom: "Ombre du bas", x: 0, y: 750, w: 1080, h: 600, rayon: 0, fond: "lin:rgba(0,0,0,0),rgba(0,0,0,0.97),180" }),
       ...logo(),
       nouveau.carte({ role: "carte1", x: 380, y: 40, ombre: "neon", anim: anim("pop", 0.3, "flotter") }, { titre: "Samedi", etat: "Repos", texte: "Le téléphone peut souffler, vous aussi.", bouton: "Profiter", icone: "bulle" }),
@@ -338,9 +362,9 @@ export const MODELES: Modele[] = [
       nouveau.carte({ role: "carte4", x: 30, y: 470, w: 300, rot: 2, ombre: "neon", anim: anim("pop", 0.84, "flotter") }, { titre: "Messenger", etat: "Ouvert", texte: "Une question ? On répond.", bouton: "Écrire", icone: "bulle", couleur: "#1D4ED8" }),
       nouveau.carte({ role: "carte5", x: 750, y: 470, w: 300, rot: -2, ombre: "neon", anim: anim("pop", 1.02, "flotter") }, { titre: "Lundi 7h", etat: "À suivre", texte: "Une nouvelle semaine d'actu.", bouton: "Rappel", icone: "cal", couleur: "#0A0A0A" }),
       nouveau.texte({ role: "titre", x: 60, y: 900, w: 960, h: 100, texte: "Bon week-end", police: 96, align: "center", couleur: "lin:#FFFFFF,#FFE6A3,180", ombre: "forte", anim: anim("glisser-haut", 1.2) }),
-      nouveau.pastille({ role: "fort", x: 180, y: 1010, w: 720, h: 110, texte: "prudents en ligne", police: 88, fond: "lin:#2563EB,#6E9BFF,90", rayon: 12, marge: 6, ombre: "neon", anim: anim("pop", 1.45) }),
+      nouveau.pastille({ role: "fort", x: 90, y: 1010, w: 900, h: 110, texte: "prudents en ligne", police: 88, fond: "lin:#2563EB,#6E9BFF,90", rayon: 12, marge: 6, ombre: "neon", anim: anim("pop", 1.45) }),
       nouveau.texte({ role: "sous", x: 60, y: 1150, w: 960, h: 50, texte: "Déconnectez-vous, mais gardez les bons réflexes", police: 32, graisse: 600, align: "center", anim: anim("fondu", 1.7) }),
-      nouveau.pastille({ role: "bouton", x: 370, y: 1225, w: 340, h: 64, texte: "Voir nos conseils", police: 30, rayon: 12, marge: 10, ombre: "neon", anim: anim("pop", 1.95, "pulser") }),
+      nouveau.pastille({ role: "bouton", x: 340, y: 1225, w: 400, h: 64, texte: "Voir nos conseils", police: 30, rayon: 12, marge: 10, ombre: "neon", anim: anim("pop", 1.95, "pulser") }),
     ])] }),
   },
   {
