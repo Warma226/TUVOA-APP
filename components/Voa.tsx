@@ -69,8 +69,8 @@ export default function Voa({ humeur = "veille", taille = 120, decor = false }: 
               <path className="voa-onde2" d="M75 2 Q62 20 75 38" stroke={CIEL} strokeWidth="4" fill="none" strokeLinecap="round" />
             </>
           ) : null}
-          <g transform={is("fete") ? "rotate(40 34 118) translate(4 -22)" : undefined}><ellipse cx="34" cy="128" rx="11" ry="18" fill="#1D4ED8" /></g>
-          <g transform={is("fete") ? "rotate(-40 166 118) translate(-4 -22)" : undefined}>
+          <g transform={is("fete") ? "rotate(35 34 128) translate(-10 -40)" : undefined}><ellipse cx="34" cy="128" rx="11" ry="18" fill="#1D4ED8" /></g>
+          <g transform={is("fete") ? "rotate(-35 166 128) translate(10 -40)" : undefined}>
             <g className={is("parle") ? "voa-coucou" : undefined}><ellipse cx="166" cy="128" rx="11" ry="18" fill="#1D4ED8" /></g>
           </g>
           <ellipse cx="78" cy="192" rx="17" ry="8" fill={NUIT} />
@@ -84,8 +84,8 @@ export default function Voa({ humeur = "veille", taille = 120, decor = false }: 
             <rect x="20" y="161" width="160" height="5" fill={ORANGE} />
             <rect x="20" y="169" width="160" height="2" fill={CIEL} />
           </g>
-          <path d="M126 168 L142 198 L127 196 Z" fill={NUIT} />
-          <path d="M131 178 L138 193" stroke={ORANGE} strokeWidth="3" />
+          <path d="M128 166 L152 194 L133 199 Z" fill={NUIT} />
+          <path d="M134 177 L145 194" stroke={ORANGE} strokeWidth="3" />
           {!is("dort", "content", "fete") ? (
             <g className="voa-cligne">
               <ellipse cx="76" cy="106" rx="17" ry={oeil} fill="#FFFFFF" />
