@@ -3,7 +3,6 @@ import { renderVisual, FORMATS, type VisualFormat, type VisualData } from "@/lib
 import { archivoFonts, montserratFonts, serifItalicFonts } from "@/lib/fonts";
 import { verifyParams, appUrl } from "@/lib/sign";
 import { renderSlide, type SlideData } from "@/lib/recap-slides";
-import { renderStudio, type StudioData } from "@/lib/studio";
 
 // Les photos d'articles sont chargées ici et passées en data URI : formats non pris en charge
 // par le moteur de rendu (WebP, AVIF…) ou liens bloqués → l'emplacement reste sans photo au lieu de faire échouer l'image.
@@ -60,24 +59,6 @@ async function recap(params: URLSearchParams) {
   });
 }
 
-// Studio de VOA : les données du visuel voyagent en JSON (base64url) dans le lien signé.
-async function studio(params: URLSearchParams) {
-  let data: StudioData;
-  try {
-    data = JSON.parse(Buffer.from(params.get("d") ?? "", "base64url").toString("utf8")) as StudioData;
-  } catch {
-    return new Response("Données du visuel illisibles.", { status: 400 });
-  }
-  data.photo = await safeImage(data.photo ?? null);
-  const fonts = await montserratFonts();
-  return new ImageResponse(renderStudio(data), {
-    width: 1080,
-    height: 1350,
-    fonts: fonts.length ? fonts : undefined,
-    headers: { "Cache-Control": "public, max-age=86400, immutable" },
-  });
-}
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -86,7 +67,6 @@ export async function GET(req: Request) {
   const params = new URL(req.url).searchParams;
   if (!verifyParams(params)) return new Response("Lien de visuel invalide.", { status: 403 });
   if (params.get("r") === "recap") return recap(params);
-  if (params.get("r") === "studio") return studio(params);
 
   const f = (params.get("f") as VisualFormat) || "portrait";
   const format: VisualFormat = f in FORMATS ? f : "portrait";
