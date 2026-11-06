@@ -8,9 +8,9 @@ export const FORMATS: Record<Format, { w: number; h: number; nom: string }> = {
   story: { w: 1080, h: 1920, nom: "Story / Reel 9:16" },
 };
 
-export type Entree = "aucune" | "fondu" | "glisser-haut" | "glisser-bas" | "glisser-gauche" | "glisser-droite" | "zoom" | "pop";
-export type Boucle = "aucune" | "flotter" | "pulser" | "tourner" | "balancer";
-export type Anim = { entree: Entree; delai: number; duree: number; boucle: Boucle };
+export type Entree = "aucune" | "fondu" | "glisser-haut" | "glisser-bas" | "glisser-gauche" | "glisser-droite" | "zoom" | "pop" | "machine";
+export type Boucle = "aucune" | "flotter" | "pulser" | "tourner" | "balancer" | "defiler" | "clignoter" | "trembler";
+export type Anim = { entree: Entree; delai: number; duree: number; boucle: Boucle; fin?: number };
 export type Ombre = "aucune" | "douce" | "forte" | "neon" | "verre";
 export type TypeEl = "texte" | "image" | "forme" | "carte" | "icone" | "rayons";
 export type Carte = { titre: string; etat: string; texte: string; bouton: string; icone: string; couleur: string };
@@ -23,9 +23,10 @@ export type El = {
   // fond (texte en pastille, forme, carte)
   fond?: string; rayon?: number; ombre?: Ombre; bordure?: string; epaisseur?: number; marge?: number;
   // image
-  src?: string; ajustement?: "cover" | "contain"; fonduHaut?: number; fonduBas?: number;
+  src?: string; ajustement?: "cover" | "contain"; fonduHaut?: number; fonduBas?: number; filtre?: "aucun" | "nb" | "contraste" | "duo" | "flou"; teinte?: string;
+  contour?: string; epContour?: number; glitch?: boolean;
   // forme
-  forme?: "rect" | "cercle";
+  forme?: "rect" | "cercle" | "etoile";
   // carte
   carte?: Carte;
   // icône
@@ -33,7 +34,8 @@ export type El = {
   anim: Anim;
 };
 export type Page = { id: string; fond: string; elements: El[] };
-export type Doc = { format: Format; duree: number; pages: Page[] };
+export type Genre = "visuel" | "carrousel" | "video";
+export type Doc = { format: Format; duree: number; pages: Page[]; genre?: Genre };
 
 export const ANIM_FIXE: Anim = { entree: "aucune", delai: 0, duree: 0.8, boucle: "aucune" };
 export const uid = () => Math.random().toString(36).slice(2, 10);
@@ -143,10 +145,11 @@ function dessinerIcone(ctx: Ctx, nom: string, x: number, y: number, taille: numb
 // ─── Animation : état d'un élément au temps t (en secondes) ─────────
 // t = Infinity : état final (édition, export PNG).
 export function etat(el: El, t: number) {
-  let dx = 0, dy = 0, s = 1, a = 1, r = 0;
-  const { entree, delai, duree, boucle } = el.anim;
+  let dx = 0, dy = 0, s = 1, a = 1, r = 0, machine = 1;
+  const { entree, delai, duree, boucle, fin } = el.anim;
   if (entree !== "aucune" && Number.isFinite(t)) {
     const p = clamp((t - delai) / Math.max(0.05, duree));
+    if (entree === "machine") { machine = p; a = p > 0 ? 1 : 0; }
     const e = easeOut(p);
     if (entree === "fondu") a = e;
     if (entree === "glisser-haut") { dy = (1 - e) * 90; a = clamp(p * 2); }
@@ -162,8 +165,11 @@ export function etat(el: El, t: number) {
     if (boucle === "pulser") s *= 1 + 0.04 * Math.sin(tl * 2 * Math.PI / 1.6);
     if (boucle === "tourner") r += tl * 12;
     if (boucle === "balancer") r += Math.sin(tl * 2 * Math.PI / 3) * 3;
+    if (boucle === "clignoter") a *= Math.sin(tl * 2 * Math.PI / 1.1) > -0.3 ? 1 : 0.15;
+    if (boucle === "trembler") { const k = Math.floor(tl * 14); dx += (Math.sin(k * 12.9898) * 43758.5453 % 1) * 8 - 4; dy += (Math.sin(k * 78.233) * 12345.678 % 1) * 6 - 3; }
   }
-  return { dx, dy, s, a, r };
+  if (fin && fin > 0 && Number.isFinite(t) && t > fin) a *= 1 - clamp((t - fin) / 0.3);
+  return { dx, dy, s, a, r, machine };
 }
 
 // ─── Rendu d'un élément ──────────────────────────────────────────────
@@ -182,7 +188,12 @@ export function dessinerElement(ctx: Ctx, el: El, t: number, images: Map<string,
   if (el.type === "forme") {
     appliquerOmbre(ctx, el.ombre);
     ctx.fillStyle = peinture(ctx, el.fond, 0, 0, w, h);
-    if (el.forme === "cercle") { ctx.beginPath(); ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); } else rrect(ctx, 0, 0, w, h, el.rayon ?? 0);
+    if (el.forme === "cercle") { ctx.beginPath(); ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); }
+    else if (el.forme === "etoile") {
+      const n = 18; ctx.beginPath();
+      for (let i = 0; i < n * 2; i++) { const ang = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2, rr = i % 2 ? 0.8 : 1; const px = w / 2 + (w / 2) * rr * Math.cos(ang), py = h / 2 + (h / 2) * rr * Math.sin(ang); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+      ctx.closePath();
+    } else rrect(ctx, 0, 0, w, h, el.rayon ?? 0);
     ctx.fill(); sansOmbre(ctx);
     if (el.bordure && el.epaisseur) { ctx.strokeStyle = el.bordure; ctx.lineWidth = el.epaisseur; ctx.stroke(); }
   }
@@ -211,7 +222,13 @@ export function dessinerElement(ctx: Ctx, el: El, t: number, images: Map<string,
     if (img && img.complete && img.naturalWidth) {
       const r = el.ajustement === "contain" ? Math.min(w / img.naturalWidth, h / img.naturalHeight) : Math.max(w / img.naturalWidth, h / img.naturalHeight);
       const iw = img.naturalWidth * r, ih = img.naturalHeight * r;
+      const f = el.filtre ?? "aucun";
+      if (f === "nb" || f === "duo") ctx.filter = "grayscale(1) contrast(1.15)";
+      if (f === "contraste") ctx.filter = "contrast(1.22) saturate(1.3)";
+      if (f === "flou") ctx.filter = "blur(18px) brightness(0.8)";
       ctx.drawImage(img, (w - iw) / 2, el.ajustement === "contain" ? (h - ih) : Math.min(0, (h - ih) * 0.3), iw, ih);
+      ctx.filter = "none";
+      if (f === "duo") { ctx.globalCompositeOperation = "color"; ctx.fillStyle = el.teinte ?? "#2563EB"; ctx.fillRect(0, 0, w, h); ctx.globalCompositeOperation = "source-over"; }
     } else {
       ctx.fillStyle = "#1D3A7A"; ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = "#BFD0FF"; ctx.font = police(34, 700); ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -223,13 +240,14 @@ export function dessinerElement(ctx: Ctx, el: El, t: number, images: Map<string,
   if (el.type === "texte") {
     let taille = el.police ?? 60;
     const marge = el.marge ?? 0;
-    const txt = el.majuscules ? (el.texte ?? "").toUpperCase() : el.texte ?? "";
+    const plein = el.majuscules ? (el.texte ?? "").toUpperCase() : el.texte ?? "";
+    const txt = st.machine < 1 ? plein.slice(0, Math.round(plein.length * st.machine)) : plein;
     ctx.font = police(taille, el.graisse ?? 800);
     if ("letterSpacing" in ctx) (ctx as Ctx & { letterSpacing: string }).letterSpacing = `${el.espacement ?? 0}px`;
     // Pastille : le texte tient sur une ligne (la taille diminue si besoin, jusqu'à la moitié).
-    if (el.fond && !txt.includes("\n")) {
+    if (el.fond && !plein.includes("\n")) {
       const dispo = Math.max(10, w - marge * 2 - 8);
-      const mesure = ctx.measureText(txt).width;
+      const mesure = ctx.measureText(plein).width;
       if (mesure > dispo) { taille = Math.max(taille * 0.5, taille * (dispo / mesure)); ctx.font = police(taille, el.graisse ?? 800); }
     }
     const lh = (el.interligne ?? 1.1) * taille;
@@ -246,7 +264,31 @@ export function dessinerElement(ctx: Ctx, el: El, t: number, images: Map<string,
     ctx.textAlign = al;
     const x = al === "center" ? w / 2 : al === "right" ? w - marge : marge;
     const y0 = el.fond ? (Math.max(h, hTexte + marge * 2) - hTexte) / 2 : 0;
-    ls.forEach((l, i) => ctx.fillText(l, x, y0 + i * lh + taille * 0.86 + (lh - taille) / 2));
+    const base = (i: number) => y0 + i * lh + taille * 0.86 + (lh - taille) / 2;
+    const ecrire = (l: string, xx: number, yy: number) => {
+      if (el.contour && el.epContour) { ctx.save(); ctx.strokeStyle = el.contour; ctx.lineWidth = el.epContour; ctx.lineJoin = "round"; ctx.strokeText(l, xx, yy); ctx.restore(); }
+      if (el.couleur !== "transparent") ctx.fillText(l, xx, yy);
+    };
+    if (el.anim.boucle === "defiler" && Number.isFinite(t)) {
+      // Bandeau qui défile : une seule ligne, répétée.
+      const ligne = plein.replace(/\n/g, "   ");
+      const pasX = ctx.measureText(ligne).width + 80;
+      const dec = ((Math.max(0, t - el.anim.delai) * 180) % pasX);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip(); ctx.textAlign = "left";
+      for (let xx = -dec; xx < w; xx += pasX) ecrire(ligne, xx, base(0));
+      ctx.restore();
+    } else {
+      if (el.glitch) {
+        const k = Number.isFinite(t) ? Math.floor(t * 12) : 0;
+        const amp = Number.isFinite(t) && Math.sin(k * 3.7) > 0.6 ? 12 : 6;
+        const coul = ctx.fillStyle;
+        ctx.save(); ctx.globalAlpha *= 0.85;
+        ctx.fillStyle = "#00D1FF"; ls.forEach((l, i) => ctx.fillText(l, x - amp, base(i) + 2));
+        ctx.fillStyle = "#E94A06"; ls.forEach((l, i) => ctx.fillText(l, x + amp, base(i) - 2));
+        ctx.restore(); ctx.fillStyle = coul;
+      }
+      ls.forEach((l, i) => ecrire(l, x, base(i)));
+    }
     sansOmbre(ctx);
   }
 
@@ -314,9 +356,9 @@ export const nouveau = {
   icone: (p: Partial<El> = {}) => base({ type: "icone", nom: "Icône", icone: "ia", w: 90, h: 90, fond: "#2563EB", rayon: 20, couleur: "#FFFFFF", ...p }),
   rayons: (p: Partial<El> = {}) => base({ type: "rayons", nom: "Rayons de lumière", x: -410, y: -480, w: 1900, h: 1900, couleur: "rgba(255,240,190,0.38)", anim: { entree: "fondu", delai: 0, duree: 1, boucle: "tourner" }, ...p }),
 };
-const anim = (entree: Entree, delai: number, boucle: Boucle = "aucune", duree = 0.8): Anim => ({ entree, delai, duree, boucle });
+export const anim = (entree: Entree, delai: number, boucle: Boucle = "aucune", duree = 0.8, fin?: number): Anim => ({ entree, delai, duree, boucle, ...(fin ? { fin } : {}) });
 
-function logo(x = 56, y = 52, clair = true): El[] {
+export function logo(x = 56, y = 52, clair = true): El[] {
   return [
     nouveau.forme({ nom: "Logo (carré)", x, y, w: 58, h: 58, rayon: 0, fond: "#2563EB" }),
     nouveau.texte({ nom: "Logo (sigle)", x, y: y + 20, w: 58, h: 20, texte: "TUVOA", police: 13, graisse: 800, align: "center" }),
@@ -326,7 +368,7 @@ function logo(x = 56, y = 52, clair = true): El[] {
 
 // ─── Modèles de départ ───────────────────────────────────────────────
 export type Modele = { id: string; nom: string; description: string; doc: () => Doc };
-const page = (fond: string, elements: El[]): Page => ({ id: uid(), fond, elements });
+export const page = (fond: string, elements: El[]): Page => ({ id: uid(), fond, elements });
 
 export const MODELES: Modele[] = [
   {
