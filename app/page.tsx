@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Voa from "@/components/Voa";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
 import { Icon } from "@/components/Icon";
@@ -102,7 +103,7 @@ export default function Dashboard() {
         </Link>
 
         <Link href="/communaute" className="card link" style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <Icon name="bulle" size={24} />
+          <Voa taille={52} decor />
           <span style={{ flex: 1 }}>
             <strong style={{ display: "block", fontSize: 15 }}>Le Grin · VOA, community manager</strong>
             <span className="muted">Commentaires, messages, mentions, modération et brief du soir</span>

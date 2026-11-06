@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { CmFil, CmLigne, CmRapport, CmReglages } from "@/lib/cm";
+import Voa, { HUMEURS, type Humeur } from "@/components/Voa";
 
 type Diag = { id: string; label: string; ok: boolean; detail: string };
 type Etat = {
@@ -124,6 +125,21 @@ export default function Grin() {
   const couverture = useMemo(() => { const p = tisser(fils, 12); return Array.from({ length: 144 }, (_, k) => p[Math.floor(k / 12) * 72 + 24 + (k % 12) * 4] ?? C.vide); }, [fils]);
   const alertes = (e?.aTraiter ?? []).filter((l) => l.canal === "alerte" || l.canal === "crise");
   const decisions = (e?.aTraiter ?? []).filter((l) => l.canal !== "alerte" && l.canal !== "crise");
+  // L'humeur de VOA suit la Page : pause, crise, arnaque repérée, réponse récente, message en cours, fête, tout traité.
+  const humeur: Humeur = (() => {
+    if (!e) return "veille";
+    if (lecture) return "parle";
+    if (e.reglages.crise?.active) return "crise";
+    if (!e.reglages.actif) return "dort";
+    if (alertes.length) return "alerte";
+    const recent = e.journal.find((l) => l.action !== "ignore");
+    const age = recent ? Date.now() - new Date(recent.created_at).getTime() : Infinity;
+    if (recent && age < 10 * 60000 && recent.canal === "piliers") return "fete";
+    if (recent && age < 5 * 60000 && ["repondu", "signale"].includes(recent.action)) return "parle";
+    if (recent && age < 5 * 60000) return "ecoute";
+    if (!decisions.length && (e.journal.length > 0)) return "content";
+    return "veille";
+  })();
   const r = e?.rapport?.contenu;
   const gain = r?.abonnes != null && r?.abonnesVeille != null ? r.abonnes - r.abonnesVeille : null;
   const aujourdhuiTxt = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -216,10 +232,11 @@ export default function Grin() {
               </p>
             </div>
             <div style={{ ...carte, flex: "1 1 340px", minWidth: 0, boxShadow: `8px 8px 0 ${C.encre}` }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: "50%", background: C.bleu, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: TITRE, fontWeight: 800, fontSize: 14 }}>VOA</div>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 24 }} aria-hidden="true">
-                  {Array.from({ length: 14 }, (_, i) => <span key={i} className={e?.reglages.actif ? "grin-onde" : ""} style={{ width: 4, height: 24, background: C.bleu, borderRadius: 2, animationDelay: `${i * 0.11}s`, transform: e?.reglages.actif ? undefined : "scaleY(.3)", transformOrigin: "bottom" }} />)}
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <Voa humeur={humeur} taille={96} />
+                <div>
+                  <p style={{ fontFamily: TITRE, fontWeight: 800, fontSize: 22 }}>VOA</p>
+                  <p style={{ fontSize: 14, color: C.gris }}>{HUMEURS[humeur]}</p>
                 </div>
               </div>
               {(e?.journal ?? []).filter((l) => l.action !== "ignore").slice(0, 4).map((l) => (
@@ -270,6 +287,7 @@ export default function Grin() {
             <div style={carte}>
               <p style={surtitre}>Rien que pour toi</p>
               <h3 style={h3}>{decisions.length ? `${decisions.length} décision${decisions.length > 1 ? "s" : ""} que VOA ne prend pas seule` : "Aucune décision en attente"}</h3>
+              {!decisions.length && e ? <div style={{ display: "flex", alignItems: "center", gap: 12 }}><Voa humeur="content" taille={72} decor /><p style={{ fontSize: 15, color: C.gris }}>VOA s&apos;occupe de tout. Tu peux souffler.</p></div> : null}
               {decisions.slice(0, 6).map((d) => (
                 <div key={d.id} style={{ borderTop: `1px solid ${C.trait}`, paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1, color: d.action === "erreur" ? C.terre : "#1D4ED8" }}>{d.action === "erreur" ? "ERREUR" : (CANAL[d.canal] ?? d.canal).toUpperCase()} · {d.auteur}</span>
