@@ -9,13 +9,14 @@ import { ImageField } from "@/components/ImageField";
 import Voa from "@/components/Voa";
 import { montserrat } from "@/lib/studio-font";
 import {
-  ANIM_FIXE, FORMATS, ICONES, MODELES, POLICE, dessinerPage, nouveau, uid,
-  type Boucle, type Doc, type El, type Entree, type Format, type Ombre, type Page,
+  ANIM_FIXE, FORMATS, ICONES, POLICE, dessinerPage, nouveau, uid,
+  type Boucle, type Doc, type El, type Entree, type Format, type Genre, type Ombre, type Page,
 } from "@/lib/creation";
+import { GALERIE, GENRES, type Maquette } from "@/lib/modeles";
 
 const CLE_BROUILLON = "tuvoa-studio-brouillon";
-const ENTREES: [Entree, string][] = [["aucune", "Aucune"], ["fondu", "Fondu"], ["glisser-haut", "Glisse du bas"], ["glisser-bas", "Glisse du haut"], ["glisser-gauche", "Glisse de la droite"], ["glisser-droite", "Glisse de la gauche"], ["zoom", "Zoom"], ["pop", "Pop (rebond)"]];
-const BOUCLES: [Boucle, string][] = [["aucune", "Aucune"], ["flotter", "Flotter"], ["pulser", "Pulser"], ["balancer", "Balancer"], ["tourner", "Tourner"]];
+const ENTREES: [Entree, string][] = [["aucune", "Aucune"], ["fondu", "Fondu"], ["glisser-haut", "Glisse du bas"], ["glisser-bas", "Glisse du haut"], ["glisser-gauche", "Glisse de la droite"], ["glisser-droite", "Glisse de la gauche"], ["zoom", "Zoom"], ["pop", "Pop (rebond)"], ["machine", "Machine à écrire"]];
+const BOUCLES: [Boucle, string][] = [["aucune", "Aucune"], ["flotter", "Flotter"], ["pulser", "Pulser"], ["balancer", "Balancer"], ["tourner", "Tourner"], ["defiler", "Défiler (bandeau)"], ["clignoter", "Clignoter"], ["trembler", "Trembler"]];
 const OMBRES: [Ombre, string][] = [["aucune", "Aucune"], ["douce", "Douce"], ["forte", "Forte"], ["neon", "Néon bleu"], ["verre", "Verre"]];
 const NUANCIER = ["#FFFFFF", "#0A0A0A", "#2563EB", "#6E9BFF", "#0A2A66", "#E94A06", "#F2B21B", "#DCE6FF", "#F3F4F6"];
 
@@ -24,7 +25,10 @@ type Glisse = { mode: "deplacer" | "redim"; id: string; x0: number; y0: number; 
 function clone<T>(x: T): T { return JSON.parse(JSON.stringify(x)) as T; }
 
 export default function Studio() {
-  const [doc, setDoc] = useState<Doc>(() => MODELES[0].doc());
+  const [doc, setDoc] = useState<Doc>(() => GALERIE.visuel[0].doc());
+  const [etape, setEtape] = useState<"accueil" | "galerie" | "editeur">("accueil");
+  const [genre, setGenre] = useState<Genre>("visuel");
+  const [brouillon, setBrouillon] = useState<Doc | null>(null);
   const [pageIdx, setPageIdx] = useState(0);
   const [sel, setSel] = useState<string | null>(null);
   const [passe, setPasse] = useState<Doc[]>([]);
@@ -32,7 +36,6 @@ export default function Studio() {
   const [lecture, setLecture] = useState(false);
   const [edition, setEdition] = useState<string | null>(null);
   const [guide, setGuide] = useState<{ v: boolean; h: boolean }>({ v: false, h: false });
-  const [modeles, setModeles] = useState(false);
   const [version, setVersion] = useState(0); // redessin quand une image finit de charger
   const [policePrete, setPolicePrete] = useState(false);
   const [sujet, setSujet] = useState("");
@@ -64,9 +67,21 @@ export default function Studio() {
 
   // Brouillon gardé dans ce navigateur
   useEffect(() => {
-    try { const b = localStorage.getItem(CLE_BROUILLON); if (b) setDoc(JSON.parse(b) as Doc); } catch { /* stockage indisponible */ }
+    try { const b = localStorage.getItem(CLE_BROUILLON); if (b) setBrouillon(JSON.parse(b) as Doc); } catch { /* stockage indisponible */ }
   }, []);
-  useEffect(() => { try { localStorage.setItem(CLE_BROUILLON, JSON.stringify(doc)); } catch { /* stockage indisponible */ } }, [doc]);
+  useEffect(() => { if (etape !== "editeur") return; try { localStorage.setItem(CLE_BROUILLON, JSON.stringify(doc)); } catch { /* stockage indisponible */ } }, [doc, etape]);
+
+  // Photos des maquettes de la galerie
+  const chargerImage = useCallback((src?: string) => {
+    if (!src || images.current.has(src)) return;
+    const img = new Image(); img.crossOrigin = "anonymous";
+    img.onload = () => setVersion((v) => v + 1);
+    img.src = src; images.current.set(src, img);
+  }, []);
+  const exemples = useMemo(() => ({ visuel: GALERIE.visuel[3].doc(), carrousel: GALERIE.carrousel[1].doc(), video: GALERIE.video[2].doc() }) as Record<Genre, Doc>, []);
+  useEffect(() => { if (etape === "accueil") for (const d of Object.values(exemples)) for (const p of d.pages) for (const e of p.elements) if (e.type === "image") chargerImage(e.src); }, [etape, exemples, chargerImage]);
+  const maquettes = useMemo(() => GALERIE[genre].map((m) => ({ m, d: m.doc() })), [genre]);
+  useEffect(() => { if (etape === "galerie") for (const { d } of maquettes) for (const p of d.pages) for (const e of p.elements) if (e.type === "image") chargerImage(e.src); }, [etape, maquettes, chargerImage]);
 
   // Largeur d'affichage du canvas
   useEffect(() => {
@@ -276,7 +291,8 @@ export default function Studio() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(""); setMsg(""); }
   }
 
-  const ouvrirModele = (id: string) => { const m = MODELES.find((x) => x.id === id); if (!m) return; changer(() => m.doc()); setPageIdx(0); setSel(null); setModeles(false); setEnvoye(null); };
+  const ouvrir = (m: Maquette) => { setPasse([]); setFutur([]); setDoc(m.doc()); setPageIdx(0); setSel(null); setEnvoye(null); setEnVideo(m.doc().genre === "video"); setLecture(m.doc().genre === "video"); setEtape("editeur"); };
+  const reprendre = () => { if (!brouillon) return; setDoc(brouillon); setPageIdx(0); setSel(null); setEnVideo(brouillon.genre === "video"); setEtape("editeur"); };
   const minis = useMemo(() => doc.pages.map((p) => p.id), [doc.pages]);
 
   // ─── Rendu de l'interface ──────────────────────────────────────
@@ -299,13 +315,73 @@ export default function Studio() {
   return (
     <div className={montserrat.className} style={{ display: "contents" }}>
       <TopBar title="Studio de VOA" back="/communaute" wide />
+      {etape === "accueil" ? (
+        <main className="page sub wide" style={{ paddingTop: 8, maxWidth: 1100 }}>
+          <div className="row" style={{ gap: 18, alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
+            <Voa humeur="parle" taille={110} />
+            <div>
+              <h1 style={{ fontSize: 40, fontWeight: 800, letterSpacing: -1, margin: 0 }}>Que veux-tu créer ?</h1>
+              <p className="muted" style={{ margin: "6px 0 0" }}>Choisis le format : VOA te propose 10 maquettes d&apos;inspiration à personnaliser.</p>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
+            {GENRES.map((g) => {
+              const ex = exemples[g.id];
+              return (
+                <button key={g.id} type="button" onClick={() => { setGenre(g.id); setEtape("galerie"); }} className="card" style={{ cursor: "pointer", gap: 12, alignItems: "center", textAlign: "center", padding: 20 }}>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "center", height: 220, alignItems: "flex-end" }}>
+                    {(g.id === "carrousel" ? ex.pages.slice(0, 3) : [ex.pages[0]]).map((p, i) => (
+                      <div key={p.id} style={{ transform: g.id === "carrousel" ? `rotate(${(i - 1) * 6}deg) translateY(${i === 1 ? -10 : 0}px)` : undefined }}>
+                        <Miniature page={p} format={ex.format} images={images.current} version={version} actif={false} onClick={() => undefined} numero={i + 1} largeur={g.id === "video" ? 124 : 150} anime={g.id === "video"} duree={ex.duree} charger={chargerImage} />
+                      </div>
+                    ))}
+                  </div>
+                  <strong style={{ fontSize: 26 }}>{g.nom}</strong>
+                  <span className="muted">{g.sous}</span>
+                </button>
+              );
+            })}
+          </div>
+          {brouillon ? <button type="button" className="btn ghost" onClick={reprendre}>Reprendre ma dernière création</button> : null}
+        </main>
+      ) : etape === "galerie" ? (
+        <main className="page sub wide" style={{ paddingTop: 8, maxWidth: 1400 }}>
+          <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <div>
+              <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1, margin: 0 }}>10 idées de {GENRES.find((g) => g.id === genre)?.nom.toLowerCase()}</h1>
+              <p className="muted" style={{ margin: "4px 0 0" }}>Clique sur une maquette pour la personnaliser{genre === "video" ? " (survole-la pour voir l'animation)" : ""}. Tout est modifiable : textes, photos, couleurs, animations.</p>
+            </div>
+            <div className="row" style={{ gap: 6 }}>
+              {GENRES.map((g) => <button key={g.id} type="button" className={`btn small ${g.id === genre ? "primary" : "ghost"}`} onClick={() => setGenre(g.id)}>{g.nom}</button>)}
+              <button type="button" className="btn small ghost" onClick={() => setEtape("accueil")}>← Retour</button>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${genre === "carrousel" ? 300 : 210}px, 1fr))`, gap: 18 }}>
+            {maquettes.map(({ m, d }) => (
+              <button key={m.id} type="button" onClick={() => ouvrir(m)} className="card" style={{ cursor: "pointer", gap: 10, textAlign: "left", padding: 12 }}>
+                <div style={{ display: "flex", gap: 4, overflow: "hidden", borderRadius: 10 }}>
+                  {(genre === "carrousel" ? d.pages.slice(0, 3) : [d.pages[0]]).map((p, i) => (
+                    <Miniature key={p.id} page={p} format={d.format} images={images.current} version={version} actif={false} onClick={() => undefined} numero={i + 1} largeur={genre === "carrousel" ? 92 : 186} anime={genre === "video"} survol duree={d.duree} charger={chargerImage} />
+                  ))}
+                </div>
+                <div className="row" style={{ justifyContent: "space-between", gap: 6 }}>
+                  <strong style={{ fontSize: 16 }}>{m.nom}</strong>
+                  {genre === "carrousel" ? <span className="badge">{d.pages.length} pages</span> : genre === "video" ? <span className="badge bleu">{d.duree} s</span> : null}
+                </div>
+                <span className="muted" style={{ fontSize: 13, lineHeight: 1.4 }}>{m.idee}</span>
+              </button>
+            ))}
+          </div>
+        </main>
+      ) : (
       <main className="page sub wide" style={{ paddingTop: 4, maxWidth: 1400 }}>
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
         {msg ? <p className="notice" role="status">{msg}</p> : null}
 
         {/* Barre d'outils */}
         <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-          {btn("Modèles", () => setModeles(true), { actif: true })}
+          {btn("← Nouveau", () => setEtape("accueil"))}
+          {btn("Changer de maquette", () => { setGenre(doc.genre ?? "visuel"); setEtape("galerie"); }, { actif: true })}
           {btn("+ Texte", () => ajouter(nouveau.texte()))}
           {btn("+ Pastille", () => ajouter(nouveau.pastille()))}
           {btn("+ Photo", () => ajouter(nouveau.image({ w: 600, h: 750, rayon: 24 })))}
@@ -318,20 +394,6 @@ export default function Studio() {
           {btn("Rétablir", retablir, { off: !futur.length, titre: "Ctrl+Maj+Z" })}
           {btn(lecture ? "■ Arrêter" : "▶ Lecture", () => setLecture(!lecture), { actif: lecture })}
         </div>
-
-        {modeles ? (
-          <section className="card" style={{ gap: 12 }}>
-            <div className="row" style={{ justifyContent: "space-between" }}><p className="section-title">Choisir un modèle</p>{btn("Fermer", () => setModeles(false))}</div>
-            <p className="muted" style={{ fontSize: 13 }}>Le modèle remplace ta création en cours (« Annuler » permet de revenir).</p>
-            <div className="grid2">
-              {MODELES.map((m) => (
-                <button key={m.id} type="button" className="card" onClick={() => ouvrirModele(m.id)} style={{ textAlign: "left", cursor: "pointer", gap: 4 }}>
-                  <strong>{m.nom}</strong><span className="muted" style={{ fontSize: 13 }}>{m.description}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
 
         <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-start", gap: 20 }}>
           {/* Pages */}
@@ -476,22 +538,31 @@ export default function Studio() {
           </aside>
         </div>
       </main>
+      )}
     </div>
   );
 }
 
-function Miniature({ page, format, images, version, actif, onClick, numero }: { page: Page; format: Format; images: Map<string, HTMLImageElement>; version: number; actif: boolean; onClick: () => void; numero: number }) {
+function Miniature({ page, format, images, version, actif, onClick, numero, largeur = 110, anime = false, survol = false, duree = 8, charger }: { page: Page; format: Format; images: Map<string, HTMLImageElement>; version: number; actif: boolean; onClick: () => void; numero: number; largeur?: number; anime?: boolean; survol?: boolean; duree?: number; charger?: (src?: string) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const [dessus, setDessus] = useState(false);
   const { w, h } = FORMATS[format];
+  useEffect(() => { if (charger) for (const e of page.elements) if (e.type === "image") charger(e.src); }, [page, charger]);
   useEffect(() => {
     const c = ref.current; const ctx = c?.getContext("2d"); if (!c || !ctx) return;
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height);
-    ctx.scale(c.width / w, c.height / h);
-    dessinerPage(ctx, page, format, Infinity, images);
-  }, [page, format, images, version, w, h]);
+    const peindre = (t: number) => { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); ctx.scale(c.width / w, c.height / h); dessinerPage(ctx, page, format, t, images); };
+    const joue = anime && (!survol || dessus);
+    if (!joue) { peindre(Infinity); return; }
+    let raf = 0; const t0 = performance.now();
+    const boucle = () => { peindre(((performance.now() - t0) / 1000) % duree); raf = requestAnimationFrame(boucle); };
+    raf = requestAnimationFrame(boucle);
+    return () => cancelAnimationFrame(raf);
+  }, [page, format, images, version, w, h, anime, survol, dessus, duree]);
+  const largeurPx = Math.round(largeur * 2);
   return (
-    <button type="button" onClick={onClick} aria-label={`Page ${numero}`} aria-current={actif ? "true" : undefined} style={{ padding: 0, border: actif ? "3px solid var(--bleu)" : "1px solid #CBD5E1", borderRadius: 8, overflow: "hidden", cursor: "pointer", background: "#fff", width: 110 }}>
-      <canvas ref={ref} width={216} height={Math.round((216 * h) / w)} style={{ width: "100%", display: "block" }} />
-    </button>
+    <span role="button" tabIndex={-1} onClick={onClick} onMouseEnter={() => setDessus(true)} onMouseLeave={() => setDessus(false)} aria-label={`Page ${numero}`} aria-current={actif ? "true" : undefined}
+      style={{ display: "block", padding: 0, border: actif ? "3px solid var(--bleu)" : "1px solid #CBD5E1", borderRadius: 8, overflow: "hidden", cursor: "pointer", background: "#fff", width: largeur, flexShrink: 0 }}>
+      <canvas ref={ref} width={largeurPx} height={Math.round((largeurPx * h) / w)} style={{ width: "100%", display: "block" }} />
+    </span>
   );
 }
