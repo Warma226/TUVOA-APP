@@ -232,7 +232,18 @@ async function facebookCarousel(post: Post, slides: string[]) {
   return { ok: true, detail: `Carrousel de ${ids.length} images publié sur la Page`, url: json.id ? `https://www.facebook.com/${json.id}` : undefined };
 }
 
+// Vidéo (créée dans le Studio) : Facebook la récupère à partir de son lien.
+async function facebookVideo(post: Post, url: string) {
+  const version = process.env.FB_GRAPH_VERSION || "v21.0";
+  const body = new URLSearchParams({ file_url: url, description: post.texts.facebook, access_token: process.env.FB_PAGE_TOKEN ?? "" });
+  const res = await fetch(`https://graph-video.facebook.com/${version}/${process.env.FB_PAGE_ID}/videos`, { method: "POST", body });
+  const json = (await res.json()) as { id?: string; error?: { message: string } };
+  if (!res.ok || json.error) throw new Error(`Facebook (vidéo) : ${json.error?.message ?? res.status}`);
+  return { ok: true, detail: "Vidéo publiée sur la Page", url: json.id ? `https://www.facebook.com/${process.env.FB_PAGE_ID}/videos/${json.id}` : undefined };
+}
+
 const facebook: Publisher = async (post) => {
+  if (post.visual.video) return facebookVideo(post, post.visual.video);
   if (post.visual.slides && post.visual.slides.length > 1) return facebookCarousel(post, post.visual.slides);
   const version = process.env.FB_GRAPH_VERSION || "v21.0";
   const body = new URLSearchParams({

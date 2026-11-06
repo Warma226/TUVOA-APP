@@ -34,6 +34,17 @@ async function wordpressUpload(bytes: ArrayBuffer, type: string, name: string): 
   return json.source_url;
 }
 
+// Envoi direct depuis le navigateur (vidéos trop lourdes pour passer par l'app) : lien d'envoi signé, valable 2 h.
+export async function signedUpload(type: string, ext: string): Promise<{ signedUrl: string; publicUrl: string }> {
+  if (isDemo()) throw new Error("L'envoi de vidéos demande Supabase (voir Connexions).");
+  if (!/^(video|image)\//.test(type)) throw new Error("Type de fichier refusé.");
+  const name = `${new Date().toISOString().slice(0, 7)}/tuvoa-${crypto.randomUUID().slice(0, 8)}.${ext.replace(/[^a-z0-9]/gi, "").slice(0, 5) || "bin"}`;
+  const storage = db().storage.from(BUCKET);
+  const { data, error } = await storage.createSignedUploadUrl(name);
+  if (error || !data) throw new Error(`Stockage Supabase : ${error?.message ?? "lien d'envoi indisponible"}`);
+  return { signedUrl: data.signedUrl, publicUrl: storage.getPublicUrl(name).data.publicUrl };
+}
+
 export function uploadAvailable(): boolean {
   return !isDemo() || Boolean(process.env.WP_URL && process.env.WP_USER && process.env.WP_APP_PASSWORD);
 }
