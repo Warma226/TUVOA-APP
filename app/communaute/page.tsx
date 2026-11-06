@@ -225,7 +225,7 @@ export default function Grin() {
               {(e?.journal ?? []).filter((l) => l.action !== "ignore").slice(0, 4).map((l) => (
                 <p key={l.id} style={{ fontSize: 15, lineHeight: 1.5, paddingTop: 12, borderTop: `1px solid ${C.trait}` }}><strong>{heure(l.created_at)}</strong> · {voix(l)}</p>
               ))}
-              {e && !e.journal.some((l) => l.action !== "ignore") ? <p style={{ fontSize: 15, color: C.gris }}>Je n&apos;ai encore rien eu à faire. Je passe toutes les 15 minutes.</p> : null}
+              {e && !e.journal.some((l) => l.action !== "ignore") ? <p style={{ fontSize: 15, color: C.gris }}>Je n&apos;ai encore rien eu à faire. Je passe toutes les 2 minutes.</p> : null}
             </div>
           </section>
 
@@ -351,7 +351,7 @@ export default function Grin() {
             <section style={carte}>
               <p style={surtitre}>Réglages de VOA</p>
               {([
-                ["actif", "VOA au grin", "Réponses, mentions, modération et rapport, toutes les 15 minutes, publiés sans validation."],
+                ["actif", "VOA au grin", "Réponses aux commentaires, messages et mentions en 5 minutes au plus, modération et rapport, publiés sans validation."],
                 ["lienArticle", "Lien de l'article en commentaire", "Sous chaque publication, le lien vers l'article du site, pour le trafic sans pénaliser la portée."],
                 ["radar", "Radar à arnaques", "Trois personnes signalent la même arnaque : VOA rédige l'alerte #CyberActu, à valider dans le calendrier."],
               ] as const).map(([cle, titre, texte]) => (

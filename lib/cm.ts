@@ -28,7 +28,7 @@ export type CmRapport = {
 };
 
 const REGLAGES_DEFAUT: CmReglages = { actif: true, lienArticle: true, heureRapport: 20, grin: true, piliers: true, radar: true, crise: null };
-const MAX_PAR_PASSAGE = 15;
+const MAX_PAR_PASSAGE = 20;
 const DELAI_ANNULATION = 10 * 60000;
 
 // ─── Réglages (table settings, ligne 3) ──────────────────────────────
@@ -434,12 +434,27 @@ async function rendezVous(r: CmReglages, log: string[]) {
 }
 
 // ─── Passage complet ─────────────────────────────────────────────────
+// Passage toutes les 2 minutes (réaction en 5 minutes au plus). Un verrou évite que deux passages se chevauchent.
+// Les tâches de fond (liens d'articles, rendez-vous du grin, rapport) ne tournent que toutes les 15 minutes environ.
 export async function cmPassage(opts: { force?: boolean } = {}): Promise<string[]> {
-  const log: string[] = [];
   const r = await cmReglages();
   if (!r.actif && !opts.force) return ["Agent en pause."];
   if (!fbConfigure()) return ["Page Facebook non reliée."];
   if (!aiConfigured()) return ["IA non configurée."];
+  const { data: verrou } = await db().from("settings").select("data").eq("id", 4).maybeSingle();
+  const debut = (verrou?.data as { debut?: string | null } | null)?.debut;
+  if (debut && Date.now() - new Date(debut).getTime() < 4 * 60000) return ["Passage précédent encore en cours."];
+  await db().from("settings").upsert({ id: 4, data: { debut: new Date().toISOString() } });
+  try {
+    return await passage(r, opts);
+  } finally {
+    await db().from("settings").upsert({ id: 4, data: { debut: null } });
+  }
+}
+
+async function passage(r: CmReglages, opts: { force?: boolean }): Promise<string[]> {
+  const log: string[] = [];
+  const lourd = Boolean(opts.force) || new Date().getUTCMinutes() % 15 < 2;
   const t0 = Date.now();
   const crise = Boolean(r.crise?.active);
   const cands = await collecter(log);
@@ -472,9 +487,10 @@ export async function cmPassage(opts: { force?: boolean } = {}): Promise<string[
     }
   } else log.push("Rien de nouveau.");
   const etape = async (nom: string, f: () => Promise<void>) => { try { await f(); } catch (e) { log.push(`${nom} : ${(e as Error).message}`); } };
+  if (r.radar && (cands.length || lourd)) await etape("Radar", () => radar(log));
+  if (cands.length) await etape("Crise", () => surveillerCrise(r, log));
+  if (!lourd) return log;
   if (r.lienArticle && !crise) await etape("Liens", () => lienArticles(log));
-  if (r.radar) await etape("Radar", () => radar(log));
-  await etape("Crise", () => surveillerCrise(r, log));
   if (!crise) await etape("Rendez-vous", () => rendezVous(r, log));
   // Rapport du soir, au premier passage après l'heure choisie (GMT)
   const jour = jourIso();
