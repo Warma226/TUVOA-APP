@@ -527,14 +527,27 @@ export async function cmRapport(): Promise<CmRapport> {
 }
 
 // ─── Lecture pour l'écran Communauté ─────────────────────────────────
+export type CmFil = Pick<CmLigne, "created_at" | "canal" | "action" | "ton" | "auteur">;
 export async function cmEtat() {
-  const [reglages, j, t, r] = await Promise.all([
+  const minuit = new Date(); minuit.setUTCHours(0, 0, 0, 0);
+  const semaine = new Date(Date.now() - 7 * 864e5).toISOString();
+  const [reglages, j, t, r, a, s, g] = await Promise.all([
     cmReglages(),
     db().from("cm_journal").select("*").order("created_at", { ascending: false }).limit(60),
     db().from("cm_journal").select("*").eq("traite", false).order("created_at", { ascending: false }).limit(50),
     db().from("cm_rapports").select("*").order("jour", { ascending: false }).limit(1).maybeSingle(),
+    db().from("cm_journal").select("created_at,canal,action,ton,auteur").gte("created_at", minuit.toISOString()).limit(3000),
+    db().from("cm_journal").select("auteur").in("canal", ["commentaire", "mention"]).in("action", ["repondu", "aime"]).gte("created_at", semaine).limit(3000),
+    db().from("cm_journal").select("created_at,lien,external_id").eq("canal", "grin").eq("action", "publie").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
-  return { reglages, journal: (j.data ?? []) as CmLigne[], aTraiter: (t.data ?? []) as CmLigne[], rapport: (r.data as CmRapport | null) ?? null, delaiAnnulation: DELAI_ANNULATION };
+  const compte = new Map<string, number>();
+  for (const x of (s.data ?? []) as { auteur: string }[]) compte.set(x.auteur, (compte.get(x.auteur) ?? 0) + 1);
+  const piliers = [...compte.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([nom, n]) => ({ nom, n }));
+  return {
+    reglages, journal: (j.data ?? []) as CmLigne[], aTraiter: (t.data ?? []) as CmLigne[], rapport: (r.data as CmRapport | null) ?? null,
+    delaiAnnulation: DELAI_ANNULATION, aujourdhui: (a.data ?? []) as CmFil[], piliers,
+    dernierGrin: (g.data as { created_at: string; lien: string | null } | null) ?? null,
+  };
 }
 export async function cmMarquerTraite(id: string) {
   await db().from("cm_journal").update({ traite: true }).eq("id", id);
