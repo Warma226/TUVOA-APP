@@ -561,3 +561,9 @@ details summary { list-style-position: inside; }
   .tv-version-action { flex: 0 0 auto; }
   .tv-ed-titre { font-size: 20px !important; }
 }
+.tv-actu[data-reprise="publie"] { background: rgba(255,255,255,0.6); }
+.tv-actu[data-reprise="publie"] h3 a { color: #33425c; }
+.tv-reprise { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: #f1f9f4; font-size: 12px; color: #33425c; }
+.tv-reprise[data-statut="planifie"], .tv-reprise[data-statut="a_valider"] { background: #eef3ff; }
+.tv-reprise[data-statut="brouillon"] { background: #f1f4f9; }
+.tv-reprise[data-statut="erreur"] { background: #fdf0f2; }

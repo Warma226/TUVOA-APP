@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchVeille } from "@/lib/veille";
-import { getSettings } from "@/lib/store";
+import { getSettings, postsParUrl, urlNette } from "@/lib/store";
 import { allSources, allTriggers, isOn, type Source, type Trigger } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,16 @@ export const maxDuration = 30;
 async function run(sources: Source[], triggers: Trigger[]) {
   try {
     const { items, errors } = await fetchVeille(sources, triggers);
-    return NextResponse.json({ items: items.slice(0, 60), errors, updatedAt: new Date().toISOString() });
+    // Plus de 2 jours : retirée de la veille, publiée ou non.
+    const limite = Date.now() - 48 * 3.6e6;
+    const fraiches = items.filter((i) => !i.publishedAt || new Date(i.publishedAt).getTime() >= limite).slice(0, 80);
+    // Déjà reprise dans une publication TUVOA : on le signale.
+    const repris = await postsParUrl(fraiches.map((i) => i.url)).catch(() => new Map());
+    for (const i of fraiches) {
+      const p = repris.get(urlNette(i.url));
+      if (p) i.post = p;
+    }
+    return NextResponse.json({ items: fraiches, errors, updatedAt: new Date().toISOString() });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

@@ -179,6 +179,31 @@ export async function postedUrls(urls: string[]): Promise<Set<string>> {
   return new Set((data ?? []).map((r: { source_url: string | null }) => r.source_url ?? ""));
 }
 
+// Publications TUVOA qui reprennent ces articles (adresse comparée sans paramètres ni « / » final).
+export const urlNette = (u: string) => u.trim().replace(/[?#].*$/, "").replace(/\/+$/, "").replace(/^http:/, "https:").toLowerCase();
+export async function postsParUrl(urls: string[]): Promise<Map<string, { id: string; status: string; at: string | null }>> {
+  const out = new Map<string, { id: string; status: string; at: string | null }>();
+  if (urls.length === 0) return out;
+  type L = { id: string; status: string; scheduled_at: string | null; created_at: string; source_url: string | null; results: Post["results"] | null };
+  let lignes: L[];
+  if (isDemo()) lignes = mem().posts as L[];
+  else {
+    const variantes = [...new Set(urls.flatMap((u) => [u, u.replace(/[?#].*$/, ""), u.replace(/[?#].*$/, "").replace(/\/+$/, ""), `${u.replace(/[?#].*$/, "").replace(/\/+$/, "")}/`]))];
+    const { data, error } = await db().from("posts").select("id,status,scheduled_at,created_at,source_url,results").in("source_url", variantes.slice(0, 600)).neq("status", "annule");
+    if (error) throw new Error(error.message);
+    lignes = (data ?? []) as L[];
+  }
+  const rang: Record<string, number> = { publie: 0, planifie: 1, a_valider: 2, erreur: 3, brouillon: 4 };
+  for (const l of lignes) {
+    if (!l.source_url || l.status === "annule") continue;
+    const k = urlNette(l.source_url);
+    const at = l.status === "publie" ? Object.values(l.results ?? {}).find((r) => r?.ok)?.at ?? l.scheduled_at : l.scheduled_at;
+    const deja = out.get(k);
+    if (!deja || (rang[l.status] ?? 9) < (rang[deja.status] ?? 9)) out.set(k, { id: l.id, status: l.status, at: at ?? l.created_at });
+  }
+  return out;
+}
+
 // Tous les posts récents (manuels compris), pour ne jamais republier un sujet déjà traité.
 export async function recentPosts(hours: number): Promise<Post[]> {
   const since = new Date(Date.now() - hours * 3.6e6).toISOString();

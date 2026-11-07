@@ -24,6 +24,19 @@ function ilYa(iso: string | null, now: number): string {
 }
 
 // Étiquette principale d'une actu.
+// Déjà reprise par TUVOA : état de la publication.
+const REPRISE: Record<string, [string, string]> = {
+  publie: ["Déjà publiée", "vert"], planifie: ["Déjà planifiée", "bleu"], a_valider: ["Planifiée · à valider", "bleu"],
+  brouillon: ["En brouillon", ""], erreur: ["Publication en erreur", "rouge"],
+};
+const lienPost = (p: NonNullable<VeilleItem["post"]>) => (p.status === "brouillon" ? `/editeur?id=${p.id}` : `/apercu?id=${p.id}`);
+function datePost(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const j = d.toDateString() === new Date().toDateString() ? "aujourd'hui" : d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric" });
+  return `${j} à ${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 function etiquette(it: VeilleItem): { label: string; tone: string } {
   if (it.blocked) return { label: "Sujet sensible", tone: "orange" };
   if (it.score >= 85) return { label: "Urgent", tone: "rouge" };
@@ -99,13 +112,15 @@ export default function Veille() {
     return m;
   }, [visibles]);
   const recherche = q.trim().toLowerCase();
+  const [masquerReprises, setMasquerReprises] = useState(false);
+  const nbReprises = visibles.filter((i) => i.post).length;
   const shown = useMemo(
-    () => visibles.filter((i) => (topic === "tout" || i.topics.includes(topic)) && (!recherche || `${i.title} ${i.summary} ${i.sourceName}`.toLowerCase().includes(recherche))),
-    [visibles, topic, recherche]
+    () => visibles.filter((i) => (topic === "tout" || i.topics.includes(topic)) && (!masquerReprises || !i.post) && (!recherche || `${i.title} ${i.summary} ${i.sourceName}`.toLowerCase().includes(recherche))),
+    [visibles, topic, recherche, masquerReprises]
   );
   // Sujet du jour : l'actu reprise par le plus de sources, sinon la plus pertinente (hors sujets sensibles).
   const sujet = useMemo(() => {
-    const ok = shown.filter((i) => !i.blocked);
+    const ok = shown.filter((i) => !i.blocked && !i.post);
     if (!ok.length) return null;
     return [...ok].sort((a, b) => b.sameStoryCount - a.sameStoryCount || b.score - a.score)[0];
   }, [shown]);
@@ -159,6 +174,16 @@ export default function Veille() {
           ))}
         </div>
 
+        <div className="row" style={{ flexWrap: "wrap", gap: 12, fontSize: 13, color: "#5B6B86" }}>
+          <span>Infos des 2 derniers jours uniquement : au-delà, elles quittent la veille.</span>
+          {nbReprises ? (
+            <label className="row" style={{ gap: 8, cursor: "pointer", fontWeight: 600, color: "#33425C" }}>
+              <input type="checkbox" checked={masquerReprises} onChange={(e) => setMasquerReprises(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#2563EB" }} />
+              Masquer les {nbReprises} info{nbReprises > 1 ? "s" : ""} déjà reprise{nbReprises > 1 ? "s" : ""}
+            </label>
+          ) : null}
+        </div>
+
         {errors.map((e) => <p key={e} className="notice ambre">{e}</p>)}
 
         <div className="tv-veille">
@@ -197,7 +222,7 @@ export default function Veille() {
                 const e = etiquette(it);
                 const th = themeDe(it);
                 return (
-                  <article key={it.id} className="tv-actu">
+                  <article key={it.id} className="tv-actu" data-reprise={it.post?.status === "publie" ? "publie" : it.post ? "oui" : undefined}>
                     <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                       <SourceLogo name={it.sourceName} domain={domaines[it.sourceId]} url={it.url} size={48} radius={14} couleur={COUL[th?.id ?? ""] ?? "#2563EB"} />
                       <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", fontSize: 12, color: "#5B6B86" }}>
@@ -216,8 +241,18 @@ export default function Veille() {
                         {it.lang === "en" ? <span className="tv-pill">Anglais · sera traduit</span> : null}
                       </div>
                     ) : null}
+                    {it.post ? (
+                      <div className="tv-reprise" data-statut={it.post.status}>
+                        <span className={`tv-pill ${REPRISE[it.post.status]?.[1] ?? ""}`}>{REPRISE[it.post.status]?.[0] ?? "Déjà reprise"}</span>
+                        <span>{it.post.status === "publie" ? `Publiée ${datePost(it.post.at)}` : it.post.at && it.post.status !== "brouillon" ? `Prévue ${datePost(it.post.at)}` : "Une publication TUVOA reprend déjà cette info."}</span>
+                      </div>
+                    ) : null}
                     <div className="tv-actions">
-                      <Link href={lienCreer(it)} className="btn primary">Rédiger le post</Link>
+                      {it.post ? (
+                        <Link href={lienPost(it.post)} className="btn primary">Voir la publication</Link>
+                      ) : (
+                        <Link href={lienCreer(it)} className="btn primary">Rédiger le post</Link>
+                      )}
                       <a href={it.url} target="_blank" rel="noopener noreferrer" className="btn" style={{ background: "#EEF3FF", borderColor: "#EEF3FF", color: "#1D4ED8" }}>Lire la source</a>
                       <button type="button" className="btn" style={{ border: 0, background: "transparent", color: "#5B6B86" }} onClick={() => setHidden(new Set(hidden).add(it.id))}>Masquer</button>
                     </div>

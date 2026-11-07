@@ -17,6 +17,7 @@ export type VeilleItem = {
   triggers: string[]; // déclencheurs correspondants
   blocked: boolean; // sujet sensible : jamais en automatique
   image: string; // image fournie par le flux RSS (secours si l'article n'en donne pas)
+  post?: { id: string; status: string; at: string | null }; // déjà repris dans une publication TUVOA
 };
 
 const parser = new Parser({ timeout: 12000, headers: { "User-Agent": "TUVOA-Veille/0.1 (+https://www.tuvoa.media)" } });
