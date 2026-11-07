@@ -33,9 +33,24 @@ export type El = {
   icone?: string;
   anim: Anim;
 };
-export type Page = { id: string; fond: string; elements: El[] };
+export type Page = { id: string; fond: string; elements: El[]; duree?: number };
 export type Genre = "visuel" | "carrousel" | "video";
-export type Doc = { format: Format; duree: number; pages: Page[]; genre?: Genre };
+// sequence : vidéo en plusieurs scènes (chaque page = une scène, jouée l'une après l'autre pendant page.duree secondes).
+// audio : piste son (voix off) jouée avec la vidéo et incluse à l'export.
+export type Doc = { format: Format; duree: number; pages: Page[]; genre?: Genre; sequence?: boolean; audio?: string; titre?: string };
+
+export const dureeScene = (doc: Doc, p: Page) => Math.max(1, p.duree ?? doc.duree);
+export const dureeTotale = (doc: Doc) => (doc.sequence ? doc.pages.reduce((s, p) => s + dureeScene(doc, p), 0) : doc.duree);
+// Scène affichée au temps t d'une séquence, et temps local dans cette scène.
+export function sceneA(doc: Doc, t: number): { index: number; local: number } {
+  let debut = 0;
+  for (const [i, p] of doc.pages.entries()) {
+    const d = dureeScene(doc, p);
+    if (t < debut + d || i === doc.pages.length - 1) return { index: i, local: Math.max(0, t - debut) };
+    debut += d;
+  }
+  return { index: 0, local: 0 };
+}
 
 export const ANIM_FIXE: Anim = { entree: "aucune", delai: 0, duree: 0.8, boucle: "aucune" };
 export const uid = () => Math.random().toString(36).slice(2, 10);
@@ -343,6 +358,19 @@ export function dessinerPage(ctx: Ctx, page: Page, format: Format, t: number, im
   ctx.fillRect(0, 0, w, h);
   for (const el of page.elements) dessinerElement(ctx, el, t, images);
   ctx.restore();
+}
+
+// Séquence : la scène en cours, avec un court fondu au noir entre deux scènes.
+export function dessinerSequence(ctx: Ctx, doc: Doc, t: number, images: Map<string, HTMLImageElement>) {
+  const { index, local } = sceneA(doc, t);
+  const p = doc.pages[index];
+  dessinerPage(ctx, p, doc.format, local, images);
+  const d = dureeScene(doc, p);
+  const fondu = Math.max(clamp(1 - local / 0.25), index < doc.pages.length - 1 ? clamp((local - (d - 0.25)) / 0.25) : 0);
+  if (fondu > 0 && index + (local < 0.25 ? 0 : 1) > 0) {
+    const { w, h } = FORMATS[doc.format];
+    ctx.save(); ctx.globalAlpha = fondu * 0.85; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, h); ctx.restore();
+  }
 }
 
 // ─── Fabriques d'éléments ────────────────────────────────────────────
