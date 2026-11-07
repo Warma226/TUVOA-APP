@@ -5,12 +5,11 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Trait } from "@/components/BottomNav";
 import { ApercuFacebook, Jauge, RUB } from "@/components/Atelier";
-import { imageFor } from "@/lib/visual-url";
 import { ImageField } from "@/components/ImageField";
 import { PLATFORMS, RUBRIQUES, TOPICS, type Platform } from "@/lib/config";
 import { PLATFORM_LABEL } from "@/lib/labels";
 import type { Post } from "@/lib/store";
-import { loadPost, savePost } from "@/lib/client";
+import { loadPost, savePost, visuelsDe } from "@/lib/client";
 
 type Tab = "commun" | Platform;
 type TextKey = "commun" | "facebook" | "linkedin" | "tiktok" | "wp_body";
@@ -100,6 +99,7 @@ function Editeur() {
   const [state, setState] = useState<"saved" | "dirty" | "saving" | "error">("saved");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [visuels, setVisuels] = useState<Record<string, string>>({});
   const version = useRef(0);
   const latest = useRef<Post | null>(null);
 
@@ -107,6 +107,7 @@ function Editeur() {
     if (!id) return;
     loadPost(id)
       .then((p) => {
+        setVisuels(p.visuals ?? {});
         const clean: Post = { ...p };
         delete (clean as Partial<typeof p>).visuals;
         const withCommun = { ...clean, texts: { ...clean.texts, commun: clean.texts.commun ?? clean.texts[TEXT_KEY[clean.platforms[0] ?? "facebook"] as "facebook"] ?? "" } };
@@ -132,6 +133,15 @@ function Editeur() {
       return false;
     }
   }, []);
+
+  // Visuel de l'aperçu : recalculé par le serveur quand le visuel change (citation générée).
+  const cleVisuel = post ? JSON.stringify([post.rubrique, post.visual, post.source_name]) : "";
+  useEffect(() => {
+    if (!post || !cleVisuel) return;
+    const t = setTimeout(() => { visuelsDe(post).then(setVisuels).catch(() => {}); }, 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleVisuel]);
 
   // Enregistrement automatique 1,2 s après la dernière frappe.
   useEffect(() => {
@@ -291,7 +301,7 @@ function Editeur() {
   const [verdictTxt, verdictOk] = verdict(tab, n);
   const accrocheLg = (text.split("\n").find((l) => l.trim()) ?? "").length;
   const commun = current.texts.commun ?? "";
-  const apercuImage = imageFor(current, tab === "commun" ? "facebook" : tab) || undefined;
+  const apercuImage = visuels[tab === "commun" ? "facebook" : tab] || visuels.facebook || current.visual.image || undefined;
   const titreWp = current.texts.wp_title ?? "";
   const meta = current.texts.wp_excerpt ?? "";
   const pastille = (ok: boolean) => ({ padding: "2px 7px", borderRadius: 7, fontWeight: 800, whiteSpace: "nowrap" as const, background: ok ? "#D9F7E6" : "#FFE8DC", color: ok ? "#05603A" : "#9A3412" });

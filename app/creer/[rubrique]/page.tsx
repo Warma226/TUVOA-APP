@@ -11,10 +11,9 @@ import {
   creneauLibre, dateLongue, heureCourte, versLocal, type Etape, type Quand,
 } from "@/components/Atelier";
 import { draftWithoutAI, type Generated, type GenerateInput } from "@/lib/claude";
-import { visualUrl } from "@/lib/visual-url";
 import type { RubriqueId, Platform } from "@/lib/config";
 import type { Post } from "@/lib/store";
-import { listPosts, postAction, savePost } from "@/lib/client";
+import { listPosts, postAction, savePost, visuelsDe } from "@/lib/client";
 
 const RUBS: RubriqueId[] = ["actu", "citation", "cyberbase", "portrait"];
 const DEFAUT: Record<RubriqueId, Platform[]> = {
@@ -221,11 +220,18 @@ function AtelierRubrique({ rub }: { rub: RubriqueId }) {
 
   // Aperçu du visuel
   const citDiff = useDiffere(`${citTexte}|${auteur}|${fonction}|${photo}|${srcName}`);
-  const visuelCitation = useMemo(() => {
+  const [visuelCitation, setVisuelCitation] = useState("");
+  useEffect(() => {
+    if (rub !== "citation") return;
     const [t, a, f, ph, s] = citDiff.split("|");
-    return t.trim() ? visualUrl({ rubrique: "citation", visual: { titre: a, texte: t, nom: a, specialite: f, photo: ph || undefined }, source_name: s || null }, "portrait") : "";
-  }, [citDiff]);
-  const imageApercu = rub === "citation" ? visuelCitation : photo || (rub === "actu" && g?.visuel_titre ? visualUrl({ rubrique: "actu", visual: { titre: g.visuel_titre, texte: g.visuel_texte }, source_name: srcNameFinal }, "portrait") : "");
+    if (!t.trim()) return setVisuelCitation("");
+    let vivant = true;
+    visuelsDe({ rubrique: "citation", platforms: ["facebook"], visual: { titre: a, texte: t, nom: a, specialite: f, photo: ph || undefined }, source_name: s || null })
+      .then((v) => vivant && setVisuelCitation(v.facebook ?? ""))
+      .catch(() => {});
+    return () => { vivant = false; };
+  }, [citDiff, rub]);
+  const imageApercu = rub === "citation" ? visuelCitation : photo;
 
   const commun = { busy, error, notice };
 

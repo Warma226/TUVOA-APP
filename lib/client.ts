@@ -102,6 +102,12 @@ export async function listPostsEntre(de: Date, a: Date): Promise<Post[]> {
   return d.posts ?? [];
 }
 
+// Liens des visuels (signés par le serveur) pour un post en cours d'écriture.
+export async function visuelsDe(p: Partial<Post>): Promise<Record<string, string>> {
+  const d = await postsApi({ action: "visuals", post: p });
+  return (d.post as PostWithVisuals | undefined)?.visuals ?? {};
+}
+
 export async function loadPost(id: string): Promise<PostWithVisuals> {
   if (await isDemo()) {
     const p = localPosts().find((x) => x.id === id);
