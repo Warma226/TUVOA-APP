@@ -59,6 +59,7 @@ async function callAnthropic(key: string, system: string, user: string, maxToken
       system,
       messages: [{ role: "user", content: user }],
     }),
+    signal: AbortSignal.timeout(170000),
   });
   if (!res.ok) {
     const detail = await res.text();
@@ -102,7 +103,13 @@ async function callGemini(key: string, system: string, user: string, maxTokens: 
           ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
         },
       }),
+      // Un modèle qui ne répond pas en 70 s est abandonné : on passe au suivant.
+      signal: AbortSignal.timeout(70000),
+    }).catch((e: Error) => {
+      lastStatus = 504; lastDetail = e.name === "TimeoutError" ? "pas de réponse en 70 s" : e.message;
+      return null;
     });
+    if (!res) continue;
     if (res.ok) {
       const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[] };
       const text = (data.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? "").join("");
@@ -119,6 +126,7 @@ async function callGemini(key: string, system: string, user: string, maxTokens: 
     break;
   }
   if (lastStatus === 429) throw new Error("Quota gratuit de Gemini atteint pour le moment : réessaie dans une minute (ou demain si c'est le quota du jour).");
+  if (lastStatus === 504) throw new Error("L'IA met trop de temps à répondre en ce moment : réessaie dans une minute.");
   if (lastStatus === 503 || lastStatus === 500) throw new Error("Gemini est surchargé en ce moment : réessaie dans quelques minutes.");
   throw new Error(`Erreur de l'IA Gemini (${lastStatus}) : ${lastDetail}`);
 }

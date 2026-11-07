@@ -5,7 +5,7 @@ import { enregistrerFichier } from "@/lib/storage";
 import { DUREE_MAX, dureeLue, type Episode, type Proposition, type Scene, type TypeScene } from "@/lib/minute";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 // Épisodes et saison proposée : table settings, ligne 5.
 type Etat = { saison: Proposition[]; episodes: Episode[] };
