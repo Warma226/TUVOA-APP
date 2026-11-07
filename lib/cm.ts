@@ -6,9 +6,12 @@
 import { db, emptyPost, getSettings, saveSettings, savePost } from "./store";
 import { aiJson, aiConfigured } from "./claude";
 import type { Post } from "./store";
+import { signParams } from "./sign";
 
 export type CmCrise = { active: boolean; depuis: string; autopilotAvant: boolean; motif: string };
-export type CmReglages = { actif: boolean; lienArticle: boolean; heureRapport: number; grin: boolean; piliers: boolean; radar: boolean; crise: CmCrise | null };
+// Consigne ponctuelle donnée à VOA : remplacer une publication (republier une version corrigée, puis masquer l'ancienne).
+export type CmConsigne = { type: "remplacer"; ancien: string; nouveau?: string; fait?: string; erreur?: string };
+export type CmReglages = { actif: boolean; lienArticle: boolean; heureRapport: number; grin: boolean; piliers: boolean; radar: boolean; crise: CmCrise | null; consignes?: CmConsigne[] };
 export type CmCanal = "commentaire" | "message" | "mention" | "lien" | "grin" | "piliers" | "alerte" | "crise";
 export type CmLigne = {
   id: string; created_at: string; canal: CmCanal; external_id: string; fil: string | null; lien: string | null;
@@ -281,6 +284,61 @@ export async function cmAnnuler(id: string): Promise<string> {
   return "Action annulée.";
 }
 
+// ─── Consignes : remplacer une publication ───────────────────────────
+// 1. VOA recrée le post (visuels régénérés : nouveaux liens signés, pour ne pas resservir l'ancienne image en cache),
+//    planifié tout de suite sur Facebook ; la publication se fait au passage suivant de la veille.
+// 2. Quand la nouvelle version est en ligne, VOA masque l'ancienne sur la Page (réversible) et le note au journal.
+function regenerer(url: string): string {
+  try {
+    const u = new URL(url);
+    if (!u.searchParams.has("sig")) return url;
+    u.searchParams.set("rv", String(Date.now()));
+    u.searchParams.set("sig", signParams(u.searchParams));
+    return u.toString();
+  } catch { return url; }
+}
+const idFacebook = (url?: string) => url?.match(/facebook\.com\/(\d+_\d+)/)?.[1] ?? null;
+
+async function consignes(r: CmReglages, log: string[]) {
+  const liste = r.consignes ?? [];
+  if (!liste.some((c) => !c.fait)) return;
+  let change = false;
+  for (const c of liste) {
+    if (c.fait || c.type !== "remplacer") continue;
+    const { data: a } = await db().from("posts").select("*").eq("id", c.ancien).maybeSingle();
+    const ancien = a as Post | null;
+    if (!ancien) { c.fait = new Date().toISOString(); c.erreur = "Publication introuvable."; change = true; continue; }
+    if (!c.nouveau) {
+      const slides = (ancien.visual.slides ?? []).map(regenerer);
+      const post = emptyPost({
+        rubrique: ancien.rubrique, title: ancien.title, origin: ancien.origin, source_name: ancien.source_name, source_url: ancien.source_url,
+        platforms: ["facebook"], texts: ancien.texts,
+        visual: { ...ancien.visual, slides, image: slides[0] ?? (ancien.visual.image ? regenerer(ancien.visual.image) : ancien.visual.image) },
+        status: "planifie", auto: false, scheduled_at: new Date().toISOString(),
+      });
+      await savePost(post);
+      c.nouveau = post.id; change = true;
+      log.push(`Remplacement : nouvelle version de « ${ancien.title} » planifiée.`);
+      continue;
+    }
+    const { data: n } = await db().from("posts").select("status,results").eq("id", c.nouveau).maybeSingle();
+    const nouveau = n as Pick<Post, "status" | "results"> | null;
+    if (!nouveau || nouveau.status === "planifie") continue; // pas encore publiée
+    if (nouveau.status !== "publie" || !nouveau.results.facebook?.ok) {
+      c.fait = new Date().toISOString(); c.erreur = nouveau.results.facebook?.detail ?? "Nouvelle version non publiée."; change = true;
+      log.push(`Remplacement interrompu : ${c.erreur}`); continue;
+    }
+    const vieux = idFacebook(ancien.results.facebook?.url);
+    if (vieux) {
+      await graph(vieux, {}, { is_hidden: true });
+      await noter({ canal: "lien", external_id: vieux, lien: ancien.results.facebook?.url ?? null, auteur: "TUVOA", texte: ancien.title, action: "masque", raison: "Remplacée par la nouvelle version avec photos", traite: true });
+    }
+    c.fait = new Date().toISOString(); change = true;
+    log.push(`Remplacement terminé : « ${ancien.title} »${vieux ? ", ancienne version masquée" : ""}.`);
+  }
+  if (change) await cmSauverReglages({ consignes: liste });
+}
+
 // ─── Lien de l'article en premier commentaire ────────────────────────
 // Un seul lien par publication : avant d'en poster un, VOA regarde ce que la Page a déjà commenté,
 // et supprime les doublons éventuels (on garde le plus ancien).
@@ -490,6 +548,7 @@ async function passage(r: CmReglages, opts: { force?: boolean }): Promise<string
     }
   } else log.push("Rien de nouveau.");
   const etape = async (nom: string, f: () => Promise<void>) => { try { await f(); } catch (e) { log.push(`${nom} : ${(e as Error).message}`); } };
+  await etape("Consignes", () => consignes(r, log));
   if (r.radar && (cands.length || lourd)) await etape("Radar", () => radar(log));
   if (cands.length) await etape("Crise", () => surveillerCrise(r, log));
   if (!lourd) return log;

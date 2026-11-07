@@ -34,7 +34,7 @@ function voix(l: CmLigne): string {
   switch (l.action) {
     case "repondu": return l.canal === "mention" ? `J'ai répondu à ${prenom(l.auteur)}, qui a cité TUVOA : « ${court(l.reponse, 110)} »` : `J'ai répondu à ${prenom(l.auteur)} : « ${court(l.reponse, 110)} »`;
     case "aime": return `J'ai aimé le commentaire de ${prenom(l.auteur)}.`;
-    case "masque": return `J'ai masqué un commentaire indésirable (${court(l.raison, 60) || "spam"}).`;
+    case "masque": return l.canal === "lien" ? `J'ai masqué l'ancienne version de « ${court(l.texte, 70)} » : ${court(l.raison, 60)}.` : `J'ai masqué un commentaire indésirable (${court(l.raison, 60) || "spam"}).`;
     case "signale": return l.canal === "alerte" ? `J'ai repéré une arnaque signalée par ${l.auteur} et rédigé l'alerte.` : l.canal === "crise" ? `J'ai déclenché le mode crise : ${court(l.texte, 80)}.` : `Je t'ai gardé le message de ${prenom(l.auteur)} : « ${court(l.texte, 90)} »`;
     case "lien": return `J'ai ajouté le lien de l'article sous « ${court(l.texte, 80)} ».`;
     case "publie": return l.canal === "piliers" ? "J'ai remercié les piliers du grin." : "J'ai publié le grin du jeudi.";
