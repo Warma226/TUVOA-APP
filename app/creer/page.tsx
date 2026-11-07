@@ -1,307 +1,128 @@
 "use client";
-import { SourceLogo } from "@/components/SourceLogo";
+// Créer : choix de la rubrique. Chaque rubrique a son propre atelier (/creer/actu, /creer/citation…).
 import Link from "next/link";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { TopBar } from "@/components/BottomNav";
-import { Icon } from "@/components/Icon";
-import { ImageField } from "@/components/ImageField";
-import { RUBRIQUES, PLATFORMS, type Platform, type RubriqueId } from "@/lib/config";
-import { draftWithoutAI, type Generated } from "@/lib/claude";
+import { NAV_ICONS, Trait } from "@/components/BottomNav";
+import { RUB, Tuile, creneauLibre, dateLongue } from "@/components/Atelier";
+import type { RubriqueId } from "@/lib/config";
 import type { Post } from "@/lib/store";
-import { savePost } from "@/lib/client";
+import { listPosts } from "@/lib/client";
+import { joursManquants } from "@/lib/schedule";
 
-export default function CreerPage() {
+const DESC: Record<RubriqueId, [string, string]> = {
+  actu: ["Une info tech de la veille ou votre idée, résumée en français, montants en FCFA.", "Pilote auto · 6 h – 20 h"],
+  citation: ["Une phrase vérifiable d'une voix tech, avec la photo de son auteur.", "Toutes les 2 h"],
+  cyberbase: ["Une notion de cybersécurité expliquée simplement, pour tout le monde.", "Chaque jour à heure fixe"],
+  portrait: ["Un expert d'ici ou d'ailleurs, raconté avec son accord.", "Sur accord de la personne"],
+};
+
+export default function Page() {
   return (
     <Suspense fallback={null}>
-      <Creer />
+      <Choix />
     </Suspense>
   );
 }
 
-function Creer() {
+function Choix() {
   const router = useRouter();
   const q = useSearchParams();
-  const sourceUrl = q.get("src");
-  const sourceName = q.get("source");
-  const articleTitle = q.get("titre") ?? "";
-  const articleSummary = q.get("resume") ?? "";
-  const categorie = q.get("theme") ?? undefined;
-  const [notice, setNotice] = useState("");
+  const [posts, setPosts] = useState<Post[] | null>(null);
 
-  const initialRubrique = q.get("rubrique");
-  const [rubrique, setRubrique] = useState<RubriqueId>(
-    initialRubrique === "cyberbase" || initialRubrique === "portrait" || initialRubrique === "citation" ? initialRubrique : "actu"
-  );
-  const [idea, setIdea] = useState("");
-  const [platforms, setPlatforms] = useState<Platform[]>(["facebook", "linkedin", "wordpress"]);
-  const [nom, setNom] = useState("");
-  const [specialite, setSpecialite] = useState("");
-  const [photo, setPhoto] = useState("");
-  const [infos, setInfos] = useState("");
-  const [consent, setConsent] = useState(false);
-  // Citation
-  const [citTexte, setCitTexte] = useState("");
-  const [auteur, setAuteur] = useState("");
-  const [fonction, setFonction] = useState("");
-  const [contexte, setContexte] = useState("");
-  const [srcName, setSrcName] = useState("");
-  const [srcUrl, setSrcUrl] = useState("");
-  const isCitation = rubrique === "citation";
-  const srcNameFinal = sourceName || (isCitation ? srcName.trim() || null : null);
-  const srcUrlFinal = sourceUrl || (isCitation ? srcUrl.trim() || null : null);
-  const citationInput = isCitation ? { texte: citTexte.trim(), auteur: auteur.trim(), fonction: fonction.trim(), contexte: contexte.trim() } : undefined;
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [gen, setGen] = useState<Generated | null>(null);
-  const [picked, setPicked] = useState(0);
-  const autoStarted = useRef(false);
-
-  // Depuis la veille : l'IA rédige le post tout de suite, sans clic supplémentaire.
+  // Anciens liens (/creer?src=… depuis la veille, /creer?rubrique=…) : on va droit à l'atelier.
+  const redirection = q.get("src") ? "actu" : (["actu", "citation", "cyberbase", "portrait"].find((r) => r === q.get("rubrique")) ?? null);
   useEffect(() => {
-    if (sourceUrl && !autoStarted.current) {
-      autoStarted.current = true;
-      void generate();
+    if (redirection) {
+      const p = new URLSearchParams(q.toString());
+      p.delete("rubrique");
+      const s = p.toString();
+      router.replace(`/creer/${redirection}${s ? `?${s}` : ""}`);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceUrl]);
+  }, [redirection, q, router]);
+  useEffect(() => {
+    listPosts().then(setPosts).catch(() => setPosts([]));
+  }, []);
+  if (redirection) return null;
 
-  const togglePlatform = (p: Platform) => setPlatforms(platforms.includes(p) ? platforms.filter((x) => x !== p) : [...platforms, p]);
-
-  function validate(): string {
-    if (platforms.length === 0) return "Choisis au moins une plateforme.";
-    if (isCitation) {
-      if (!citTexte.trim() || !auteur.trim() || !fonction.trim()) return "Indique la citation exacte, son auteur et sa fonction.";
-      if (!srcNameFinal) return "Indique la source de la citation (média, discours, réseau social…).";
-    } else if (rubrique === "portrait") {
-      if (!nom.trim() || !specialite.trim()) return "Indique le nom et la spécialité de l'expert.";
-      if (!consent) return "Confirme l'accord de la personne avant de continuer.";
-    } else if (!idea.trim() && !sourceUrl) {
-      return rubrique === "cyberbase" ? "Indique la notion à expliquer." : "Écris ton idée ou pars d'une actu de la veille.";
+  const etat = (r: RubriqueId): [string, string] => {
+    if (!posts) return ["…", "#5B6B86"];
+    const libre = creneauLibre(posts, r);
+    if (r === "cyberbase") {
+      const manque = joursManquants(posts, "cyberbase").length;
+      return manque ? [`${manque} jour${manque > 1 ? "s" : ""} sans notion cette semaine`, "#B45309"] : ["Semaine complète", "#05603A"];
     }
-    return "";
-  }
-
-  async function generate() {
-    const v = validate();
-    setError(v);
-    if (v) return;
-    setBusy(true);
-    setNotice("");
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        body: JSON.stringify({
-          mode: "post",
-          rubrique,
-          idea,
-          sourceUrl: srcUrlFinal,
-          sourceName: srcNameFinal,
-          articleTitle,
-          articleSummary,
-          categorie,
-          portrait: rubrique === "portrait" ? { nom, specialite, infos } : undefined,
-          citation: citationInput,
-        }),
-      });
-      const d = await res.json().catch(() => ({ error: "Le serveur n'a pas répondu à temps. Réessaie." }));
-      if (!res.ok || !d.generated) throw new Error(d.error || "Aucun texte reçu. Réessaie.");
-      setGen(d.generated);
-      if (d.image && !photo.trim() && !isCitation) setPhoto(d.image);
-      setNotice(d.notice ?? "");
-      setPicked(0);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
+    if (r === "citation") {
+      const sansPhoto = posts.filter((p) => p.rubrique === "citation" && ["planifie", "erreur"].includes(p.status) && !p.visual?.photo).length;
+      if (sansPhoto) return [`${sansPhoto} citation${sansPhoto > 1 ? "s" : ""} sans photo`, "#B42318"];
+      return libre ? [`Prochain créneau : ${dateLongue(libre).toLowerCase()}`, "#1D4ED8"] : ["Grille complète", "#05603A"];
     }
-  }
-
-  async function saveAndEdit(draftOnly = false) {
-    const v = validate();
-    setError(v);
-    if (v) return;
-    setBusy(true);
-    // Sans génération : brouillon structuré à partir de l'article (jamais de textes vides).
-    const g: Generated | null =
-      gen ?? (sourceUrl || idea.trim() || rubrique === "portrait" || isCitation
-        ? draftWithoutAI({ rubrique, idea, sourceUrl: srcUrlFinal, sourceName: srcNameFinal, articleTitle, articleSummary, categorie, portrait: rubrique === "portrait" ? { nom, specialite, infos } : undefined, citation: citationInput })
-        : null);
-    const accroche = gen && picked > 0 ? gen.variantes[picked] : undefined;
-    const post: Partial<Post> = {
-      rubrique,
-      idea,
-      title: isCitation ? `${auteur.trim()} : « ${citTexte.replace(/\*\*/g, "").trim().slice(0, 80)} »` : articleTitle || g?.wp_title || g?.visuel_titre || (rubrique === "portrait" ? nom : idea),
-      source_name: srcNameFinal,
-      source_url: srcUrlFinal,
-      origin: sourceUrl ? "veille" : "manuel",
-      platforms,
-      status: "brouillon",
-      texts: !g
-        ? { facebook: idea, linkedin: idea, tiktok: idea.slice(0, 150), wp_title: idea, wp_body: idea ? `<p>${idea}</p>` : "" }
-        : {
-            facebook: withHook(g.facebook, accroche),
-            linkedin: g.linkedin,
-            tiktok: g.tiktok,
-            wp_title: g.wp_title,
-            wp_body: g.wp_body,
-          },
-      visual: isCitation ? {
-        titre: auteur.trim(),
-        texte: citTexte.trim(),
-        nom: auteur.trim(),
-        specialite: fonction.trim(),
-        photo: photo.trim() || undefined,
-      } : {
-        titre: rubrique === "portrait" ? nom : g?.visuel_titre || idea,
-        texte: rubrique === "portrait" ? specialite : g?.visuel_texte || "",
-        nom: rubrique === "portrait" ? nom : undefined,
-        specialite: rubrique === "portrait" ? specialite : undefined,
-        image: photo.trim() || undefined,
-      },
-    };
-    try {
-      const saved = await savePost(post);
-      router.push(draftOnly ? "/calendrier?filtre=brouillon" : `/editeur?id=${saved.id}`);
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
+    if (r === "portrait") {
+      const n = posts.filter((p) => p.rubrique === "portrait" && ["brouillon", "a_valider"].includes(p.status)).length;
+      return n ? [`${n} portrait${n > 1 ? "s" : ""} en cours`, "#1D4ED8"] : ["Aucun portrait en cours", "#5B6B86"];
     }
-  }
-
-  const VERSIONS = ["DIRECTE", "PÉDAGOGIQUE", "QUESTION"];
+    const n = posts.filter((p) => p.rubrique === "actu" && p.status === "brouillon").length;
+    return n ? [`${n} brouillon${n > 1 ? "s" : ""} en attente`, "#1D4ED8"] : ["Partez d'une actu de la veille", "#5B6B86"];
+  };
+  const brouillons = (posts ?? []).filter((p) => p.status === "brouillon").slice(0, 5);
 
   return (
-    <>
-      <TopBar title="Nouveau post" back="/" />
-      <main className="page sub" style={{ paddingTop: 4 }}>
-        {sourceUrl ? (
-          <div className="notice row" style={{ alignItems: "flex-start", gap: 12 }}>
-            <SourceLogo name={sourceName ?? "Source"} url={sourceUrl} size={40} radius={12} />
-            <span style={{ minWidth: 0 }}>
-              <strong>Depuis la veille</strong> · {sourceName}
-              <br />
-              {articleTitle}
-            </span>
+    <div className="tv-page">
+      <div className="tv-corps" style={{ paddingTop: 20 }}>
+        <div className="tv-entete">
+          <div style={{ flex: "1 1 340px", display: "flex", flexDirection: "column", gap: 6 }}>
+            <Link href="/" className="tv-gris tv-desk" style={{ textDecoration: "none", fontWeight: 600 }}>← Tableau de bord</Link>
+            <h1 className="tv-titre">Que voulez-vous créer ?</h1>
+            <span style={{ fontSize: 15, color: "#33425C" }}>Chaque rubrique a son propre atelier, avec ses règles et son visuel.</span>
           </div>
-        ) : null}
-
-        {rubrique === "portrait" || isCitation ? null : (
-          <label className="field">
-            {rubrique === "cyberbase" ? "Notion à expliquer" : sourceUrl ? "Ton angle (facultatif)" : "Ton idée"}
-            <textarea rows={3} value={idea} onChange={(e) => setIdea(e.target.value)} placeholder={rubrique === "cyberbase" ? "Social engineering" : "Comment repérer une arnaque au mobile money"} />
-          </label>
-        )}
-
-        <div className="stack" style={{ gap: 8 }}>
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <p id="rub" className="label">Rubrique</p>
-            <Link href="/rubriques" style={{ fontSize: 14, fontWeight: 600, textDecoration: "none" }}>Gérer</Link>
-          </div>
-          <div className="grid2" role="radiogroup" aria-labelledby="rub">
-            {RUBRIQUES.map((r) => (
-              <button key={r.id} type="button" role="radio" aria-checked={rubrique === r.id} className="seg" onClick={() => setRubrique(r.id)}>
-                {r.id === "actu" ? "Actualité" : r.id === "cyberbase" ? "Cyberbase" : r.label}
-              </button>
-            ))}
-          </div>
-          {rubrique !== "actu" ? <p className="muted small">{RUBRIQUES.find((r) => r.id === rubrique)?.description}</p> : null}
         </div>
 
-        {rubrique === "portrait" ? (
-          <div className="stack">
-            <label className="field">Nom de l'expert<input type="text" value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Prénom Nom" /></label>
-            <label className="field">Spécialité<input type="text" value={specialite} onChange={(e) => setSpecialite(e.target.value)} placeholder="Expert en investigation numérique et en IA" /></label>
-            <label className="field">Infos fournies par la personne<textarea rows={4} value={infos} onChange={(e) => setInfos(e.target.value)} placeholder="Parcours, projets, réalisations…" /></label>
-            <button type="button" role="checkbox" aria-checked={consent} className="option" onClick={() => setConsent(!consent)}>
-              <span style={{ fontWeight: 600 }}>{consent ? "☑" : "☐"} La personne a donné son accord</span>
-              <span className="muted small">Pour la photo, les infos et la publication. Elle relira le texte avant sa sortie.</span>
-            </button>
-          </div>
-        ) : null}
+        <div className="tv-hub">
+          {(Object.keys(RUB) as RubriqueId[]).map((r) => {
+            const [txt, c] = etat(r);
+            return (
+              <Link key={r} href={`/creer/${r}`} className="tv-hub-carte">
+                <Tuile rub={r} taille={88} />
+                <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <strong style={{ fontFamily: "var(--font-mont)", fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" }}>{RUB[r].nom}</strong>
+                  <span style={{ fontSize: 15, lineHeight: 1.5, color: "#33425C" }}>{DESC[r][0]}</span>
+                  <span className="row" style={{ flexWrap: "wrap", gap: 8, fontSize: 13 }}>
+                    <span className="tv-pill">{DESC[r][1]}</span>
+                    <span style={{ color: c, fontWeight: 700 }}>{txt}</span>
+                  </span>
+                  <span style={{ marginTop: 2, fontSize: 14, fontWeight: 800, color: "#2563EB" }}>Ouvrir l'atelier {RUB[r].nom} →</span>
+                </span>
+              </Link>
+            );
+          })}
+        </div>
 
-        {isCitation ? (
-          <div className="stack">
-            <label className="field">
-              Citation exacte
-              <textarea rows={4} value={citTexte} onChange={(e) => setCitTexte(e.target.value)} placeholder="Mot pour mot, sans guillemets. Mets **entre deux étoiles** les mots à afficher en bleu." />
-            </label>
-            <label className="field">Auteur<input type="text" value={auteur} onChange={(e) => setAuteur(e.target.value)} placeholder="Prénom Nom" /></label>
-            <label className="field">Fonction<input type="text" value={fonction} onChange={(e) => setFonction(e.target.value)} placeholder="Ministre de la Transition digitale" /></label>
-            <label className="field">Source<input type="text" value={srcName} onChange={(e) => setSrcName(e.target.value)} placeholder="Média, discours, compte officiel…" /></label>
-            <label className="field">Lien de la source (facultatif)<input type="url" value={srcUrl} onChange={(e) => setSrcUrl(e.target.value)} placeholder="https://…" /></label>
-            <label className="field">Contexte (facultatif)<textarea rows={2} value={contexte} onChange={(e) => setContexte(e.target.value)} placeholder="Où et quand la phrase a été prononcée." /></label>
-            <ImageField label="Photo de l'auteur" hint="Une photo dont TUVOA a le droit d'usage (fournie par la personne, son service de presse ou libre de droits). Le visuel est généré automatiquement : tu le vois dans l'aperçu." value={photo} onChange={setPhoto} />
-          </div>
-        ) : rubrique !== "actu" ? (
-          <ImageField label="Ton visuel" hint="Le visuel que tu as créé. Tu peux aussi l'ajouter plus tard dans l'éditeur." value={photo} onChange={setPhoto} />
-        ) : sourceUrl || photo ? (
-          <ImageField label="Image de l'article" hint="Récupérée automatiquement depuis l'article. Tu peux la remplacer." value={photo} onChange={setPhoto} />
-        ) : null}
-
-        <fieldset style={{ border: 0, margin: 0, padding: 0 }} className="stack">
-          <legend className="label" style={{ marginBottom: 8 }}>Plateformes</legend>
-          <div className="grid2">
-            {PLATFORMS.map((p) => (
-              <button key={p.id} type="button" aria-pressed={platforms.includes(p.id)} className="toggle-card" onClick={() => togglePlatform(p.id)}>
-                <span>{p.label}</span>
-                <Icon name={platforms.includes(p.id) ? "check" : "plus"} size={16} stroke={2} />
-              </button>
-            ))}
-          </div>
-        </fieldset>
-
-        {error ? <p className="notice rouge" role="alert">{error}</p> : null}
-        {notice ? <p className="notice ambre" role="status">{notice}</p> : null}
-
-        {busy && !gen ? (
-          <div className="card" role="status" style={{ gap: 6, padding: 16 }}>
-            <strong>L'IA rédige ton post…</strong>
-            <span className="muted small">Facebook, LinkedIn, TikTok et article, en français. Quelques secondes.</span>
-          </div>
-        ) : null}
-
-        <button type="button" className={gen ? "btn" : "btn dark"} onClick={generate} disabled={busy}>
-          <Icon name="etincelle" size={18} />
-          {busy ? "Rédaction…" : gen ? "Régénérer avec l'IA" : "Générer avec l'IA"}
-        </button>
-
-        {gen ? (
-          <section className="stack" role="radiogroup" aria-labelledby="versions">
-            <h2 id="versions" className="label">Choisis une version</h2>
-            {gen.variantes.map((v, i) => (
-              <button key={i} type="button" role="radio" aria-checked={picked === i} className="option" onClick={() => setPicked(i)}>
-                <span className="small" style={{ fontWeight: 700, letterSpacing: "0.04em", color: "var(--bleu)" }}>VERSION {i + 1}{VERSIONS[i] ? ` · ${VERSIONS[i]}` : ""}</span>
-                <span style={{ fontSize: 15, lineHeight: 1.45 }}>{v}</span>
-              </button>
-            ))}
-          </section>
-        ) : null}
-
-        {gen ? (
-          <section className="stack" aria-labelledby="propose">
-            <h2 id="propose" className="label">Post proposé · Facebook</h2>
-            <div className="card" style={{ padding: 16, whiteSpace: "pre-wrap", fontSize: 15, lineHeight: 1.5 }}>
-              {withHook(gen.facebook, picked > 0 ? gen.variantes[picked] : undefined)}
+        <div className="tv-bas">
+          <section aria-labelledby="t-autres" style={{ flex: "999 1 520px", minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+            <h2 id="t-autres" className="tv-h2">Les autres ateliers</h2>
+            <div className="row" style={{ flexWrap: "wrap", gap: 12, alignItems: "stretch" }}>
+              {([["/minute-cyber", "La minute cyber", "Vidéo d'une minute : script, voix, montage", NAV_ICONS.minute], ["/studio", "Studio", "Visuels libres, carrousels, vidéos", NAV_ICONS.studio], ["/calendrier", "Récap du vendredi", "Préparé tout seul chaque vendredi", NAV_ICONS.cal]] as const).map(([href, nom, d, ic]) => (
+                <Link key={href} href={href} className="tv-atelier-lien">
+                  <span className="ico"><Trait d={ic} size={20} /></span>
+                  <span style={{ display: "flex", flexDirection: "column", gap: 2 }}><strong style={{ fontSize: 15 }}>{nom}</strong><span className="tv-gris" style={{ fontSize: 13 }}>{d}</span></span>
+                </Link>
+              ))}
             </div>
-            <p className="muted small">LinkedIn, TikTok et l'article WordPress sont aussi prêts : tu les verras dans l'éditeur avant de publier.</p>
           </section>
-        ) : null}
-      </main>
-      <div className="actionbar">
-        <div className="btn-row">
-          <button type="button" className="btn" onClick={() => saveAndEdit(true)} disabled={busy}>Brouillon</button>
-          <button type="button" className="btn primary" style={{ flex: 2 }} onClick={() => saveAndEdit(false)} disabled={busy}>
-            <Icon name="creer" size={18} />
-            {gen ? "Relire et publier" : "Écrire moi-même"}
-          </button>
+          <section aria-labelledby="t-br" className="tv-carte-side" style={{ flex: "1 1 340px", minWidth: 0 }}>
+            <h2 id="t-br" className="tv-h2" style={{ fontSize: 18 }}>Reprendre un brouillon</h2>
+            {posts === null ? <span className="tv-gris">…</span> : brouillons.length === 0 ? <span className="tv-gris" style={{ fontSize: 14 }}>Aucun brouillon en attente.</span> : null}
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {brouillons.map((p) => (
+                <Link key={p.id} href={`/editeur?id=${p.id}`} className="row" style={{ gap: 12, padding: "12px 0", borderTop: "1px solid #EDF1F7", textDecoration: "none", color: "#0B1A33" }}>
+                  <span className="tv-pill" style={{ background: RUB[p.rubrique].pastille[0], color: RUB[p.rubrique].pastille[1], flexShrink: 0 }}>{RUB[p.rubrique].nom.toUpperCase()}</span>
+                  <strong style={{ flex: 1, fontSize: 14, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title || p.visual?.titre || p.idea || "Sans titre"}</strong>
+                </Link>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
-    </>
+    </div>
   );
-}
-
-function withHook(text: string, hook?: string): string {
-  if (!hook || text.startsWith(hook)) return text;
-  return `${hook}\n\n${text}`;
 }

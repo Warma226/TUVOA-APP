@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listPosts, getPost, savePost, deletePost, emptyPost, isDemo, type Post } from "@/lib/store";
+import { listPosts, listPostsEntre, getPost, savePost, deletePost, emptyPost, isDemo, type Post } from "@/lib/store";
 import { imageFor } from "@/lib/visual-url";
 import { publishPost } from "@/lib/publish";
 
@@ -21,7 +21,9 @@ function normalize(input: Partial<Post> | undefined): Post {
 // GET /api/posts → liste ; GET /api/posts?id=… → un post avec ses visuels
 export async function GET(req: Request) {
   try {
-    const id = new URL(req.url).searchParams.get("id");
+    const sp = new URL(req.url).searchParams;
+    const id = sp.get("id");
+    if (sp.get("de") && sp.get("a")) return NextResponse.json({ posts: await listPostsEntre(new Date(sp.get("de") as string).toISOString(), new Date(sp.get("a") as string).toISOString()) });
     if (id) {
       const post = await getPost(id);
       if (!post) return NextResponse.json({ error: "Post introuvable" }, { status: 404 });

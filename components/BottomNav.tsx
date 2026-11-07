@@ -64,7 +64,7 @@ const ONGLETS: { href: string; label: string; d: string }[] = [
   { href: "/communaute", label: "Grin", d: NAV_ICONS.grin },
 ];
 
-const SECONDAIRES = ["/studio", "/minute-cyber", "/creer", "/editeur", "/apercu", "/declencheurs", "/rubriques", "/sources", "/mediatheque", "/connexions"];
+const SECONDAIRES = ["/studio", "/minute-cyber", "/creer/", "/editeur", "/apercu", "/declencheurs", "/rubriques", "/sources", "/mediatheque", "/connexions"];
 
 type Etat = { autopilot: boolean; grin: number } | null;
 

@@ -96,6 +96,12 @@ export async function listPosts(): Promise<Post[]> {
   return d.posts ?? [];
 }
 
+export async function listPostsEntre(de: Date, a: Date): Promise<Post[]> {
+  if (await isDemo()) return localPosts().filter((p) => { const t = new Date(p.scheduled_at ?? p.created_at).getTime(); return t >= de.getTime() && t < a.getTime(); });
+  const d = await json<{ posts: Post[] }>(await fetch(`/api/posts?de=${encodeURIComponent(de.toISOString())}&a=${encodeURIComponent(a.toISOString())}`, { cache: "no-store" }));
+  return d.posts ?? [];
+}
+
 export async function loadPost(id: string): Promise<PostWithVisuals> {
   if (await isDemo()) {
     const p = localPosts().find((x) => x.id === id);
