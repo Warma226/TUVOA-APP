@@ -40,6 +40,7 @@ function Calendrier() {
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [error, setError] = useState("");
   const [jour, setJour] = useState<string | null>(null);
+  const recherche = (q.get("q") ?? "").trim().toLowerCase();
 
   useEffect(() => {
     listPosts()
@@ -65,6 +66,7 @@ function Calendrier() {
     const shown = (posts ?? [])
       .filter((p) => p.status !== "annule")
       .filter((p) => filtre === "tout" || p.status === filtre)
+      .filter((p) => !recherche || [p.title, p.idea, p.source_name, p.visual?.nom, p.visual?.titre, p.texts?.facebook].some((t) => (t ?? "").toLowerCase().includes(recherche)))
       .filter((p) => !jour || (postDate(p) && dayKey(new Date(postDate(p) as string)) === jour));
     const map = new Map<string, Post[]>();
     for (const p of shown) {
@@ -86,7 +88,7 @@ function Calendrier() {
       k,
       posts: (map.get(k) ?? []).sort((a, b) => (postDate(a) ?? "").localeCompare(postDate(b) ?? "")),
     }));
-  }, [posts, filtre, jour]);
+  }, [posts, filtre, jour, recherche]);
 
   const titreJour = (k: string) => {
     if (k === "sans-date") return "Sans date";
@@ -106,6 +108,11 @@ function Calendrier() {
         </Link>
       </header>
       <main className="page" style={{ paddingTop: 8 }}>
+        {recherche ? (
+          <p className="notice">
+            Recherche : « {q.get("q")} » · <Link href="/calendrier" style={{ fontWeight: 600 }}>Tout afficher</Link>
+          </p>
+        ) : null}
         <div className="grid7" role="group" aria-label="Les 7 prochains jours">
           {semaine.map(({ key, d, n }) => (
             <button
