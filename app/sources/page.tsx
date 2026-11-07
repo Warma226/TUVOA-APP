@@ -1,4 +1,5 @@
 "use client";
+import { SourceLogo } from "@/components/SourceLogo";
 import { useEffect, useState } from "react";
 import { TopBar } from "@/components/BottomNav";
 import { Icon } from "@/components/Icon";
@@ -81,6 +82,7 @@ export default function Sources() {
               return (
                 <article key={src.id} className="card" style={{ padding: 16 }}>
                   <div className="row" style={{ alignItems: "flex-start" }}>
+                    <SourceLogo name={src.name} domain={src.domain} size={44} radius={12} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontWeight: 600, fontSize: 16 }}>{src.name}</p>
                       <p className="muted small">{src.domain} · {src.lang === "fr" ? "français" : "anglais"}</p>

@@ -23,11 +23,15 @@ export async function GET(req: Request) {
       const [s, cm, pub] = await Promise.all([
         getSettings(),
         db().from("cm_journal").select("id", { count: "exact", head: true }).eq("traite", false),
-        db().from("posts").select("source_name").eq("status", "publie").gte("scheduled_at", depuis).not("source_name", "is", null).limit(2000),
+        db().from("posts").select("source_name,source_url").eq("status", "publie").gte("scheduled_at", depuis).not("source_name", "is", null).limit(2000),
       ]);
       const src = new Map<string, number>();
-      for (const x of (pub.data ?? []) as { source_name: string }[]) src.set(x.source_name, (src.get(x.source_name) ?? 0) + 1);
-      const sources = [...src.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([nom, n]) => ({ nom, n }));
+      const dom = new Map<string, string>();
+      for (const x of (pub.data ?? []) as { source_name: string; source_url: string | null }[]) {
+        src.set(x.source_name, (src.get(x.source_name) ?? 0) + 1);
+        if (!dom.has(x.source_name) && x.source_url) { try { dom.set(x.source_name, new URL(x.source_url).hostname.replace(/^www\./, "")); } catch { /* lien invalide */ } }
+      }
+      const sources = [...src.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([nom, n]) => ({ nom, n, domaine: dom.get(nom) }));
       return NextResponse.json({ autopilot: s.autopilot, grin: { aTraiter: cm.count ?? 0 }, sources });
     }
     const now = new Date();

@@ -1,5 +1,6 @@
 "use client";
 // Aperçu avant publication (écran 8 de la maquette) : rien ne part sans passer par cet écran (sauf autopilote).
+import { SourceLogo } from "@/components/SourceLogo";
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -202,8 +203,9 @@ function Apercu() {
 
         <div className="stack" style={{ marginTop: 16 }}>
           {current.source_url ? (
-            <p className="muted small">
-              Source : <a href={current.source_url} target="_blank" rel="noopener noreferrer">{current.source_name ?? current.source_url}</a>
+            <p className="muted small row" style={{ gap: 8 }}>
+              <SourceLogo name={current.source_name ?? "Source"} url={current.source_url} size={24} radius={7} />
+              <span>Source : <a href={current.source_url} target="_blank" rel="noopener noreferrer">{current.source_name ?? current.source_url}</a></span>
             </p>
           ) : null}
 
