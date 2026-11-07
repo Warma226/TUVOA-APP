@@ -1,4 +1,5 @@
 "use client";
+import { SourceLogo } from "@/components/SourceLogo";
 import Link from "next/link";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -175,10 +176,13 @@ function Creer() {
       <TopBar title="Nouveau post" back="/" />
       <main className="page sub" style={{ paddingTop: 4 }}>
         {sourceUrl ? (
-          <div className="notice">
-            <strong>Depuis la veille</strong> · {sourceName}
-            <br />
-            {articleTitle}
+          <div className="notice row" style={{ alignItems: "flex-start", gap: 12 }}>
+            <SourceLogo name={sourceName ?? "Source"} url={sourceUrl} size={40} radius={12} />
+            <span style={{ minWidth: 0 }}>
+              <strong>Depuis la veille</strong> · {sourceName}
+              <br />
+              {articleTitle}
+            </span>
           </div>
         ) : null}
 

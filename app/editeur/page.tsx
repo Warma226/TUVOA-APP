@@ -1,5 +1,6 @@
 "use client";
 // Éditeur de texte (écran 7 de la maquette) : texte commun, versions par plateforme, assistant IA.
+import { SourceLogo } from "@/components/SourceLogo";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/BottomNav";
@@ -398,8 +399,9 @@ function Editeur() {
       <div className="actionbar">
         {current.source_name && !locked ? (
           <div className="row card" style={{ padding: "10px 14px", justifyContent: "space-between", flexDirection: "row" }}>
-            <span className="small" style={{ fontSize: 13, minWidth: 0 }}>
-              <strong id="cite">Citer la source</strong> · {current.source_name}
+            <span className="small row" style={{ fontSize: 13, minWidth: 0, gap: 8 }}>
+              <SourceLogo name={current.source_name ?? "Source"} url={current.source_url} size={28} radius={8} />
+              <span><strong id="cite">Citer la source</strong> · {current.source_name}</span>
             </span>
             <button type="button" role="switch" aria-checked={cites} aria-labelledby="cite" className="switch" onClick={toggleSource}>
               <span />

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Voa from "@/components/Voa";
+import { SourceLogo } from "@/components/SourceLogo";
 import { NAV_ICONS, Trait } from "@/components/BottomNav";
 import { TOPICS, allSources, allTriggers, isOn, type Trigger } from "@/lib/config";
 import type { VeilleItem } from "@/lib/veille";
@@ -31,7 +32,6 @@ function etiquette(it: VeilleItem): { label: string; tone: string } {
   if (ageH < 3) return { label: "Nouveau", tone: "vert" };
   return { label: `Pertinence ${it.score}`, tone: "" };
 }
-const initiales = (s: string) => s.split(/[\s’'-]+/).filter((w) => /^[A-Za-zÀ-ÿ]/.test(w)).slice(0, 3).map((w) => w[0].toUpperCase()).join("") || "?";
 const themeDe = (it: VeilleItem) => TOPICS.find((t) => t.id === it.topics[0]);
 function lienCreer(it: VeilleItem) {
   const params = new URLSearchParams({ src: it.url, source: it.sourceName, titre: it.title, resume: it.summary.slice(0, 400) });
@@ -50,7 +50,8 @@ export default function Veille() {
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [q, setQ] = useState("");
-  const [compte, setCompte] = useState<{ autopilot: boolean; sources: { nom: string; n: number }[] } | null>(null);
+  const [compte, setCompte] = useState<{ autopilot: boolean; sources: { nom: string; n: number; domaine?: string }[] } | null>(null);
+  const [domaines, setDomaines] = useState<Record<string, string>>({});
 
   function load() {
     setItems(null);
@@ -60,6 +61,7 @@ export default function Veille() {
         const sources = allSources(s.customSources).filter((x) => x.feed && isOn(s.sourcesEnabled, x.id, x.enabledByDefault));
         const trig = allTriggers(s.triggers).filter((t) => isOn(s.triggersEnabled, t.id, t.enabledByDefault));
         setNbSources(sources.length);
+        setDomaines(Object.fromEntries(allSources(s.customSources).map((x) => [x.id, x.domain])));
         setTriggers(trig);
         return fetch("/api/veille", {
           method: "POST",
@@ -172,7 +174,7 @@ export default function Veille() {
                 <h2><a className="lien" href={sujet.url} target="_blank" rel="noopener noreferrer">{sujet.title}</a></h2>
                 {sujet.summary ? <p style={{ fontSize: 15, lineHeight: 1.55, color: "#DCE5F7", maxWidth: 760, position: "relative" }}>{sujet.summary.slice(0, 260)}{sujet.summary.length > 260 ? "…" : ""}</p> : null}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", position: "relative" }}>
-                  <span style={{ width: 34, height: 34, borderRadius: 17, background: "#fff", color: "#0A2A66", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{initiales(sujet.sourceName)}</span>
+                  <SourceLogo name={sujet.sourceName} domain={domaines[sujet.sourceId]} url={sujet.url} size={36} radius={18} />
                   <span style={{ fontSize: 13, color: "#C9D6F2" }}>{sujet.sourceName}{sujet.publishedAt ? ` · ${ilYa(sujet.publishedAt, now)}` : ""}{sujet.lang === "en" ? " · en anglais, sera traduit" : ""}</span>
                   <span style={{ flex: 1 }} />
                   <Link href={lienCreer(sujet)} style={{ height: 46, padding: "0 18px", borderRadius: 14, background: "#fff", color: "#0A2A66", textDecoration: "none", display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 800 }}>
@@ -197,7 +199,7 @@ export default function Veille() {
                 return (
                   <article key={it.id} className="tv-actu">
                     <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                      <span aria-hidden="true" style={{ width: 48, height: 48, borderRadius: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(145deg, ${COUL[th?.id ?? ""] ?? "#2563EB"}, #0A2A66)`, color: "#fff", fontFamily: "var(--font-mont)", fontWeight: 800, fontSize: 13 }}>{initiales(it.sourceName)}</span>
+                      <SourceLogo name={it.sourceName} domain={domaines[it.sourceId]} url={it.url} size={48} radius={14} couleur={COUL[th?.id ?? ""] ?? "#2563EB"} />
                       <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", fontSize: 12, color: "#5B6B86" }}>
                         <span className={`tv-pill ${e.tone}`}>{e.label}</span>
                         <strong style={{ color: "#33425C" }}>{it.sourceName}</strong>
@@ -242,7 +244,7 @@ export default function Veille() {
               {compte === null ? <span className="tv-gris">…</span> : compte.sources.length === 0 ? <span className="tv-gris">Pas encore de publication sourcée cette semaine.</span> : null}
               {(compte?.sources ?? []).map((s, i) => (
                 <div key={s.nom} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ display: "flex", fontSize: 14, gap: 8 }}><strong style={{ flex: 1, minWidth: 0 }}>{s.nom}</strong><span style={{ color: "#33425C", fontWeight: 700 }}>{s.n}</span></div>
+                  <div style={{ display: "flex", fontSize: 14, gap: 8, alignItems: "center" }}><SourceLogo name={s.nom} domain={s.domaine} size={24} radius={7} couleur={BARRES[i % BARRES.length]} /><strong style={{ flex: 1, minWidth: 0 }}>{s.nom}</strong><span style={{ color: "#33425C", fontWeight: 700 }}>{s.n}</span></div>
                   <span style={{ height: 8, borderRadius: 4, background: "#EDF1F7", display: "flex" }}><span style={{ width: `${Math.round((s.n / maxSrc) * 100)}%`, borderRadius: 4, background: BARRES[i % BARRES.length] }} /></span>
                 </div>
               ))}
