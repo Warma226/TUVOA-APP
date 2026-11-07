@@ -20,7 +20,11 @@ const VOIX: [string, string][] = [["Charon", "Charon — grave, posée"], ["Fenr
 
 async function api<T>(body: Record<string, unknown>): Promise<T> {
   const r = await fetch("/api/minute", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const d = await r.json();
+  const brut = await r.text();
+  let d: { error?: string } & Record<string, unknown>;
+  try { d = JSON.parse(brut); } catch {
+    throw new Error(r.status === 504 || /timed out|timeout/i.test(brut) ? "VOA a mis trop de temps à répondre : réessaie dans un instant." : `Le serveur a répondu une erreur (${r.status}). Réessaie dans un instant.`);
+  }
   if (!r.ok) throw new Error(d.error || `Erreur ${r.status}`);
   return d as T;
 }
