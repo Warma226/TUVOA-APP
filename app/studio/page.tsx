@@ -9,7 +9,7 @@ import { ImageField } from "@/components/ImageField";
 import Voa from "@/components/Voa";
 import { montserrat } from "@/lib/studio-font";
 import {
-  ANIM_FIXE, FORMATS, ICONES, POLICE, dessinerPage, nouveau, uid,
+  ANIM_FIXE, FORMATS, ICONES, POLICE, dessinerPage, dessinerSequence, dureeTotale, nouveau, uid,
   type Boucle, type Doc, type El, type Entree, type Format, type Genre, type Ombre, type Page,
 } from "@/lib/creation";
 import { GALERIE, GENRES, type Maquette } from "@/lib/modeles";
@@ -67,7 +67,18 @@ export default function Studio() {
 
   // Brouillon gardé dans ce navigateur
   useEffect(() => {
-    try { const b = localStorage.getItem(CLE_BROUILLON); if (b) setBrouillon(JSON.parse(b) as Doc); } catch { /* stockage indisponible */ }
+    try {
+      const b = localStorage.getItem(CLE_BROUILLON);
+      if (b) {
+        const d = JSON.parse(b) as Doc;
+        setBrouillon(d);
+        if (new URLSearchParams(window.location.search).get("reprendre") === "1") {
+          setDoc(d); setPageIdx(0); setEnVideo(d.genre === "video"); setEtape("editeur");
+          const l = localStorage.getItem("tuvoa-studio-legende"); if (l) { setLegende(l); localStorage.removeItem("tuvoa-studio-legende"); }
+          window.history.replaceState(null, "", "/studio");
+        }
+      }
+    } catch { /* stockage indisponible */ }
   }, []);
   useEffect(() => { if (etape !== "editeur") return; try { localStorage.setItem(CLE_BROUILLON, JSON.stringify(doc)); } catch { /* stockage indisponible */ } }, [doc, etape]);
 
@@ -107,14 +118,22 @@ export default function Studio() {
     const ctx = c.getContext("2d"); if (!ctx) return;
     if (!lecture) { dessinerPage(ctx, page, doc.format, Infinity, images.current); return; }
     let raf = 0; const t0 = performance.now();
+    const total = dureeTotale(doc);
+    // Vidéo en scènes : toute la séquence, avec la voix off
+    const son = doc.sequence && doc.audio ? new Audio(doc.audio) : null;
+    if (son) { son.loop = false; void son.play().catch(() => undefined); }
     const boucle = () => {
-      const t = ((performance.now() - t0) / 1000) % doc.duree;
-      dessinerPage(ctx, page, doc.format, t, images.current);
+      const brut = (performance.now() - t0) / 1000;
+      if (doc.sequence) {
+        if (son && brut >= total) { son.currentTime = 0; void son.play().catch(() => undefined); }
+        const t = son && !son.paused ? son.currentTime : brut % total;
+        dessinerSequence(ctx, doc, Math.min(t, total), images.current);
+      } else dessinerPage(ctx, page, doc.format, brut % doc.duree, images.current);
       raf = requestAnimationFrame(boucle);
     };
     raf = requestAnimationFrame(boucle);
-    return () => cancelAnimationFrame(raf);
-  }, [page, doc.format, doc.duree, lecture, version, policePrete]);
+    return () => { cancelAnimationFrame(raf); son?.pause(); };
+  }, [page, doc, lecture, version, policePrete]);
 
   // ─── Historique ────────────────────────────────────────────────
   const changer = useCallback((f: (d: Doc) => Doc, historique = true) => {
@@ -211,27 +230,44 @@ export default function Studio() {
   async function enregistrerVideo(): Promise<{ blob: Blob; ext: string }> {
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const ctx = c.getContext("2d"); if (!ctx) throw new Error("Canvas indisponible.");
-    const types = ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
+    const total = dureeTotale(doc);
+    const dessiner = (t: number) => (doc.sequence ? dessinerSequence(ctx, doc, t, images.current) : dessinerPage(ctx, page, doc.format, t, images.current));
+    const avecSon = Boolean(doc.sequence && doc.audio);
+    const types = avecSon
+      ? ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1,mp4a.40.2", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]
+      : ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
     const mime = types.find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t));
     if (!mime) throw new Error("Ce navigateur ne sait pas enregistrer de vidéo. Essaie avec Chrome.");
-    dessinerPage(ctx, page, doc.format, 0, images.current);
+    dessiner(0);
     const flux = c.captureStream(30);
+    // Voix off mixée dans la vidéo
+    let source: AudioBufferSourceNode | null = null; let ac: AudioContext | null = null;
+    if (avecSon) {
+      setMsg("Préparation de la voix off…");
+      ac = new AudioContext();
+      const tampon = await ac.decodeAudioData(await (await fetch(doc.audio as string)).arrayBuffer());
+      const sortie = ac.createMediaStreamDestination();
+      source = ac.createBufferSource(); source.buffer = tampon; source.connect(sortie);
+      for (const piste of sortie.stream.getAudioTracks()) flux.addTrack(piste);
+    }
     const rec = new MediaRecorder(flux, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
     const morceaux: Blob[] = [];
     rec.ondataavailable = (e) => { if (e.data.size) morceaux.push(e.data); };
     const fini = new Promise<void>((ok) => { rec.onstop = () => ok(); });
     rec.start(200);
+    source?.start();
     const t0 = performance.now();
     await new Promise<void>((ok) => {
       const pas = () => {
         const t = (performance.now() - t0) / 1000;
-        dessinerPage(ctx, page, doc.format, Math.min(t, doc.duree), images.current);
-        setMsg(`Enregistrement de la vidéo… ${Math.min(100, Math.round((t / doc.duree) * 100))} %`);
-        if (t >= doc.duree) ok(); else requestAnimationFrame(pas);
+        dessiner(Math.min(t, total));
+        setMsg(`Enregistrement de la vidéo… ${Math.min(100, Math.round((t / total) * 100))} %`);
+        if (t >= total) ok(); else requestAnimationFrame(pas);
       };
       requestAnimationFrame(pas);
     });
     rec.stop(); await fini; setMsg("");
+    try { source?.stop(); await ac?.close(); } catch { /* déjà arrêté */ }
     const type = mime.split(";")[0];
     return { blob: new Blob(morceaux, { type }), ext: type === "video/mp4" ? "mp4" : "webm" };
   }
@@ -284,7 +320,7 @@ export default function Studio() {
         const d = await r.json(); if (!r.ok) throw new Error(d.error || "Envoi de l'image impossible.");
         urls.push(d.url);
       }
-      const titre = doc.pages[0].elements.find((e) => e.role === "titre")?.texte ?? "Création du Studio";
+      const titre = doc.titre ?? doc.pages[0].elements.find((e) => e.role === "titre")?.texte ?? "Création du Studio";
       const r = await fetch("/api/studio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "creation", images: urls, video, legende, titre, quand: quand ? new Date(quand).toISOString() : undefined }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || "Création du post impossible.");
       setEnvoye(d.id);
@@ -342,6 +378,14 @@ export default function Studio() {
               );
             })}
           </div>
+          <Link href="/minute-cyber" className="card" style={{ flexDirection: "row", alignItems: "center", gap: 16, textDecoration: "none", color: "#fff", background: "#0A0A0A", borderColor: "#0A0A0A", padding: 18 }}>
+            <span style={{ width: 64, height: 64, borderRadius: 14, background: "#E94A06", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 26, flexShrink: 0 }}>60s</span>
+            <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+              <strong style={{ fontSize: 22 }}>La minute cyber</strong>
+              <span style={{ color: "#C7CBD6", fontSize: 14 }}>L&apos;assistant de la série vidéo : script, storyboard, voix off et montage automatique.</span>
+            </span>
+            <span className="btn small primary">Ouvrir</span>
+          </Link>
           {brouillon ? <button type="button" className="btn ghost" onClick={reprendre}>Reprendre ma dernière création</button> : null}
         </main>
       ) : etape === "galerie" ? (
@@ -506,7 +550,12 @@ export default function Studio() {
                 <label className="field">Format<select value={doc.format} onChange={(e) => changer((d) => ({ ...d, format: e.target.value as Format }))}>{Object.entries(FORMATS).map(([k, v]) => <option key={k} value={k}>{v.nom} ({v.w} × {v.h})</option>)}</select></label>
                 {couleur("Fond de la page", page.fond, (c) => majPage({ fond: c }))}
                 <p className="muted" style={{ fontSize: 13 }}>Dégradés : « lin:#0B1633,#2563EB,160 » (linéaire) ou « rad:#FFD45A,#F2B21B,#4A2204 » (radial).</p>
-                {num("Durée de la vidéo (s)", doc.duree, (v) => changer((d) => ({ ...d, duree: Math.max(2, Math.min(60, v)) })), 1)}
+                {doc.sequence ? (
+                  <>
+                    {num("Durée de cette scène (s)", page.duree ?? doc.duree, (v) => majPage({ duree: Math.max(1, Math.min(30, v)) }), 0.1)}
+                    <p className="muted" style={{ fontSize: 13 }}>Vidéo en {doc.pages.length} scènes · {Math.round(dureeTotale(doc))} s au total{doc.audio ? " · avec voix off" : ""}. « Lecture » joue toute la séquence.</p>
+                  </>
+                ) : num("Durée de la vidéo (s)", doc.duree, (v) => changer((d) => ({ ...d, duree: Math.max(2, Math.min(60, v)) })), 1)}
                 <p className="muted" style={{ fontSize: 13 }}>Clique sur un élément du visuel pour le modifier.</p>
               </section>
             )}
@@ -525,7 +574,7 @@ export default function Studio() {
               <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
                 {btn(busy === "png" ? "…" : "PNG de la page", () => exporterPNG(false))}
                 {doc.pages.length > 1 ? btn("PNG de toutes les pages", () => exporterPNG(true)) : null}
-                {btn(busy === "video" ? "Enregistrement…" : `Vidéo (${doc.duree} s)`, exporterVideo)}
+                {btn(busy === "video" ? "Enregistrement…" : `Vidéo (${Math.round(dureeTotale(doc))} s)`, exporterVideo)}
               </div>
               <label className="field">Texte du post<textarea rows={4} value={legende} onChange={(e) => setLegende(e.target.value)} placeholder="VOA le propose quand elle réécrit les textes." /></label>
               <div className="grid2">

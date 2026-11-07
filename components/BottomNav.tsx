@@ -15,7 +15,7 @@ const items: { href: string; label: string; icon: IconName }[] = [
   { href: "/connexions", label: "Connexions", icon: "connexions" },
 ];
 
-const SECONDAIRES = ["/studio", "/communaute", "/creer", "/editeur", "/apercu", "/declencheurs", "/rubriques", "/sources"];
+const SECONDAIRES = ["/studio", "/minute-cyber", "/communaute", "/creer", "/editeur", "/apercu", "/declencheurs", "/rubriques", "/sources"];
 
 export function BottomNav() {
   const path = usePathname();
