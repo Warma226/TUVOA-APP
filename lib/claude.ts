@@ -32,7 +32,7 @@ export type GenerateInput = {
   citation?: { texte: string; auteur: string; fonction: string; contexte: string };
 };
 
-export type RewriteAction = "raccourcir" | "reformuler" | "expliquer" | "ton" | "traduire";
+export type RewriteAction = "raccourcir" | "reformuler" | "expliquer" | "ton" | "traduire" | "ajuster";
 
 // Deux fournisseurs possibles : Claude (ANTHROPIC_API_KEY, payant à l'usage)
 // ou Google Gemini (GEMINI_API_KEY, offre gratuite avec quotas). Claude est utilisé s'il est configuré.
@@ -369,8 +369,10 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
   };
 }
 
-export async function rewrite(action: RewriteAction, text: string, platform: string): Promise<string> {
+export async function rewrite(action: RewriteAction, text: string, platform: string, cible?: { min: number; max: number }): Promise<string> {
+  const c = cible ?? { min: 0, max: 0 };
   const consignes: Record<RewriteAction, string> = {
+    ajuster: `Ajuste la longueur de ce texte entre ${c.min} et ${c.max} caractères (espaces compris) : ${text.length > c.max ? "resserre en gardant l'essentiel, l'accroche et la source" : "développe avec du contexte utile et vérifiable tiré du texte lui-même, sans rien inventer"}. Garde l'accroche dans les 125 premiers caractères et les hashtags en fin de texte.`,
     raccourcir: "Raccourcis ce texte de moitié en gardant l'essentiel et la source.",
     reformuler: "Reformule ce texte avec une autre accroche, même sens, même longueur.",
     expliquer: "Ajoute une explication très simple de ce que ça change concrètement pour le lecteur.",

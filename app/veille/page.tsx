@@ -37,7 +37,7 @@ function lienCreer(it: VeilleItem) {
   const params = new URLSearchParams({ src: it.url, source: it.sourceName, titre: it.title, resume: it.summary.slice(0, 400) });
   const theme = themeDe(it)?.label;
   if (theme) params.set("theme", theme);
-  return `/creer?${params.toString()}`;
+  return `/creer/actu?${params.toString()}`;
 }
 
 export default function Veille() {

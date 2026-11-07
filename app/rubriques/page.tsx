@@ -28,7 +28,7 @@ export default function Rubriques() {
           const ex = EXEMPLES[r.id];
           const src = visualUrl({ rubrique: r.id, visual: { titre: ex.titre, texte: ex.texte, nom: ex.nom, specialite: ex.specialite }, source_name: ex.source ?? null }, "portrait");
           return (
-            <Link key={r.id} href={`/creer?rubrique=${r.id}`} className="card link" style={{ flexDirection: "row", gap: 14, padding: 12 }} aria-label={`Créer un post ${r.hashtag}`}>
+            <Link key={r.id} href={`/creer/${r.id}`} className="card link" style={{ flexDirection: "row", gap: 14, padding: 12 }} aria-label={`Créer un post ${r.hashtag}`}>
               {r.id === "actu" || r.id === "citation" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={src} alt="" loading="lazy" style={{ width: 112, aspectRatio: "4 / 5", objectFit: "cover", borderRadius: 10, background: "var(--gris-1)", flexShrink: 0 }} />

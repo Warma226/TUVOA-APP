@@ -14,7 +14,8 @@ export async function POST(req: Request) {
       if (!aiConfigured()) {
         return NextResponse.json({ error: "L'assistant de réécriture a besoin de l'IA : ajoute GEMINI_API_KEY (gratuit) ou ANTHROPIC_API_KEY dans Vercel." }, { status: 400 });
       }
-      const text = await rewrite(body.action as RewriteAction, String(body.text ?? ""), String(body.platform ?? ""));
+      const cible = body.cible && Number(body.cible.max) > 0 ? { min: Number(body.cible.min) || 0, max: Number(body.cible.max) } : undefined;
+      const text = await rewrite(body.action as RewriteAction, String(body.text ?? ""), String(body.platform ?? ""), cible);
       return NextResponse.json({ text });
     }
     const input = body as GenerateInput;

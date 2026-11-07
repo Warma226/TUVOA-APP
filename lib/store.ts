@@ -96,6 +96,17 @@ export async function listPosts(limit = 50): Promise<Post[]> {
   return (data ?? []) as Post[];
 }
 
+// Posts d'une période (calendrier) : prévus ou publiés entre deux dates, plus les brouillons créés pendant ce temps.
+export async function listPostsEntre(de: string, a: string): Promise<Post[]> {
+  if (isDemo()) return mem().posts.filter((p) => (p.scheduled_at ?? p.created_at) >= de && (p.scheduled_at ?? p.created_at) < a);
+  const [r1, r2] = await Promise.all([
+    db().from("posts").select("*").gte("scheduled_at", de).lt("scheduled_at", a).neq("status", "annule").limit(1500),
+    db().from("posts").select("*").is("scheduled_at", null).gte("created_at", de).lt("created_at", a).neq("status", "annule").limit(300),
+  ]);
+  if (r1.error) throw new Error(r1.error.message);
+  return [...((r1.data ?? []) as Post[]), ...((r2.data ?? []) as Post[])];
+}
+
 export async function getPost(id: string): Promise<Post | null> {
   if (isDemo()) return mem().posts.find((p) => p.id === id) ?? null;
   const { data, error } = await db().from("posts").select("*").eq("id", id).maybeSingle();

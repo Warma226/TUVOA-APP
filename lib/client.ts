@@ -96,6 +96,18 @@ export async function listPosts(): Promise<Post[]> {
   return d.posts ?? [];
 }
 
+export async function listPostsEntre(de: Date, a: Date): Promise<Post[]> {
+  if (await isDemo()) return localPosts().filter((p) => { const t = new Date(p.scheduled_at ?? p.created_at).getTime(); return t >= de.getTime() && t < a.getTime(); });
+  const d = await json<{ posts: Post[] }>(await fetch(`/api/posts?de=${encodeURIComponent(de.toISOString())}&a=${encodeURIComponent(a.toISOString())}`, { cache: "no-store" }));
+  return d.posts ?? [];
+}
+
+// Liens des visuels (signés par le serveur) pour un post en cours d'écriture.
+export async function visuelsDe(p: Partial<Post>): Promise<Record<string, string>> {
+  const d = await postsApi({ action: "visuals", post: p });
+  return (d.post as PostWithVisuals | undefined)?.visuals ?? {};
+}
+
 export async function loadPost(id: string): Promise<PostWithVisuals> {
   if (await isDemo()) {
     const p = localPosts().find((x) => x.id === id);
