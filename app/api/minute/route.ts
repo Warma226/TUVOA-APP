@@ -42,11 +42,12 @@ function nettoyerScenes(brut: unknown[]): Scene[] {
   return scenes.slice(0, 12);
 }
 
-// Voix off de synthèse (Google Gemini, modèle TTS) → fichier WAV.
+// Voix off de synthèse (Google Gemini TTS, offre gratuite sur les modèles récents) → fichier WAV.
+// Modèles essayés du plus récent au plus ancien : un modèle sans offre gratuite ou saturé laisse la place au suivant.
 async function synthese(texte: string, voix: string): Promise<{ url: string; duree: number }> {
   const cle = process.env.GEMINI_API_KEY;
   if (!cle) throw new Error("La voix de synthèse demande une clé GEMINI_API_KEY dans Vercel. En attendant, enregistre ta voix ou importe un fichier audio.");
-  const modeles = [process.env.GEMINI_TTS_MODEL, "gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"].filter(Boolean) as string[];
+  const modeles = [process.env.GEMINI_TTS_MODEL, "gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"].filter(Boolean) as string[];
   let derniere = "";
   for (const m of modeles) {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
