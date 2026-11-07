@@ -4,18 +4,23 @@ import { archivoFonts, montserratFonts, serifItalicFonts } from "@/lib/fonts";
 import { verifyParams, appUrl } from "@/lib/sign";
 import { renderSlide, type SlideData } from "@/lib/recap-slides";
 
-// Les photos d'articles sont chargées ici et passées en data URI : formats non pris en charge
-// par le moteur de rendu (WebP, AVIF…) ou liens bloqués → l'emplacement reste sans photo au lieu de faire échouer l'image.
+// Les photos d'articles sont chargées ici et passées en data URI. WebP, AVIF, GIF sont convertis en JPEG
+// (le moteur de rendu ne les lit pas) ; lien bloqué → l'emplacement reste sans photo au lieu de faire échouer l'image.
 async function safeImage(url: string | null): Promise<string | undefined> {
   if (!url || !/^https?:\/\//.test(url)) return undefined;
   try {
     const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (compatible; TUVOA/1.0)" }, signal: AbortSignal.timeout(6000) });
     if (!res.ok) return undefined;
     const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
-    if (!["image/jpeg", "image/jpg", "image/png"].includes(type)) return undefined;
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > 6_000_000) return undefined;
-    return `data:${type === "image/jpg" ? "image/jpeg" : type};base64,${buf.toString("base64")}`;
+    if (buf.length > 12_000_000) return undefined;
+    if (["image/jpeg", "image/jpg", "image/png"].includes(type) && buf.length <= 6_000_000) {
+      return `data:${type === "image/jpg" ? "image/jpeg" : type};base64,${buf.toString("base64")}`;
+    }
+    // WebP, AVIF, GIF… (ou type mal déclaré) : converti en JPEG pour le moteur de rendu.
+    const sharp = (await import("sharp")).default;
+    const jpg = await sharp(buf, { animated: false }).rotate().resize({ width: 1400, height: 1400, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
+    return `data:image/jpeg;base64,${jpg.toString("base64")}`;
   } catch {
     return undefined;
   }
