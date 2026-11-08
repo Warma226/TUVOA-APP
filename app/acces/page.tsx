@@ -22,6 +22,8 @@ function Acces() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [majuscules, setMajuscules] = useState(false);
+  const [qui, setQui] = useState<"admin" | "membre">("admin");
+  const [contact, setContact] = useState("");
   const [titres, setTitres] = useState<string[]>([]);
   useEffect(() => {
     fetch("/api/vitrine").then((r) => (r.ok ? r.json() : null)).then((d: { titres?: string[] } | null) => setTitres(d?.titres ?? [])).catch(() => {});
@@ -29,11 +31,12 @@ function Acces() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!password) return setError("Entre le mot de passe.");
+    if (qui === "membre" && !contact.trim()) return setError("Entrez votre e-mail ou téléphone.");
+    if (!password) return setError("Entrez le mot de passe.");
     setBusy(true);
     setError("");
     try {
-      const res = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+      const res = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(qui === "membre" ? { password, contact } : { password }) });
       const d = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(d.error || `Connexion impossible (${res.status}).`);
       window.location.href = safeNext(q.get("next"));
@@ -95,7 +98,15 @@ function Acces() {
                 <span>Espace de publication · se prononce « tu vois »</span>
               </div>
               <form onSubmit={submit} className="stack" style={{ gap: 14 }} noValidate>
-                <input type="text" name="username" autoComplete="username" value="tuvoa" readOnly hidden />
+                <div className="qui" role="tablist" aria-label="Type de compte">
+                  <button type="button" role="tab" aria-selected={qui === "admin"} onClick={() => { setQui("admin"); setError(""); }}>Administration</button>
+                  <button type="button" role="tab" aria-selected={qui === "membre"} onClick={() => { setQui("membre"); setError(""); }}>Membre de l&apos;équipe</button>
+                </div>
+                {qui === "membre" ? (
+                  <label className="field" htmlFor="contact">E-mail ou téléphone
+                    <input id="contact" name="username" type="text" autoComplete="username" value={contact} onChange={(e) => setContact(e.target.value)} placeholder="Celui donné à l'administration" style={{ height: 52, background: "#f7f9fc", borderRadius: 14 }} />
+                  </label>
+                ) : <input type="text" name="username" autoComplete="username" value="tuvoa" readOnly hidden />}
                 <label className="field" htmlFor="password">
                   Mot de passe
                   <span className="login-pass">
@@ -104,7 +115,6 @@ function Acces() {
                       name="password"
                       type={show ? "text" : "password"}
                       autoComplete="current-password"
-                      autoFocus
                       placeholder="Entrez votre mot de passe"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
