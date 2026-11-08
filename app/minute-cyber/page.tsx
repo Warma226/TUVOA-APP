@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Trait } from "@/components/BottomNav";
 import { Jauge } from "@/components/Atelier";
 import { useVoirPlus } from "@/components/VoirPlus";
+import { VOIX } from "@/lib/voix-liste";
 import Voa from "@/components/Voa";
 import { montserrat } from "@/lib/studio-font";
 import { FORMATS, POLICE, dessinerPage, dessinerSequence, dureeTotale, type Doc, type Page } from "@/lib/creation";
@@ -18,7 +19,6 @@ import {
 const CLE_BROUILLON = "tuvoa-studio-brouillon";
 const CLE_LEGENDE = "tuvoa-studio-legende";
 const COULEUR: Record<TypeScene, string> = { accroche: "#0A0A0A", histoire: "#2563EB", message: "#22C55E", appel: "#16A34A", revelation: "#E94A06", technique: "#0A2A66", reflexes: "#6E9BFF", fin: "#94A3B8" };
-const VOIX: [string, string][] = [["Charon", "Charon — grave, posée"], ["Fenrir", "Fenrir — intense"], ["Orus", "Orus — ferme"], ["Puck", "Puck — vive"], ["Kore", "Kore — claire (féminine)"], ["Aoede", "Aoede — chaleureuse (féminine)"]];
 
 async function api<T>(body: Record<string, unknown>): Promise<T> {
   const r = await fetch("/api/minute", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -359,7 +359,7 @@ export default function MinuteCyber() {
                   <div className="tv-voix-choix">
                     <div>
                       <strong>La voix de VOA</strong>
-                      <select value={voixNom} onChange={(e) => setVoixNom(e.target.value)} aria-label="Voix">{VOIX.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                      <select value={voixNom} onChange={(e) => setVoixNom(e.target.value)} aria-label="Voix"><optgroup label="Voix masculines">{VOIX.filter((v) => v.genre === "m").map((v) => <option key={v.id} value={v.id}>{v.nom}</option>)}</optgroup><optgroup label="Voix féminines">{VOIX.filter((v) => v.genre === "f").map((v) => <option key={v.id} value={v.id}>{v.nom}</option>)}</optgroup></select>
                       <button type="button" className="tv-btn-nuit" style={{ height: 40, justifyContent: "center" }} disabled={!!busy} onClick={voixVoa}>{busy === "voix" ? "VOA ENREGISTRE…" : "GÉNÉRER LA VOIX"}</button>
                     </div>
                     <div>
