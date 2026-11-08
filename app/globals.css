@@ -762,3 +762,5 @@ details summary { list-style-position: inside; }
 .tv-regle-carte .chiffres small { font-size: 11px; color: var(--gris-t); }
 .tv-regle-carte .spark { display: flex !important; flex-direction: row !important; gap: 3px; align-items: flex-end; height: 28px; }
 .tv-regle-carte .spark i { display: block; width: 6px; border-radius: 3px; }
+button.tv-etape-fixe { border: 0; background: none; font: inherit; cursor: pointer; }
+button.tv-etape-fixe:hover:not([aria-current="step"]) { background: rgba(10,42,102,0.06); }
