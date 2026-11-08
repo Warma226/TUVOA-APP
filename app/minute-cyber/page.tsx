@@ -41,7 +41,7 @@ const dureeAudio = (src: string) => new Promise<number>((ok, ko) => {
 
 export default function MinuteCyber() {
   const router = useRouter();
-  const [saison, setSaison] = useState<Proposition[]>([]);
+  const [, setSaison] = useState<Proposition[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [ep, setEp] = useState<Episode | null>(null);
   const [sujet, setSujet] = useState("");
@@ -77,7 +77,6 @@ export default function MinuteCyber() {
     setBusy(nom); setError(""); setInfo("");
     try { return await f(); } catch (e) { setError((e as Error).message); } finally { setBusy(""); }
   }
-  const proposerSaison = () => action("saison", async () => { const d = await api<{ saison: Proposition[] }>({ action: "saison" }); setSaison(d.saison); });
   const ecrire = (s: string, pitch?: string) => action("script", async () => {
     const d = await api<{ saison: Proposition[]; episodes: Episode[]; episode: Episode; alerte?: string }>({ action: "script", sujet: s, pitch });
     setSaison(d.saison); setEpisodes(d.episodes); choisir(d.episode); setSujet(""); setVue("script");
@@ -184,23 +183,8 @@ export default function MinuteCyber() {
         {info ? <p style={{ color: "#1D4ED8", fontWeight: 600, margin: 0 }}>{info}</p> : null}
 
         <div className="row" style={{ alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
-          {/* Colonne : saison et épisodes */}
+          {/* Colonne : épisodes */}
           <aside className="stack" style={{ flex: "0 1 320px", minWidth: 260, gap: 14 }}>
-            <div className="card" style={{ gap: 10 }}>
-              <div className="row" style={{ justifyContent: "space-between" }}>
-                <strong>Saison proposée</strong>
-                <button type="button" className="btn small ghost" disabled={!!busy} onClick={proposerSaison}>{busy === "saison" ? "…" : saison.length ? "Renouveler" : "Proposer"}</button>
-              </div>
-              {saison.length === 0 ? <p className="muted" style={{ margin: 0 }}>VOA te propose 10 épisodes, du plus courant au plus sournois.</p> : null}
-              {saison.map((p) => (
-                <button key={p.menace + p.titre} type="button" disabled={!!busy} onClick={() => void ecrire(p.menace, `${p.titre}. ${p.pitch}`)}
-                  style={{ textAlign: "left", border: "1px solid #E5E7EB", borderRadius: 12, padding: 10, background: "#fff", cursor: "pointer", display: "flex", flexDirection: "column", gap: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1, color: "#E94A06" }}>{p.menace.toUpperCase()}</span>
-                  <strong style={{ fontSize: 15 }}>{p.titre}</strong>
-                  <span className="muted" style={{ fontSize: 13 }}>{p.pitch}</span>
-                </button>
-              ))}
-            </div>
             <div className="card" style={{ gap: 8 }}>
               <strong>Mes épisodes</strong>
               {episodes.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucun épisode pour l&apos;instant.</p> : null}
@@ -329,7 +313,7 @@ export default function MinuteCyber() {
             <section className="card" style={{ flex: "1 1 600px", alignItems: "center", textAlign: "center", padding: 40 }}>
               <Voa humeur="ecoute" taille={120} />
               <strong style={{ fontSize: 22 }}>Premier épisode ?</strong>
-              <p className="muted">Tape une menace en haut (par exemple « ingénierie sociale »), ou demande à VOA de proposer une saison.</p>
+              <p className="muted">Tape une menace en haut (par exemple « ingénierie sociale ») : VOA écrit l&apos;épisode.</p>
             </section>
           )}
         </div>
