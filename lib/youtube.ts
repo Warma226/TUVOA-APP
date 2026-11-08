@@ -232,10 +232,17 @@ Chaque moment devient un Reel choc : 30 à 60 secondes, JAMAIS plus d'une minute
 Évite les génériques, les sponsors et les appels à s'abonner. Les minutages doivent être exacts.
 Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "accroche choc en français, 60 caractères max", "pourquoi": "pourquoi ce moment marque, une phrase en français", "citation": "la phrase la plus forte, mot pour mot, traduite en français si besoin, 160 caractères max", "soustitres": "ce qui est dit dans l'extrait, en français, 400 caractères max", "format": "reel" ou "carrousel"}]`;
   // Alias « latest » : suit le modèle Flash courant de Google, sans changer le code à chaque nouvelle version.
-  const modeles = ["gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash"];
+  // Quand un modèle est saturé (503) ou au quota (429), on passe au suivant après une courte pause,
+  // puis on refait un tour : les pics de demande chez Google durent souvent quelques secondes.
+  const modeles = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.8-flash", "gemini-2.5-flash", "gemini-flash-latest", "gemini-flash-lite-latest"];
   const erreurs: string[] = [];
   let derniere = "";
-  for (const m of modeles) {
+  let sature = 0;
+  const debutT = Date.now();
+  for (const [i, m] of modeles.entries()) {
+    if (Date.now() - debutT > 200_000) break; // garder de la marge sur la limite de 300 s de la fonction
+    if (i === 4) await new Promise((ok) => setTimeout(ok, 8000)); // second tour
+
     const generationConfig: Record<string, unknown> = { responseMimeType: "application/json", temperature: 0.4 };
     if (info.duree > 1500) generationConfig.mediaResolution = "MEDIA_RESOLUTION_LOW"; // longs documentaires
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
@@ -244,7 +251,11 @@ Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "ac
       signal: AbortSignal.timeout(280000),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { derniere = (d as { error?: { message?: string } }).error?.message ?? `Erreur ${r.status}`; erreurs.push(`${m} : ${derniere}`); continue; }
+    if (!r.ok) {
+      derniere = (d as { error?: { message?: string } }).error?.message ?? `Erreur ${r.status}`; erreurs.push(`${m} : ${derniere}`);
+      if (r.status === 503 || r.status === 429 || /high demand|overloaded|quota/i.test(derniere)) { sature++; await new Promise((ok) => setTimeout(ok, 3000)); }
+      continue;
+    }
     const txt = ((d as { candidates?: { content?: { parts?: { text?: string }[] } }[] }).candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("");
     let liste: Extrait[] = [];
     try { liste = JSON.parse(txt.replace(/^```json\s*|```$/g, "")); } catch { derniere = "Réponse illisible."; continue; }
@@ -257,7 +268,8 @@ Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "ac
     return liste;
   }
   console.error("[videos] repérage", erreurs.join(" | "));
-  throw new Error(`Repérage impossible : ${erreurs.length > 1 ? erreurs[0].replace(/^[^:]+ : /, "") : derniere}`);
+  if (sature && sature >= erreurs.length) throw new Error("Les serveurs d'IA de Google sont saturés en ce moment. Réessayez dans quelques minutes.");
+  throw new Error(`Repérage impossible : ${derniere}`);
 }
 
 export async function ecarter(id: string) { await db().from("videos_yt").update({ statut: "ecarte" }).eq("id", id); }
