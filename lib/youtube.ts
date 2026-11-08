@@ -226,10 +226,11 @@ export async function reperer(id: string): Promise<Extrait[]> {
   const consigne = `Tu es éditeur vidéo pour TUVOA Tech Media, un média tech francophone (Afrique de l'Ouest) qui publie des Reels, TikTok et carrousels.
 Vidéo : « ${info.titre} » (chaîne ${info.chaine}, ${info.genre === "docu" ? "documentaire" : info.genre === "interview" ? "interview" : "actualité"}).
 ${choc
-  ? `Repère les 4 moments les plus CHOCS : une révélation, un aveu, un chiffre qui frappe, une prise de position tranchée, une phrase qu'on a envie de partager. Pour une interview, garde la parole de l'invité, pas les questions. Chaque moment fait 15 à 45 secondes et se comprend sans contexte.`
-  : `Choisis 3 ou 4 extraits de 20 à 45 secondes qui tiennent seuls : l'info principale, une explication claire, un chiffre fort ou une phrase choc.`}
+  ? `Repère les 4 moments les plus CHOCS : une révélation, un aveu, un chiffre qui frappe, une prise de position tranchée, une phrase qu'on a envie de partager. Pour une interview, garde la parole de l'invité, pas les questions. `
+  : `Repère les 4 moments les plus forts : l'info qui choque, un chiffre qui frappe, une phrase choc, une explication qui fait « wow ».`}
+Chaque moment devient un Reel choc : 30 à 60 secondes, JAMAIS plus d'une minute. Il démarre directement sur la phrase forte (accroche dans les 3 premières secondes, pas d'introduction) et se comprend sans contexte.
 Évite les génériques, les sponsors et les appels à s'abonner. Les minutages doivent être exacts.
-Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "titre accrocheur en français, 70 caractères max", "pourquoi": "pourquoi ce moment marque, une phrase en français", "citation": "la phrase la plus forte, mot pour mot, traduite en français si besoin, 160 caractères max", "soustitres": "ce qui est dit dans l'extrait, en français, 400 caractères max", "format": "reel" ou "carrousel"}]`;
+Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "accroche choc en français, 60 caractères max", "pourquoi": "pourquoi ce moment marque, une phrase en français", "citation": "la phrase la plus forte, mot pour mot, traduite en français si besoin, 160 caractères max", "soustitres": "ce qui est dit dans l'extrait, en français, 400 caractères max", "format": "reel" ou "carrousel"}]`;
   // Alias « latest » : suit le modèle Flash courant de Google, sans changer le code à chaque nouvelle version.
   const modeles = ["gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash"];
   const erreurs: string[] = [];
@@ -249,7 +250,7 @@ Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "ti
     try { liste = JSON.parse(txt.replace(/^```json\s*|```$/g, "")); } catch { derniere = "Réponse illisible."; continue; }
     if (!Array.isArray(liste)) { derniere = "Réponse illisible."; continue; }
     liste = liste.filter((e) => Number.isFinite(e.debut) && Number.isFinite(e.fin) && e.fin > e.debut && e.debut >= 0 && e.fin <= info.duree + 1)
-      .map((e) => ({ ...e, debut: Math.round(e.debut), fin: Math.round(Math.min(e.fin, e.debut + 60)), format: (e.format === "carrousel" ? "carrousel" : "reel") as Extrait["format"] }))
+      .map((e) => ({ ...e, debut: Math.round(e.debut), fin: Math.round(Math.min(e.fin, e.debut + 60)) /* Reel : 1 min max */, format: (e.format === "carrousel" ? "carrousel" : "reel") as Extrait["format"] }))
       .sort((a, b) => a.debut - b.debut).slice(0, 4);
     if (!liste.length) { derniere = "Aucun extrait trouvé."; continue; }
     await db().from("videos_yt").update({ extraits: liste, statut: "analyse" }).eq("id", id);

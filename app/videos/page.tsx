@@ -193,7 +193,7 @@ export default function VideosPage() {
                 {!extraits.length ? (
                   <div className="tv-carte" style={{ alignItems: "flex-start", gap: 10 }}>
                     <strong style={{ fontSize: 16 }}>{busy === "extraits" ? "VOA regarde la vidéo…" : v.info.genre === "actu" ? "Les meilleurs extraits, prêts à partager" : "Les moments chocs, prêts à partager"}</strong>
-                    <span className="tv-gris" style={{ fontSize: 13 }}>{busy === "extraits" ? "Il note les passages forts et traduit ce qui est dit. Cela prend une à trois minutes : vous pouvez rester sur cette page." : v.info.genre === "actu" ? "En un clic, VOA visionne la vidéo et sélectionne 3 ou 4 passages de 20 à 45 s qui tiennent seuls, sous-titrés en français." : "En un clic, VOA visionne toute la vidéo et sélectionne les 4 moments les plus forts : révélations, aveux, chiffres qui frappent, phrases à partager."}</span>
+                    <span className="tv-gris" style={{ fontSize: 13 }}>{busy === "extraits" ? "Il note les passages forts et traduit ce qui est dit. Cela prend une à trois minutes : vous pouvez rester sur cette page." : v.info.genre === "actu" ? "En un clic, VOA visionne la vidéo et sélectionne 4 Reels chocs de 1 min maximum, qui démarrent sur la phrase forte, sous-titrés en français." : "En un clic, VOA visionne toute la vidéo et sélectionne 4 Reels chocs de 1 min maximum : révélations, aveux, chiffres qui frappent, phrases à partager."}</span>
                     <div className="row" style={{ gap: 8 }}>
                       <button type="button" className="tv-btn-nuit" onClick={reperer} disabled={Boolean(busy)}>{busy === "extraits" ? "VOA REGARDE LA VIDÉO…" : v.info.genre === "actu" ? "REPÉRER LES EXTRAITS" : "TROUVER LES MOMENTS CHOCS"}</button>
                       <button type="button" className="btn" onClick={() => ecarter(v.id)}>Écarter cette vidéo</button>
@@ -214,7 +214,7 @@ export default function VideosPage() {
                         {i === ext && x.soustitres ? <div className="st"><b>SOUS-TITRES FR · </b>{x.soustitres}</div> : null}
                         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                           <button type="button" className="btn small" onClick={() => { setExt(i); setLecture({ debut: x.debut, fin: x.fin }); }}><Trait d="M8 5v14l11-7z" size={14} />Lire</button>
-                          <button type="button" className={i === ext ? "tv-btn-nuit" : "btn small"} style={i === ext ? { height: 40, fontSize: 13 } : undefined} onClick={() => { setExt(i); setDecoupe(x); }}><Trait d="M6 2v20M18 2v20M2 12h20" size={14} />Couper en Reel 9:16</button>
+                          <button type="button" className={i === ext ? "tv-btn-nuit" : "btn small"} style={i === ext ? { height: 40, fontSize: 13 } : undefined} onClick={() => { setExt(i); setDecoupe(x); }}><Trait d="M6 2v20M18 2v20M2 12h20" size={14} />Reel choc · 1 min max</button>
                           <Link href={`/creer/actu?idee=${encodeURIComponent(idee(x))}`} className="btn small">Écrire le post</Link>
                           {x.citation ? <button type="button" className="btn small" onClick={() => { void navigator.clipboard?.writeText(`« ${x.citation} » — ${v.info.chaine} (youtu.be/${v.id}?t=${x.debut})`); setInfo("Citation copiée avec sa source."); }}>Copier la citation</button> : null}
                           <button type="button" className="btn small" onClick={() => { void navigator.clipboard?.writeText(lien(x)); setInfo("Lien horodaté copié."); }}>Copier le lien du moment</button>
@@ -232,7 +232,7 @@ export default function VideosPage() {
               <h2 className="tv-h2" style={{ fontSize: 17 }}>Ce que vous pouvez en faire</h2>
               <ol className="tv-vid-etapes">
                 <li><b>1</b><span><strong>Toutes les vidéos</strong> : écrire un post qui raconte et commente le moment, citer une phrase courte avec la source, partager le lien horodaté.</span></li>
-                <li><b>2</b><span><strong>Couper en Reel 9:16</strong> : importez le fichier de la vidéo ; VOA coupe au bon minutage, recadre en vertical, incruste les sous-titres, le logo TUVOA et le crédit de la chaîne.</span></li>
+                <li><b>2</b><span><strong>Reel choc (1 min max)</strong> : importez le fichier de la vidéo ; VOA coupe au bon minutage, recadre en vertical, met l&apos;accroche en bandeau orange, incruste les sous-titres, le logo TUVOA et le crédit de la chaîne.</span></li>
                 <li><b>3</b><span>Gardez des extraits courts et ajoutez votre commentaire dans le post : c&apos;est ce qui protège le mieux en cas de réclamation.</span></li>
               </ol>
             </section>
@@ -245,17 +245,18 @@ export default function VideosPage() {
           </aside>
         </div>
       </div>
-      {decoupe && v ? <Decoupe extrait={decoupe} credit={`Source : ${v.info.chaine}${v.licence === "cc" ? " (CC BY)" : ""}`} titre={decoupe.titre} fermer={() => setDecoupe(null)} /> : null}
+      {decoupe && v ? <Decoupe extrait={decoupe} credit={`Source : ${v.info.chaine}${v.licence === "cc" ? " (CC BY)" : ""}`} titre={decoupe.citation ? `« ${decoupe.citation} »` : decoupe.titre} fermer={() => setDecoupe(null)} /> : null}
     </div>
   );
 }
 
 // Découpe 9:16 dans le navigateur : la vidéo importée est lue de « debut » à « fin » et enregistrée sur un canvas
 // 1080 × 1920 avec sous-titres, logo TUVOA et crédit.
-function Decoupe({ extrait, credit, titre, fermer }: { extrait: Extrait; credit: string; titre: string; fermer: () => void }) {
+function Decoupe({ extrait, credit, titre: titre0, fermer }: { extrait: Extrait; credit: string; titre: string; fermer: () => void }) {
+  const [titre, setTitre] = useState(titre0);
   const [fichier, setFichier] = useState<string | null>(null);
   const [debut, setDebut] = useState(extrait.debut);
-  const [fin, setFin] = useState(extrait.fin);
+  const [fin, setFin] = useState(Math.min(extrait.fin, extrait.debut + 60));
   const [st, setSt] = useState(extrait.soustitres);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -285,9 +286,14 @@ function Decoupe({ extrait, credit, titre, fermer }: { extrait: Extrait; credit:
       ctx.fillStyle = "rgba(6,26,68,0.55)"; ctx.fillRect(0, 0, W, H);
       const s = Math.min(W / vw, (H * 0.6) / vh), dw = vw * s, dh = vh * s, y0 = H * 0.32 - dh / 2 + 120;
       ctx.drawImage(v, (W - dw) / 2, y0, dw, dh);
-      // titre
-      ctx.fillStyle = "#fff"; ctx.font = "800 64px Montserrat, sans-serif"; ctx.textAlign = "center";
-      lignes(ctx, titre, W - 160, 2).forEach((l, i) => ctx.fillText(l, W / 2, 330 + i * 76));
+      // accroche choc : bandeau orange, texte blanc
+      ctx.font = "900 62px Montserrat, sans-serif"; ctx.textAlign = "center";
+      const la = lignes(ctx, titre, W - 200, 3);
+      la.forEach((l, i) => {
+        const w = ctx.measureText(l).width + 44, y = 300 + i * 82;
+        ctx.fillStyle = "#E94A06"; ctx.beginPath(); ctx.roundRect((W - w) / 2, y - 60, w, 76, 14); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.fillText(l, W / 2, y);
+      });
       // sous-titre courant
       const k = Math.min(blocs.length - 1, Math.floor(((v.currentTime - debut) / duree) * blocs.length));
       const b = blocs[Math.max(0, k)];
@@ -302,6 +308,10 @@ function Decoupe({ extrait, credit, titre, fermer }: { extrait: Extrait; credit:
       ctx.fillStyle = "#fff"; ctx.font = "800 38px Montserrat, sans-serif"; ctx.fillText("TUVOA", 145, 175);
       ctx.fillStyle = "#CFDCFF"; ctx.font = "700 15px Montserrat, sans-serif"; ctx.fillText("TECH MEDIA", 145, 205);
       ctx.fillStyle = "#C9D6F2"; ctx.font = "600 30px Inter, sans-serif"; ctx.fillText(credit, W / 2, H - 120);
+      // barre de progression (retient l'attention jusqu'au bout)
+      const p = Math.min(1, Math.max(0, (v.currentTime - debut) / duree));
+      ctx.fillStyle = "rgba(255,255,255,0.18)"; ctx.fillRect(0, H - 14, W, 14);
+      ctx.fillStyle = "#E94A06"; ctx.fillRect(0, H - 14, W * p, 14);
     };
     try {
       v.currentTime = debut; await new Promise((ok) => v.addEventListener("seeked", ok, { once: true }));
@@ -331,7 +341,7 @@ function Decoupe({ extrait, credit, titre, fermer }: { extrait: Extrait; credit:
   return (
     <div className="tv-vid-modale" role="dialog" aria-modal="true" aria-label="Couper l'extrait">
       <div className="boite">
-        <div className="row" style={{ gap: 10 }}><h2 className="tv-h2" style={{ flex: 1 }}>Couper en Reel 9:16</h2><button type="button" className="btn small" onClick={fermer}>Fermer</button></div>
+        <div className="row" style={{ gap: 10 }}><h2 className="tv-h2" style={{ flex: 1 }}>Reel choc 9:16 · 1 min max</h2><button type="button" className="btn small" onClick={fermer}>Fermer</button></div>
         {!fichier ? (
           <label className="tv-vid-depot">
             <Trait d="M12 16V4M6 10l6-6 6 6M4 20h16" size={26} />
@@ -343,10 +353,11 @@ function Decoupe({ extrait, credit, titre, fermer }: { extrait: Extrait; credit:
           <video ref={vid} src={fichier} controls playsInline style={{ width: "100%", maxHeight: 260, borderRadius: 14, background: "#000" }} onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = debut; }} />
         )}
         <div className="row" style={{ gap: 10 }}>
-          <label className="field" style={{ flex: 1 }}>Début (s)<input type="number" min={0} value={debut} onChange={(e) => setDebut(Math.max(0, Number(e.target.value)))} /></label>
-          <label className="field" style={{ flex: 1 }}>Fin (s)<input type="number" min={debut + 1} value={fin} onChange={(e) => setFin(Number(e.target.value))} /></label>
-          <span className="tv-pill" style={{ alignSelf: "flex-end", marginBottom: 10 }}>{mmss(debut)} → {mmss(fin)}</span>
+          <label className="field" style={{ flex: 1 }}>Début (s)<input type="number" min={0} value={debut} onChange={(e) => { const d = Math.max(0, Number(e.target.value)); setDebut(d); if (fin > d + 60) setFin(d + 60); }} /></label>
+          <label className="field" style={{ flex: 1 }}>Fin (s)<input type="number" min={debut + 1} max={debut + 60} value={fin} onChange={(e) => setFin(Math.min(debut + 60, Number(e.target.value)))} /></label>
+          <span className="tv-pill" style={{ alignSelf: "flex-end", marginBottom: 10 }}>{fin - debut} s / 60 s max</span>
         </div>
+        <label className="field">Accroche (en haut du Reel)<input value={titre} maxLength={120} onChange={(e) => setTitre(e.target.value)} /></label>
         <label className="field">Sous-titres en français<textarea rows={4} value={st} onChange={(e) => setSt(e.target.value)} /></label>
         <span className="tv-gris" style={{ fontSize: 12 }}>Crédit incrusté : {credit}</span>
         {err ? <p className="notice rouge">{err}</p> : null}
@@ -357,7 +368,7 @@ function Decoupe({ extrait, credit, titre, fermer }: { extrait: Extrait; credit:
             <a className="tv-btn-nuit" href={sortie.url} download={`TUVOA_extrait.${sortie.ext}`}>TÉLÉCHARGER LE REEL</a>
           </div>
         ) : null}
-        <button type="button" className="tv-btn-nuit" style={{ justifyContent: "center" }} onClick={couper} disabled={!fichier || Boolean(msg) || fin <= debut}>{msg ? "DÉCOUPE EN COURS…" : "COUPER L'EXTRAIT"}</button>
+        <button type="button" className="tv-btn-nuit" style={{ justifyContent: "center" }} onClick={couper} disabled={!fichier || Boolean(msg) || fin <= debut}>{msg ? "DÉCOUPE EN COURS…" : "CRÉER LE REEL"}</button>
         <span className="tv-gris" style={{ fontSize: 12 }}>La découpe se fait en temps réel dans votre navigateur ({fin - debut} s). Gardez cet onglet ouvert.</span>
       </div>
     </div>
