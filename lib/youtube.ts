@@ -1,11 +1,12 @@
 // Vidéos YouTube des chaînes suivies (Micode, France 24…), filtrées sur l'actu tech, et repérage des moments forts par Gemini.
 // Droits : une vidéo ne peut être coupée et republiée que si elle est sous licence CC BY ou si la chaîne a donné son
 // autorisation (case « Autorisation obtenue »). Sinon, on la commente, on cite une phrase courte et on renvoie vers l'original.
+import { aiJson } from "./claude";
 import { db } from "./store";
 
 export type Genre = "actu" | "interview" | "docu";
 export type Licence = "cc" | "autorisee" | "reservee";
-export type VideoYT = { id: string; titre: string; chaine: string; chaineId: string; publie: string; duree: number; langue: string; vues: number; miniature: string; description: string; genre: Genre; cc: boolean; theme?: string };
+export type VideoYT = { id: string; titre: string; chaine: string; chaineId: string; publie: string; duree: number; langue: string; vues: number; miniature: string; description: string; genre: Genre; cc: boolean; tri?: number; theme?: string };
 export type Extrait = { debut: number; fin: number; titre: string; pourquoi: string; soustitres: string; citation?: string; format: "reel" | "carrousel" };
 export type LigneVideo = { id: string; info: VideoYT; extraits: Extrait[] | null; statut: string; pertinence: number; publie_at: string | null; licence: Licence };
 export type Chaine = { handle: string; nom: string; type: "tech" | "info"; id?: string; uploads?: string; autorisee?: boolean; introuvable?: boolean };
@@ -24,13 +25,13 @@ export const CHAINES_DEFAUT: Chaine[] = [
   { handle: "@lesnumeriques", nom: "Les Numériques", type: "tech" },
   { handle: "@frandroid", nom: "Frandroid", type: "tech" },
   { handle: "@MonsieurBidouille", nom: "Monsieur Bidouille", type: "tech" },
-  { handle: "@TheVerge", nom: "The Verge", type: "tech" },
-  { handle: "@WIRED", nom: "WIRED", type: "tech" },
-  { handle: "@BloombergTechnology", nom: "Bloomberg Technology", type: "tech" },
 ];
 
 // Mots qui signalent un sujet tech dans une chaîne d'info générale.
-const TECH = /\b(IA|AI|intelligence artificielle|artificial intelligence|ChatGPT|OpenAI|Gemini|Claude|Anthropic|Mistral|DeepSeek|Nvidia|puces?|semi-?conducteurs?|cyber\w*|hack\w*|pirat\w*|ran[çc]ongiciel|ransomware|phishing|arnaques? en ligne|données personnelles|fuite de données|surveillance|espionn\w*|Pegasus|tech|technolog\w*|numérique|digital|internet|réseaux sociaux|TikTok|Meta|Facebook|Instagram|WhatsApp|Telegram|YouTube|Google|Apple|iPhone|Microsoft|Amazon|Musk|Tesla|SpaceX|Starlink|satellites?|robots?|robotique|drones?|algorithmes?|deepfakes?|crypto\w*|bitcoin|blockchain|mobile money|startups?|smartphones?|5G|data ?centers?|métavers|Zuckerberg|Altman|Bezos|Silicon Valley|quantique|électrique)\b/i;
+const SIGLES = /\b(IA|5G|IoT|ChatGPT|OpenAI|Nvidia|TikTok|WhatsApp|Starlink|SpaceX|Tesla|Meta|Google|Apple|Microsoft|Amazon|Huawei|Samsung|Xiaomi|Pegasus)\b/; // sensibles à la casse (« IA », pas « ia »)
+const TECH = /\b(intelligence artificielle|cyber\w*|hack\w*|pirat\w*|ran[çc]ongiciels?|phishing|hameçonnage|données personnelles|fuites? de données|espionn\w*|technolog\w*|numérique|internet|réseaux sociaux|Facebook|Instagram|Telegram|YouTube|iPhone|Musk|Zuckerberg|Altman|satellites?|robots?|robotique|drones?|algorithmes?|deepfakes?|bitcoin|cryptomonnaies?|blockchain|mobile money|start-?ups?|smartphones?|data ?centers?|centres? de données|semi-?conducteurs?|puces électroniques|quantique|logiciels?|applis?|applications?|Silicon Valley|géants de la tech|big tech)\b/i;
+// Formations, tutos, guides d'achat et contenus hors actualité : écartés d'office.
+const HORS = /#shorts|\btuto\w*|formation|\bcours\b|leçon|débutants?|apprendre|comment (faire|installer|configurer|utiliser)|guide d'achat|top \d+|bons? plans?|promo\b|meilleurs? .* à moins de|#soins|unboxing|masterclass|webinaire/i;
 const DOCU = /documentaire|docu\b|enquête|reportage|investigation|grand format|immersion|documentary|investigat/i;
 const INTERVIEW = /interview|entretien|invitée?|face à|podcast|débat|répond|confessions?|témoign|conversation|talk|«|"/i;
 
@@ -51,11 +52,15 @@ async function yt(chemin: string, params: Record<string, string>) {
   return d as { items?: Record<string, unknown>[] };
 }
 
+// Chaînes anglophones retirées de la liste par défaut (français uniquement).
+const RETIREES = ["@TheVerge", "@WIRED", "@BloombergTechnology"];
+const TRI = 2; // version du tri : les vidéos triées avec une version plus ancienne sont retriées
+
 // Liste des chaînes suivies (settings, ligne 7).
 export async function lireChaines(): Promise<Chaine[]> {
   const { data } = await db().from("settings").select("data").eq("id", 7).maybeSingle();
   const l = (data?.data as { chaines?: Chaine[] } | null)?.chaines;
-  return Array.isArray(l) && l.length ? l : CHAINES_DEFAUT;
+  return Array.isArray(l) && l.length ? l.filter((c) => !RETIREES.includes(c.handle)) : CHAINES_DEFAUT;
 }
 async function ecrireChaines(chaines: Chaine[]) { await db().from("settings").upsert({ id: 7, data: { chaines } }); }
 
@@ -104,7 +109,7 @@ export async function rafraichir(): Promise<number> {
     }
   }
   if (!ids.length) return 0;
-  const { data: deja } = await db().from("videos_yt").select("id").in("id", ids);
+  const { data: deja } = await db().from("videos_yt").select("id").in("id", ids).eq("info->>tri", String(TRI));
   const nouveaux = ids.filter((id) => !(deja ?? []).some((d) => d.id === id));
   const parId = new Map(chaines.map((c) => [c.id, c]));
   let n = 0;
@@ -117,29 +122,64 @@ export async function rafraichir(): Promise<number> {
       if (!c || st?.privacyStatus !== "public" || s.liveBroadcastContent !== "none") return [];
       const duree = iso((v.contentDetails as { duration: string }).duration);
       if (duree < 90) return []; // Shorts et bandes-annonces
+      const langue = (s.defaultAudioLanguage || s.defaultLanguage || "").slice(0, 2);
+      if (langue && langue !== "fr") return []; // français uniquement
+      if (HORS.test(s.title)) return [];
       const texte = `${s.title} ${(s.description ?? "").slice(0, 250)}`;
-      if (c.type === "info" && !TECH.test(texte)) return []; // chaîne d'info : sujets tech seulement
+      if (c.type === "info" && !TECH.test(texte) && !SIGLES.test(texte)) return []; // chaîne d'info : sujets tech seulement
       const genre: Genre = duree >= 1200 || DOCU.test(s.title) ? "docu" : INTERVIEW.test(s.title) ? "interview" : "actu";
       const vues = Number((v.statistics as { viewCount?: string })?.viewCount ?? 0);
-      const langue = (s.defaultAudioLanguage || s.defaultLanguage || "").slice(0, 2);
       const info: VideoYT = {
         id: v.id as string, titre: s.title, chaine: s.channelTitle, chaineId: s.channelId, publie: s.publishedAt, duree, langue, vues,
-        miniature: s.thumbnails?.high?.url ?? s.thumbnails?.medium?.url ?? "", description: (s.description ?? "").slice(0, 600), genre, cc: st?.license === "creativeCommon",
+        miniature: s.thumbnails?.high?.url ?? s.thumbnails?.medium?.url ?? "", description: (s.description ?? "").slice(0, 600), genre, cc: st?.license === "creativeCommon", tri: TRI,
       };
       const jours = (Date.now() - new Date(s.publishedAt).getTime()) / 864e5;
       const pertinence = Math.max(1, Math.min(99, Math.round(30 + Math.log10(vues + 10) * 8 + (langue === "fr" ? 10 : 0) + (genre !== "actu" ? 8 : 0) + (c.type === "info" ? 6 : 0) - jours * 2.5)));
       return [{ id: info.id, info, pertinence, publie_at: s.publishedAt }];
     });
-    if (lignes.length) { const { error } = await db().from("videos_yt").upsert(lignes); if (error) throw new Error(error.message); n += lignes.length; }
+    if (!lignes.length) continue;
+    const garder = await trier(lignes.map((l) => l.info));
+    const tri = lignes.map((l) => ({ ...l, statut: garder.has(l.id) ? "nouveau" : "hors_sujet" }));
+    // une vidéo déjà analysée ou écartée garde ses extraits et son statut
+    const { data: anciens } = await db().from("videos_yt").select("id,statut,extraits").in("id", tri.map((l) => l.id));
+    for (const l of tri) { const a = (anciens ?? []).find((x) => x.id === l.id); if (a && l.statut === "nouveau" && a.statut !== "hors_sujet") Object.assign(l, { statut: a.statut, extraits: a.extraits }); }
+    const { error } = await db().from("videos_yt").upsert(tri);
+    if (error) throw new Error(error.message);
+    n += tri.filter((l) => l.statut === "nouveau").length;
   }
   return n;
+}
+
+// Tri final par l'IA, strict : actualité tech en français uniquement. Sans IA disponible, seuls les filtres ci-dessus s'appliquent.
+async function trier(videos: VideoYT[]): Promise<Set<string>> {
+  const garder = new Set<string>();
+  for (let i = 0; i < videos.length; i += 40) {
+    const lot = videos.slice(i, i + 40);
+    try {
+      const r = await aiJson<{ garder?: string[] }>(
+        `Tu es rédacteur en chef de TUVOA Tech Media, un média d'actualité tech francophone. Tu tries des vidéos YouTube avec rigueur : dans le doute, tu écartes.
+GARDER seulement si les deux conditions sont vraies :
+1. La vidéo est en français.
+2. Son sujet principal est l'actualité de la tech et du numérique : IA, cybersécurité et arnaques en ligne, réseaux sociaux et plateformes, géants de la tech et leurs dirigeants, télécoms et mobile money, startups, spatial, data centers, crypto (sous l'angle technologique), lois et politique du numérique, sorties et annonces de produits tech, enquêtes, documentaires et interviews sur la tech.
+ÉCARTER : tutoriels, formations, cours, conseils pour débutants, guides d'achat, « top » et comparatifs d'achat, bons plans, beauté et électroménager, finance et bourse pure, politique, sport, climat, culture ou société sans angle tech central, journaux d'information multi-sujets, Shorts.
+Réponds uniquement en JSON : {"garder": ["id", ...]}`,
+        lot.map((v) => `${v.id} | ${v.chaine} | ${v.titre} | ${v.description.replace(/\s+/g, " ").slice(0, 200)}`).join("\n"),
+        1500,
+      );
+      for (const id of r.garder ?? []) if (lot.some((v) => v.id === id)) garder.add(id);
+    } catch (e) {
+      console.error("[videos] tri IA impossible", (e as Error).message);
+      for (const v of lot) if (TECH.test(v.titre) || SIGLES.test(v.titre)) garder.add(v.id);
+    }
+  }
+  return garder;
 }
 
 export async function lister(): Promise<{ videos: LigneVideo[]; chaines: Chaine[] }> {
   const chaines = await lireChaines();
   const suivies = chaines.filter((c) => c.id).map((c) => c.id!);
   if (!suivies.length) return { videos: [], chaines };
-  const { data, error } = await db().from("videos_yt").select("id,info,extraits,statut,pertinence,publie_at").neq("statut", "ecarte").in("info->>chaineId", suivies).gte("publie_at", new Date(Date.now() - 14 * 864e5).toISOString()).order("publie_at", { ascending: false }).limit(150);
+  const { data, error } = await db().from("videos_yt").select("id,info,extraits,statut,pertinence,publie_at").not("statut", "in", "(ecarte,hors_sujet)").eq("info->>tri", String(TRI)).in("info->>chaineId", suivies).gte("publie_at", new Date(Date.now() - 14 * 864e5).toISOString()).order("publie_at", { ascending: false }).limit(150);
   if (error) throw new Error(error.message);
   const auto = new Set(chaines.filter((c) => c.autorisee).map((c) => c.id));
   const videos = ((data ?? []) as Omit<LigneVideo, "licence">[])
