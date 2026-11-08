@@ -23,8 +23,8 @@ export default function Page() {
 function Mediatheque() {
   const router = useRouter();
   const params = useSearchParams();
-  const initial = params.get("dossier") as CatId | null;
-  const [ouvert, setOuvert] = useState<CatId | null>(CATS.some((c) => c.id === initial) ? initial : null);
+  const initial = params.get("dossier");
+  const [ouvert, setOuvert] = useState<CatId | "tous" | null>(initial === "tous" || CATS.some((c) => c.id === initial) ? (initial as CatId | "tous") : null);
   const [data, setData] = useState<Reponse | null>(null);
   const [error, setError] = useState("");
   const [charge, setCharge] = useState(false);
@@ -32,7 +32,7 @@ function Mediatheque() {
   const [copie, setCopie] = useState("");
   const input = useRef<HTMLInputElement>(null);
 
-  const charger = useCallback((c: CatId | null) => {
+  const charger = useCallback((c: CatId | "tous" | null) => {
     setCharge(true);
     fetch(`/api/mediatheque${c ? `?dossier=${c}` : ""}`, { cache: "no-store" })
       .then(async (r) => {
@@ -46,7 +46,8 @@ function Mediatheque() {
   }, []);
   useEffect(() => charger(ouvert), [ouvert, charger]);
 
-  function ouvrir(c: CatId | null) {
+  function ouvrir(c: CatId | "tous" | null) {
+    if (c === "tous") setTri("lourd");
     setOuvert(c);
     router.replace(c ? `/mediatheque?dossier=${c}` : "/mediatheque", { scroll: false });
   }
@@ -87,7 +88,7 @@ function Mediatheque() {
     }
   }
 
-  const cat = CATS.find((c) => c.id === ouvert);
+  const cat = ouvert === "tous" ? { id: "tous", dossier: "Tous les fichiers, du plus lourd au plus léger" } : CATS.find((c) => c.id === ouvert);
   const [recherche, setRecherche] = useState("");
   const [tri, setTri] = useState<Tri>("recent");
   const [inutilises, setInutilises] = useState(false);
@@ -100,7 +101,9 @@ function Mediatheque() {
     .filter((f) => !inutilises || !(f.usages ?? []).length)
     .sort((a, b) => (tri === "recent" ? b.date.localeCompare(a.date) : tri === "ancien" ? a.date.localeCompare(b.date) : tri === "lourd" ? b.taille - a.taille : a.nom.localeCompare(b.nom)));
   const vF = useVoirPlus(fichiers, 20, `${ouvert}|${recherche}|${tri}|${inutilises}`);
-  const enCours = (f: Fichier) => (f.usages ?? []).filter((u) => ["planifie", "a_valider", "brouillon"].includes(u.status));
+  const enCours = (f: Fichier) => (f.usages ?? []).filter((u) => ["planifie", "a_valider"].includes(u.status));
+  const inutilisesTous = tous.filter((f) => !(f.usages ?? []).length);
+  const recuperable = inutilisesTous.reduce((t, f) => t + f.taille, 0);
 
   async function poster(body: unknown) {
     const r = await fetch("/api/mediatheque", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -129,7 +132,7 @@ function Mediatheque() {
   async function supprimer(liste: Fichier[]) {
     if (!liste.length) return;
     const bloques = liste.filter((f) => enCours(f).length);
-    if (bloques.length) return setError(`« ${bloques[0].nom} » sert à une publication pas encore partie : retirez-le d'abord de cette publication.`);
+    if (bloques.length) return setError(`« ${bloques[0].nom} » sert à une publication planifiée : retirez-le d'abord de cette publication, ou annulez-la.`);
     const publies = liste.filter((f) => (f.usages ?? []).length).length;
     const msg = `Supprimer définitivement ${liste.length > 1 ? `ces ${liste.length} fichiers` : `« ${liste[0].nom} »`} ?${publies ? `\n${publies} fichier${publies > 1 ? "s ont" : " a"} déjà servi à des publications parues : elles restent en ligne, mais l'image ne sera plus disponible ici.` : ""}`;
     if (!window.confirm(msg)) return;
@@ -161,10 +164,15 @@ function Mediatheque() {
           {data ? (
             <>
               <div className="tv-disques">
-                <Disque s={data} o={{ onOuvrir: ouvrir, ouvert }} />
-                <Repartition s={data} o={{ onOuvrir: ouvrir, ouvert }} />
+                <Disque s={data} o={{ onOuvrir: ouvrir, ouvert: ouvert === "tous" ? null : ouvert }} />
+                <Repartition s={data} o={{ onOuvrir: ouvrir, ouvert: ouvert === "tous" ? null : ouvert }} />
               </div>
-              <Dossiers s={data} o={{ onOuvrir: ouvrir, ouvert }} />
+              <Dossiers s={data} o={{ onOuvrir: ouvrir, ouvert: ouvert === "tous" ? null : ouvert }} />
+              <div className="tv-liberer">
+                <Trait d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" size={22} stroke={2} />
+                <span style={{ flex: "1 1 240px" }}><strong>Libérer de l&apos;espace</strong><br /><span className="tv-gris" style={{ fontSize: 13 }}>Tous les fichiers, du plus lourd au plus léger, pour repérer et supprimer ce qui encombre.</span></span>
+                <button type="button" className="tv-btn-nuit" style={{ height: 44 }} onClick={() => ouvrir("tous")}>Voir les plus lourds</button>
+              </div>
             </>
           ) : <p className="tv-gris">{error ? "Stockage indisponible." : "Lecture du stockage…"}</p>}
         </section>
@@ -180,6 +188,12 @@ function Mediatheque() {
               </nav>
               <button type="button" className="btn small ghost" onClick={() => ouvrir(null)}>Fermer</button>
             </div>
+            {ouvert === "tous" && inutilisesTous.length ? (
+              <div className="tv-liberer" style={{ background: "#FFF7ED", borderColor: "#FED7AA" }}>
+                <span style={{ flex: "1 1 260px", fontSize: 14 }}><strong>{inutilisesTous.length} fichier{inutilisesTous.length > 1 ? "s" : ""} jamais utilisé{inutilisesTous.length > 1 ? "s" : ""}</strong> · {taille(recuperable)} récupérables</span>
+                <button type="button" className="btn small" onClick={() => setChoisis(new Set(inutilisesTous.map((f) => f.chemin)))}>Sélectionner les jamais utilisés</button>
+              </div>
+            ) : null}
             {tous.length ? (
               <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
                 <label className="tv-recherche" style={{ flex: "1 1 220px", maxWidth: 320, height: 44 }}>
@@ -197,7 +211,7 @@ function Mediatheque() {
                 <span style={{ flex: 1 }} />
                 {choisis.size ? (
                   <>
-                    <span className="tv-gris" style={{ fontSize: 13 }}>{choisis.size} choisi{choisis.size > 1 ? "s" : ""}</span>
+                    <span className="tv-gris" style={{ fontSize: 13 }}>{choisis.size} choisi{choisis.size > 1 ? "s" : ""} · {taille(tous.filter((f) => choisis.has(f.chemin)).reduce((t, f) => t + f.taille, 0))}</span>
                     <button type="button" className="btn small" onClick={() => setChoisis(new Set())}>Tout désélectionner</button>
                     <button type="button" className="btn small danger" disabled={!!action} onClick={() => supprimer(tous.filter((f) => choisis.has(f.chemin)))}>{action === "supprimer" ? "Suppression…" : "Supprimer la sélection"}</button>
                   </>
@@ -216,23 +230,6 @@ function Mediatheque() {
                     <label className="tv-fichier-choix" title="Sélectionner">
                       <input type="checkbox" checked={choisis.has(f.chemin)} onChange={() => basculer(f.chemin)} aria-label={`Sélectionner ${f.nom}`} />
                     </label>
-                    <details className="tv-fichier-menu">
-                      <summary aria-label={`Options pour ${f.nom}`}><Trait d="M5 12h.01M12 12h.01M19 12h.01" size={20} stroke={3} /></summary>
-                      <div role="menu">
-                        <a role="menuitem" href={f.url} target="_blank" rel="noopener noreferrer">Ouvrir</a>
-                        <button role="menuitem" type="button" onClick={() => telecharger(f)}>Télécharger</button>
-                        <button role="menuitem" type="button" onClick={() => copier(f.url)}>{copie === f.url ? "Lien copié" : "Copier le lien"}</button>
-                        {f.categorie === "images" ? (
-                          <>
-                            <Link role="menuitem" href={`/creer/actu?image=${encodeURIComponent(f.url)}`}>Créer une actualité avec</Link>
-                            <Link role="menuitem" href={`/creer/citation?image=${encodeURIComponent(f.url)}`}>Photo d'une citation</Link>
-                            <Link role="menuitem" href={`/creer/portrait?image=${encodeURIComponent(f.url)}`}>Photo d'un portrait</Link>
-                          </>
-                        ) : null}
-                        <button role="menuitem" type="button" disabled={us.length > 0} title={us.length ? "Déjà utilisé : renommer casserait le lien des publications" : undefined} onClick={() => setRenomme({ chemin: f.chemin, nom: f.nom.replace(/\.[a-z0-9]{2,5}$/i, "") })}>Renommer{us.length ? " (utilisé)" : ""}</button>
-                        <button role="menuitem" type="button" className="danger" disabled={bloque || !!action} onClick={() => supprimer([f])}>{bloque ? "Supprimer (publication en attente)" : "Supprimer"}</button>
-                      </div>
-                    </details>
                     <a href={f.url} target="_blank" rel="noopener noreferrer" className="apercu" aria-label={`Ouvrir ${f.nom}`}>
                       {f.categorie === "images" ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -262,6 +259,23 @@ function Mediatheque() {
                           Utilisé par {us.length} publication{us.length > 1 ? "s" : ""}
                         </Link>
                       ) : <span className="tv-usage libre">Jamais utilisé</span>}
+                    </div>
+                    <div className="tv-fichier-actions" aria-label={`Actions sur ${f.nom}`}>
+                      <button type="button" onClick={() => telecharger(f)}><Trait d="M12 4v12M7 11l5 5 5-5M4 20h16" size={16} stroke={2} />Télécharger</button>
+                      <button type="button" onClick={() => copier(f.url)}><Trait d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" size={16} stroke={2} />{copie === f.url ? "Copié" : "Lien"}</button>
+                      <button type="button" disabled={us.length > 0} title={us.length ? "Déjà utilisé : renommer casserait le lien des publications" : "Renommer"} onClick={() => setRenomme({ chemin: f.chemin, nom: f.nom.replace(/\.[a-z0-9]{2,5}$/i, "") })}><Trait d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" size={16} stroke={2} />Renommer</button>
+                      <button type="button" className="danger" disabled={bloque || !!action} title={bloque ? "Une publication planifiée l'utilise" : "Supprimer définitivement"} onClick={() => supprimer([f])}><Trait d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" size={16} stroke={2} />Supprimer</button>
+                      {f.categorie === "images" ? (
+                        <label className="utiliser">
+                          <span className="sr-only">Utiliser cette image</span>
+                          <select value="" onChange={(e) => { if (e.target.value) router.push(`/creer/${e.target.value}?image=${encodeURIComponent(f.url)}`); }}>
+                            <option value="">Utiliser pour…</option>
+                            <option value="actu">Une actualité</option>
+                            <option value="citation">La photo d&apos;une citation</option>
+                            <option value="portrait">La photo d&apos;un portrait</option>
+                          </select>
+                        </label>
+                      ) : null}
                     </div>
                   </div>
                 );

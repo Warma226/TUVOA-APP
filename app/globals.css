@@ -735,3 +735,18 @@ details summary { list-style-position: inside; }
 .tv-piste button { min-width: 0; height: 42px; border-radius: 10px; border: 0; background: #c7d6fb; color: var(--nuit); font: inherit; font-size: 11px; font-weight: 800; padding: 0 8px; display: flex; flex-direction: column; justify-content: center; text-align: left; cursor: pointer; overflow: hidden; white-space: nowrap; }
 .tv-piste button span { font-weight: 500; opacity: 0.8; }
 .tv-piste button[aria-pressed="true"] { background: var(--bleu); color: #fff; }
+.tv-regles-zone { display: flex; flex-direction: column; gap: 16px; }
+.tv-regles-zone .tv-kpi strong { font-size: 26px; }
+@media (min-width: 1200px) { .tv-regle2-flux { flex-wrap: nowrap; } .tv-regle2-flux .etape { flex-shrink: 1; } }
+.tv-fichiers { grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)) !important; }
+.tv-fichier .infos { padding: 10px 12px 6px !important; font-size: 13px !important; }
+.tv-fichier .infos strong { font-size: 14px !important; }
+.tv-fichier-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px 10px 12px; border-top: 1px solid #edf1f7; }
+.tv-fichier-actions button { min-height: 40px; padding: 0 8px; border-radius: 10px; border: 1px solid #c9d3e3; background: #fff; font: inherit; font-size: 13px; font-weight: 700; color: var(--nuit); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.tv-fichier-actions button:hover:not(:disabled) { background: #eef3ff; border-color: #93b4f5; }
+.tv-fichier-actions button.danger { color: #b42318; border-color: #f2a3ac; }
+.tv-fichier-actions button.danger:hover:not(:disabled) { background: #fdeef0; }
+.tv-fichier-actions button:disabled { color: #9aa8be; border-color: #e3e9f3; background: #f6f8fb; cursor: not-allowed; }
+.tv-fichier-actions .utiliser { grid-column: 1 / -1; }
+.tv-fichier-actions select { width: 100%; height: 40px; border-radius: 10px; font-size: 13px; font-weight: 700; color: var(--nuit); }
+.tv-liberer { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; background: #fff; border: 1px solid #e3e9f3; color: var(--encre); }
