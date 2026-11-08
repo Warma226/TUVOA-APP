@@ -83,7 +83,7 @@ export default function VideosPage() {
   }
   const lien = (ex: Extrait) => `https://youtu.be/${v?.id}?t=${ex.debut}`;
   const credit = v ? `Source : ${v.info.chaine}${v.licence === "cc" ? " (licence CC BY)" : ""} · youtu.be/${v.id}` : "";
-  const idee = (ex: Extrait) => `${ex.titre}.${ex.citation ? ` « ${ex.citation} »` : ""} ${ex.soustitres}\n\nVidéo à citer et à lier (ne pas reprendre les images) : ${credit}`;
+  const idee = (ex: Extrait) => `${ex.titre}.${ex.citation ? ` « ${ex.citation} »` : ""} ${ex.soustitres}\n\nVidéo à citer et à lier : ${credit}`;
   const embed = v ? `https://www.youtube-nocookie.com/embed/${v.id}?rel=0&modestbranding=1${lecture ? `&start=${lecture.debut}&end=${lecture.fin}&autoplay=1` : ""}` : "";
 
   return (
@@ -186,7 +186,7 @@ export default function VideosPage() {
                   {libre ? (
                     <div className="tv-vid-licence"><Trait d="M20 6L9 17l-5-5" size={18} stroke={2.6} /><span><strong>{v.licence === "cc" ? "Licence Creative Commons (CC BY), vérifiée sur YouTube." : `Autorisation de ${v.info.chaine} enregistrée.`}</strong> Vous pouvez couper et republier en citant la chaîne : VOA ajoute le crédit sur la vidéo et dans le texte.</span></div>
                   ) : (
-                    <div className="tv-vid-licence" data-reserve="true"><Trait d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" size={18} stroke={2.2} /><span><strong>Droits réservés par {v.info.chaine}.</strong> Vous pouvez en parler, citer une phrase courte avec la source et partager le lien. Pour couper et republier les images, il faut l&apos;accord écrit de la chaîne{admin ? " (cochez ensuite « Autorisation obtenue » dans Chaînes suivies)" : ""}.</span></div>
+                    <div className="tv-vid-licence" data-reserve="true"><Trait d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" size={18} stroke={2.2} /><span><strong>Droits réservés par {v.info.chaine}.</strong> Le crédit de la chaîne est incrusté sur chaque extrait coupé. Une réclamation de la chaîne peut faire retirer la vidéo de vos réseaux.</span></div>
                   )}
                 </div>
 
@@ -214,8 +214,8 @@ export default function VideosPage() {
                         {i === ext && x.soustitres ? <div className="st"><b>SOUS-TITRES FR · </b>{x.soustitres}</div> : null}
                         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                           <button type="button" className="btn small" onClick={() => { setExt(i); setLecture({ debut: x.debut, fin: x.fin }); }}><Trait d="M8 5v14l11-7z" size={14} />Lire</button>
-                          {libre ? <button type="button" className={i === ext ? "tv-btn-nuit" : "btn small"} style={i === ext ? { height: 40, fontSize: 13 } : undefined} onClick={() => { setExt(i); setDecoupe(x); }}><Trait d="M6 2v20M18 2v20M2 12h20" size={14} />Couper en Reel 9:16</button> : null}
-                          <Link href={`/creer/actu?idee=${encodeURIComponent(idee(x))}`} className={!libre && i === ext ? "tv-btn-nuit" : "btn small"} style={!libre && i === ext ? { height: 40, fontSize: 13 } : undefined}>Écrire le post</Link>
+                          <button type="button" className={i === ext ? "tv-btn-nuit" : "btn small"} style={i === ext ? { height: 40, fontSize: 13 } : undefined} onClick={() => { setExt(i); setDecoupe(x); }}><Trait d="M6 2v20M18 2v20M2 12h20" size={14} />Couper en Reel 9:16</button>
+                          <Link href={`/creer/actu?idee=${encodeURIComponent(idee(x))}`} className="btn small">Écrire le post</Link>
                           {x.citation ? <button type="button" className="btn small" onClick={() => { void navigator.clipboard?.writeText(`« ${x.citation} » — ${v.info.chaine} (youtu.be/${v.id}?t=${x.debut})`); setInfo("Citation copiée avec sa source."); }}>Copier la citation</button> : null}
                           <button type="button" className="btn small" onClick={() => { void navigator.clipboard?.writeText(lien(x)); setInfo("Lien horodaté copié."); }}>Copier le lien du moment</button>
                         </div>
@@ -232,8 +232,8 @@ export default function VideosPage() {
               <h2 className="tv-h2" style={{ fontSize: 17 }}>Ce que vous pouvez en faire</h2>
               <ol className="tv-vid-etapes">
                 <li><b>1</b><span><strong>Toutes les vidéos</strong> : écrire un post qui raconte et commente le moment, citer une phrase courte avec la source, partager le lien horodaté.</span></li>
-                <li><b>2</b><span><strong>CC BY ou chaîne autorisée</strong> : « Couper en Reel 9:16 ». Importez le fichier fourni par la chaîne ; VOA coupe, recadre, incruste les sous-titres, le logo et le crédit.</span></li>
-                <li><b>3</b><span>Pour obtenir une autorisation, écrivez à la chaîne (adresse dans l&apos;onglet « À propos » de YouTube) en précisant l&apos;extrait et l&apos;usage.</span></li>
+                <li><b>2</b><span><strong>Couper en Reel 9:16</strong> : importez le fichier de la vidéo ; VOA coupe au bon minutage, recadre en vertical, incruste les sous-titres, le logo TUVOA et le crédit de la chaîne.</span></li>
+                <li><b>3</b><span>Gardez des extraits courts et ajoutez votre commentaire dans le post : c&apos;est ce qui protège le mieux en cas de réclamation.</span></li>
               </ol>
             </section>
             {e ? (
@@ -245,7 +245,7 @@ export default function VideosPage() {
           </aside>
         </div>
       </div>
-      {decoupe && v && libre ? <Decoupe extrait={decoupe} credit={`Source : ${v.info.chaine}${v.licence === "cc" ? " (CC BY)" : ""}`} titre={decoupe.titre} fermer={() => setDecoupe(null)} /> : null}
+      {decoupe && v ? <Decoupe extrait={decoupe} credit={`Source : ${v.info.chaine}${v.licence === "cc" ? " (CC BY)" : ""}`} titre={decoupe.titre} fermer={() => setDecoupe(null)} /> : null}
     </div>
   );
 }
