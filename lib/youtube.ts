@@ -7,7 +7,7 @@ import { db } from "./store";
 export type Genre = "actu" | "interview" | "docu";
 export type Licence = "cc" | "autorisee" | "reservee";
 export type VideoYT = { id: string; titre: string; chaine: string; chaineId: string; publie: string; duree: number; langue: string; vues: number; miniature: string; description: string; genre: Genre; cc: boolean; tri?: number; theme?: string };
-export type Extrait = { debut: number; fin: number; titre: string; pourquoi: string; soustitres: string; citation?: string; format: "reel" | "carrousel" };
+export type Extrait = { debut: number; fin: number; titre: string; pourquoi: string; soustitres: string; citation?: string; phrases?: { t: number; texte: string }[]; cadre?: number; format: "reel" | "carrousel" };
 export type LigneVideo = { id: string; info: VideoYT; extraits: Extrait[] | null; statut: string; pertinence: number; publie_at: string | null; licence: Licence };
 export type TypeChaine = "tech" | "info" | "interview";
 export type Chaine = { handle: string; nom: string; type: TypeChaine; id?: string; uploads?: string; autorisee?: boolean; introuvable?: boolean; cherche?: boolean };
@@ -230,7 +230,8 @@ ${choc
   : `Repère les 4 moments les plus forts : l'info qui choque, un chiffre qui frappe, une phrase choc, une explication qui fait « wow ».`}
 Chaque moment devient un Reel choc : 30 à 60 secondes, JAMAIS plus d'une minute. Il démarre directement sur la phrase forte (accroche dans les 3 premières secondes, pas d'introduction) et se comprend sans contexte.
 Évite les génériques, les sponsors et les appels à s'abonner. Les minutages doivent être exacts.
-Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "accroche choc en français, 60 caractères max", "pourquoi": "pourquoi ce moment marque, une phrase en français", "citation": "la phrase la plus forte, mot pour mot, traduite en français si besoin, 160 caractères max", "soustitres": "ce qui est dit dans l'extrait, en français, 400 caractères max", "format": "reel" ou "carrousel"}]`;
+Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "accroche choc en français, 60 caractères max", "pourquoi": "pourquoi ce moment marque, une phrase en français", "citation": "la phrase la plus forte, mot pour mot, traduite en français si besoin, 160 caractères max", "soustitres": "ce qui est dit dans l'extrait, en français, 400 caractères max", "phrases": [{"t": seconde exacte (dans la vidéo entière) où commence ce morceau de phrase, "texte": "3 à 8 mots en français, ce qui est dit à ce moment"}], "cadre": position horizontale du visage de la personne qui parle dans l'image, en pourcentage de la largeur (0 = bord gauche, 50 = centre, 100 = bord droit), "format": "reel" ou "carrousel"}]
+Les « phrases » couvrent tout l'extrait dans l'ordre, avec des minutages précis calés sur la voix : elles servent aux sous-titres mot par mot.`;
   // Alias « latest » : suit le modèle Flash courant de Google, sans changer le code à chaque nouvelle version.
   // Quand un modèle est saturé (503) ou au quota (429), on passe au suivant après une courte pause,
   // puis on refait un tour : les pics de demande chez Google durent souvent quelques secondes.
@@ -261,7 +262,7 @@ Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "ac
     try { liste = JSON.parse(txt.replace(/^```json\s*|```$/g, "")); } catch { derniere = "Réponse illisible."; continue; }
     if (!Array.isArray(liste)) { derniere = "Réponse illisible."; continue; }
     liste = liste.filter((e) => Number.isFinite(e.debut) && Number.isFinite(e.fin) && e.fin > e.debut && e.debut >= 0 && e.fin <= info.duree + 1)
-      .map((e) => ({ ...e, debut: Math.round(e.debut), fin: Math.round(Math.min(e.fin, e.debut + 60)) /* Reel : 1 min max */, format: (e.format === "carrousel" ? "carrousel" : "reel") as Extrait["format"] }))
+      .map((e) => ({ ...e, phrases: Array.isArray(e.phrases) ? e.phrases.filter((ph) => Number.isFinite(ph?.t) && typeof ph.texte === "string" && ph.texte.trim()).sort((a, b) => a.t - b.t) : undefined, cadre: Number.isFinite(e.cadre) ? Math.max(0, Math.min(100, Number(e.cadre))) : undefined, debut: Math.round(e.debut), fin: Math.round(Math.min(e.fin, e.debut + 60)) /* Reel : 1 min max */, format: (e.format === "carrousel" ? "carrousel" : "reel") as Extrait["format"] }))
       .sort((a, b) => a.debut - b.debut).slice(0, 4);
     if (!liste.length) { derniere = "Aucun extrait trouvé."; continue; }
     await db().from("videos_yt").update({ extraits: liste, statut: "analyse" }).eq("id", id);

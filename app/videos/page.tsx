@@ -260,7 +260,7 @@ type CropTargetCtor = { fromElement(el: Element): Promise<unknown> };
 function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId: string; extrait: Extrait; credit: string; titre: string; fermer: () => void }) {
   const [titre, setTitre] = useState(titre0);
   const [mise, setMise] = useState<"plein" | "centre">("plein");
-  const [cadre, setCadre] = useState(50); // position horizontale du recadrage plein écran (0 = gauche, 100 = droite)
+  const [cadre, setCadre] = useState(extrait.cadre ?? 50); // position horizontale du recadrage plein écran (0 = gauche, 100 = droite)
   const ecranOk = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices && "getDisplayMedia" in navigator.mediaDevices);
   const [mode, setMode] = useState<"youtube" | "fichier">(ecranOk ? "youtube" : "fichier");
   const [fichier, setFichier] = useState<string | null>(null);
@@ -273,6 +273,11 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
   const vid = useRef<HTMLVideoElement>(null);
   const ifr = useRef<HTMLIFrameElement>(null);
   const tYT = useRef(0);
+  const tYTa = useRef(0); // instant (performance.now) de la dernière position reçue du lecteur
+  const lecture = useRef(false);
+  const [capture, setCapture] = useState(false); // lecteur agrandi en plein écran pendant l'enregistrement (meilleure netteté)
+  const apercu = useRef<HTMLCanvasElement>(null);
+  const [vignette, setVignette] = useState<HTMLImageElement | null>(null);
   useEffect(() => () => { if (fichier) URL.revokeObjectURL(fichier); }, [fichier]);
 
   // Lecteur YouTube : on suit sa position (messages « infoDelivery ») pour caler la découpe.
@@ -282,7 +287,7 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     const ecoute = (e: MessageEvent) => {
       try {
         if (!/youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) return;
-        const d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; const t = d?.info?.currentTime; if (typeof t === "number") tYT.current = t; } catch { /* message étranger */ }
+        const d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; const t = d?.info?.currentTime; if (typeof t === "number") { tYT.current = t; tYTa.current = performance.now(); } const etat = d?.info?.playerState; if (typeof etat === "number") lecture.current = etat === 1; } catch { /* message étranger */ }
     };
     window.addEventListener("message", ecoute);
     return () => window.removeEventListener("message", ecoute);
@@ -297,6 +302,19 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     const types = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm"];
     const mime = types.find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t));
     const mots = st.split(/\s+/).filter(Boolean), parBloc = 9;
+    // Sous-titres horodatés par VOA (si le texte n'a pas été modifié à la main) : calés sur la voix.
+    const phrases = st === extrait.soustitres && extrait.phrases?.length ? extrait.phrases.filter((ph) => ph.t < fin + 1) : null;
+    const motCourant = (t: number): { mots: string[]; actif: number } => {
+      if (phrases) {
+        let k = 0; for (let i = 0; i < phrases.length; i++) if (phrases[i].t <= t) k = i;
+        const ph = phrases[k], suiv = phrases[k + 1]?.t ?? fin;
+        const m = ph.texte.split(/\s+/).filter(Boolean);
+        const q = Math.min(0.999, Math.max(0, (t - ph.t) / Math.max(0.4, suiv - ph.t)));
+        return { mots: m, actif: t < ph.t ? -1 : Math.floor(q * m.length) };
+      }
+      const p = Math.min(1, Math.max(0, (t - debut) / Math.max(1, fin - debut)));
+      return { mots, actif: Math.min(mots.length - 1, Math.floor(p * mots.length)) };
+    };
     const blocs: string[] = []; for (let i = 0; i < mots.length; i += parBloc) blocs.push(mots.slice(i, i + parBloc).join(" "));
     const duree = Math.max(1, fin - debut);
     const dessiner = (src: Source | null, t: number) => {
@@ -319,7 +337,7 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
         ctx.fillStyle = "#fff"; ctx.fillText(l, W / 2, y);
       });
       const p = Math.min(1, Math.max(0, (t - debut) / duree));
-      const b = blocs[Math.min(blocs.length - 1, Math.floor(p * blocs.length))];
+      const b = phrases ? motCourant(t).mots.join(" ") : blocs[Math.min(blocs.length - 1, Math.floor(p * blocs.length))];
       if (b) {
         ctx.font = "700 54px Inter, sans-serif";
         const ls = lignes(ctx, b, W - 200, 3), hb = ls.length * 70 + 50, yb = y0 + dh + 90;
@@ -335,7 +353,6 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     };
     // Style « Short d'interview » : image plein écran recadrée sur la personne, accroche en haut,
     // gros sous-titres mot par mot (3 à 4 mots à la fois, mot prononcé surligné), logo et crédit discrets.
-    const groupes: string[][] = []; for (let i = 0; i < mots.length; i += 4) groupes.push(mots.slice(i, i + 4));
     const pleinEcran = (ctx: CanvasRenderingContext2D, src: Source | null, t: number) => {
       const p = Math.min(1, Math.max(0, (t - debut) / duree));
       if (src && src.sw > 0 && src.sh > 0) {
@@ -357,9 +374,10 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
         ctx.fillStyle = "#fff"; ctx.fillText(l, W / 2, y);
       });
       // sous-titres mot par mot
-      if (groupes.length) {
-        const iMot = Math.min(mots.length - 1, Math.floor(p * mots.length));
-        const gi = Math.floor(iMot / 4), grp = groupes[gi] ?? [];
+      const mc = motCourant(t);
+      if (mc.mots.length && mc.actif >= 0) {
+        const iMot = mc.actif;
+        const gi = Math.floor(iMot / 4), grp = mc.mots.slice(gi * 4, gi * 4 + 4);
         ctx.font = "900 92px Montserrat, sans-serif";
         ctx.lineJoin = "round"; ctx.lineWidth = 16; ctx.strokeStyle = "#000";
         const espaces = ctx.measureText(" ").width;
@@ -398,8 +416,8 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     const morceaux: Blob[] = [];
     rec.ondataavailable = (e) => { if (e.data.size) morceaux.push(e.data); };
     const arret = new Promise<void>((ok) => { rec.onstop = () => ok(); });
+    await demarrer(); // pré-lecture : l'enregistrement commence pile au début de l'extrait
     rec.start(200);
-    await demarrer();
     await new Promise<void>((ok) => {
       const pas = () => {
         const f = image();
@@ -443,24 +461,31 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     const CT = (window as unknown as { CropTarget?: CropTargetCtor }).CropTarget;
     if (CT) { try { await (piste as MediaStreamTrack & { cropTo(t: unknown): Promise<void> }).cropTo(await CT.fromElement(el)); recadre = true; } catch { /* non pris en charge */ } }
     const cap = document.createElement("video"); cap.muted = true; cap.playsInline = true; cap.srcObject = ecran; await cap.play();
+    setCapture(true); // lecteur agrandi : YouTube passe en HD et l'image capturée est nette
+    await new Promise((ok) => setTimeout(ok, 1500));
     const zone = (): Source => {
       if (recadre) return { img: cap, sx: 0, sy: 0, sw: cap.videoWidth, sh: cap.videoHeight };
       const r = el.getBoundingClientRect(), k = cap.videoWidth / window.innerWidth;
       return { img: cap, sx: r.left * k, sy: r.top * k, sw: r.width * k, sh: r.height * k };
     };
+    // Position estimée entre deux messages du lecteur (il ne l'envoie que quelques fois par seconde).
+    const position = () => tYT.current + (lecture.current ? (performance.now() - tYTa.current) / 1000 : 0);
     try {
-      ecouterYT(); yt("pauseVideo"); yt("seekTo", [debut, true]); yt("unMute"); yt("setVolume", [100]);
-      await new Promise((ok) => setTimeout(ok, 1200));
-      tYT.current = debut;
+      ecouterYT(); yt("unMute"); yt("setVolume", [100]);
+      // 3 s de pré-lecture : le titre YouTube disparaît et la vidéo se charge en HD avant le début de l'extrait
+      yt("seekTo", [Math.max(0, debut - 3), true]); yt("playVideo");
       const depart = performance.now();
-      await enregistrer(c, mime, ecran.getAudioTracks(), () => { yt("playVideo"); }, () => {
-        const t = Math.max(tYT.current, debut);
+      await enregistrer(c, mime, ecran.getAudioTracks(), async () => {
+        const t0 = performance.now();
+        await new Promise<void>((ok) => { const v = () => (position() >= debut - 0.05 || performance.now() - t0 > 15000 ? ok() : requestAnimationFrame(v)); v(); });
+      }, () => {
+        const t = Math.max(position(), debut);
         const ecoule = (performance.now() - depart) / 1000;
-        return { src: zone(), t, fini: t >= fin || ecoule > duree + 20 };
+        return { src: zone(), t, fini: t >= fin || ecoule > duree + 25 };
       }, dessiner, duree);
       yt("pauseVideo");
       if (!ecran.getAudioTracks().length) setErr("Le Reel est prêt, mais sans le son : à la prochaine capture, activez « Partager l'audio de l'onglet ».");
-    } finally { fermerEcran(); }
+    } finally { fermerEcran(); setCapture(false); }
   }
 
   async function creer() {
@@ -469,6 +494,23 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     catch (x) { setErr((x as Error).message); }
     finally { setMsg(""); }
   }
+
+  // Image d'aperçu : une image de la vidéo (YouTube) ou l'image en cours du fichier.
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => setVignette(img);
+    img.onerror = () => { if (!img.src.includes("hq2")) img.src = `https://i.ytimg.com/vi/${videoId}/hq2.jpg`; };
+    img.src = `https://i.ytimg.com/vi/${videoId}/maxres2.jpg`;
+  }, [videoId]);
+  useEffect(() => {
+    const cv = apercu.current; if (!cv || capture || msg) return;
+    const { c, dessiner } = preparer();
+    const v = vid.current;
+    let src: Source | null = null;
+    if (mode === "fichier" && v && v.videoWidth) src = { img: v, sx: 0, sy: 0, sw: v.videoWidth, sh: v.videoHeight };
+    else if (vignette) { const h = vignette.naturalWidth * 9 / 16; src = { img: vignette, sx: 0, sy: (vignette.naturalHeight - h) / 2, sw: vignette.naturalWidth, sh: h }; }
+    try { dessiner(src, debut + Math.min(4, (fin - debut) / 3)); cv.getContext("2d")?.drawImage(c, 0, 0, cv.width, cv.height); } catch { /* image indisponible */ }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pret = mode === "youtube" ? ecranOk : Boolean(fichier);
   return (
@@ -481,7 +523,7 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
         </div>
         {mode === "youtube" ? (
           <>
-            <div className="tv-vid-lecteur">
+            <div className={capture ? "tv-vid-capture" : "tv-vid-lecteur"}>
               {origine ? <iframe ref={ifr} onLoad={ecouterYT} src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&start=${debut}&controls=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&origin=${encodeURIComponent(origine)}`} title="Lecteur YouTube" allow="autoplay; encrypted-media" /> : null}
             </div>
             {ecranOk ? (
@@ -505,11 +547,18 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
           <button type="button" className="tv-chip" aria-selected={mise === "plein"} onClick={() => setMise("plein")}>Plein écran · sous-titres mot par mot</button>
           <button type="button" className="tv-chip" aria-selected={mise === "centre"} onClick={() => setMise("centre")}>Vidéo centrée</button>
         </div>
-        {mise === "plein" ? (
-          <label className="field">Cadrage : placez la personne au centre ({cadre < 40 ? "gauche" : cadre > 60 ? "droite" : "centre"})
-            <input type="range" min={0} max={100} value={cadre} onChange={(e) => setCadre(Number(e.target.value))} />
-          </label>
-        ) : null}
+        <div className="row" style={{ gap: 14, alignItems: "center" }}>
+          <canvas ref={apercu} width={180} height={320} className="tv-vid-apercu" aria-label="Aperçu du Reel" />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+            <strong style={{ fontSize: 13 }}>Aperçu</strong>
+            {mise === "plein" ? (
+              <label className="field">Cadrage : la personne doit être au centre de l&apos;aperçu
+                <input type="range" min={0} max={100} value={cadre} onChange={(e) => setCadre(Number(e.target.value))} />
+              </label>
+            ) : null}
+            <span className="tv-gris" style={{ fontSize: 12 }}>{extrait.phrases?.length && st === extrait.soustitres ? "Sous-titres calés sur la voix par VOA." : "Sous-titres répartis sur la durée (relancez le repérage pour les caler sur la voix)."}</span>
+          </div>
+        </div>
         <div className="row" style={{ gap: 10 }}>
           <label className="field" style={{ flex: 1 }}>Début (s)<input type="number" min={0} value={debut} onChange={(e) => { const d = Math.max(0, Number(e.target.value)); setDebut(d); if (fin > d + 60) setFin(d + 60); }} /></label>
           <label className="field" style={{ flex: 1 }}>Fin (s)<input type="number" min={debut + 1} max={debut + 60} value={fin} onChange={(e) => setFin(Math.min(debut + 60, Number(e.target.value)))} /></label>
