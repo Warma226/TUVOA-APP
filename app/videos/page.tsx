@@ -1,11 +1,11 @@
 "use client";
-// Vidéos à reprendre : uniquement des vidéos YouTube sous licence Creative Commons (CC BY), réutilisables
-// en citant la chaîne. VOA (Gemini) repère les extraits ; la découpe 9:16 se fait ici, à partir du fichier de la vidéo.
+// Vidéos à reprendre : les dernières vidéos tech des chaînes suivies (Micode, France 24…). VOA (Gemini) repère les
+// moments forts. La découpe 9:16 n'est ouverte que pour les vidéos CC BY ou les chaînes qui ont donné leur autorisation.
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Trait } from "@/components/BottomNav";
 import { useVoirPlus } from "@/components/VoirPlus";
-import type { Extrait, LigneVideo } from "@/lib/youtube";
+import type { Chaine, Extrait, Genre, Licence, LigneVideo } from "@/lib/youtube";
 
 const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const ilya = (iso: string) => {
@@ -13,12 +13,19 @@ const ilya = (iso: string) => {
   return h < 1 ? "à l'instant" : h < 24 ? `il y a ${h} h` : h < 48 ? "hier" : `il y a ${Math.round(h / 24)} j`;
 };
 const COUL = ["#E94A06", "#2563EB", "#7C3AED", "#0E9F8E"];
+const GENRES: [string, string][] = [["tout", "Tout"], ["actu", "Actu tech"], ["interview", "Interviews"], ["docu", "Documentaires"]];
+const GENRE_NOM: Record<Genre, string> = { actu: "Actu", interview: "Interview", docu: "Documentaire" };
+const LIC: Record<Licence, { nom: string; cls: string }> = { cc: { nom: "CC BY", cls: "vert" }, autorisee: { nom: "Autorisée", cls: "vert" }, reservee: { nom: "Droits réservés", cls: "ambre" } };
 
 export default function VideosPage() {
   const [videos, setVideos] = useState<LigneVideo[] | null>(null);
-  const [themes, setThemes] = useState<{ id: string; nom: string }[]>([]);
-  const [theme, setTheme] = useState("tout");
-  const [langue, setLangue] = useState("toutes");
+  const [chaines, setChaines] = useState<Chaine[]>([]);
+  const [admin, setAdmin] = useState(false);
+  const [genre, setGenre] = useState("tout");
+  const [chaine, setChaine] = useState("toutes");
+  const [gerer, setGerer] = useState(false);
+  const [nouvelle, setNouvelle] = useState("");
+  const [nouvType, setNouvType] = useState<"tech" | "info">("tech");
   const [sel, setSel] = useState<string | null>(null);
   const [ext, setExt] = useState(0);
   const [busy, setBusy] = useState("");
@@ -34,15 +41,17 @@ export default function VideosPage() {
       const r = await fetch(`/api/videos${maj ? "?maj=1" : ""}`, { cache: "no-store" });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || `Erreur ${r.status}`);
-      setVideos(d.videos); setThemes(d.themes); setNote(d.note || "");
+      setVideos(d.videos); setChaines(d.chaines || []); setAdmin(Boolean(d.admin)); setNote(d.note || "");
       if (!sel && d.videos[0]) setSel(d.videos[0].id);
     } catch (e) { setError((e as Error).message); setVideos([]); } finally { setBusy(""); }
   }
   useEffect(() => { void charger(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const liste = useMemo(() => (videos ?? []).filter((v) => (theme === "tout" || v.info.theme === theme) && (langue === "toutes" || (langue === "fr" ? v.info.langue === "fr" : v.info.langue !== "fr"))), [videos, theme, langue]);
-  const vListe = useVoirPlus(liste, 6, `${theme}|${langue}`);
+  const liste = useMemo(() => (videos ?? []).filter((v) => (genre === "tout" || v.info.genre === genre) && (chaine === "toutes" || v.info.chaineId === chaine)), [videos, genre, chaine]);
+  const vListe = useVoirPlus(liste, 8, `${genre}|${chaine}`);
+  const presentes = useMemo(() => chaines.filter((c) => c.id && (videos ?? []).some((v) => v.info.chaineId === c.id)), [chaines, videos]);
   const v = (videos ?? []).find((x) => x.id === sel) ?? null;
+  const libre = v ? v.licence !== "reservee" : false;
   const extraits = v?.extraits ?? [];
   const e = extraits[ext];
 
@@ -62,9 +71,19 @@ export default function VideosPage() {
     setVideos((xs) => (xs ?? []).filter((x) => x.id !== id));
     if (sel === id) setSel(null);
   }
+  async function actionChaine(action: string, handle: string, extra: Record<string, unknown> = {}) {
+    setBusy("chaine"); setError("");
+    try {
+      const r = await fetch("/api/videos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, handle, ...extra }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `Erreur ${r.status}`);
+      if (action === "chaine-ajouter") { setNouvelle(""); setInfo(`Chaîne ajoutée : ${d.chaine.nom}. Lancez « Chercher les nouvelles vidéos ».`); }
+      await charger();
+    } catch (x) { setError((x as Error).message); } finally { setBusy(""); }
+  }
   const lien = (ex: Extrait) => `https://youtu.be/${v?.id}?t=${ex.debut}`;
-  const credit = v ? `Source : ${v.info.chaine} (licence CC BY) · youtube.com/watch?v=${v.id}` : "";
-  const idee = (ex: Extrait) => `${ex.titre}. ${ex.soustitres}\n\n${credit}`;
+  const credit = v ? `Source : ${v.info.chaine}${v.licence === "cc" ? " (licence CC BY)" : ""} · youtu.be/${v.id}` : "";
+  const idee = (ex: Extrait) => `${ex.titre}.${ex.citation ? ` « ${ex.citation} »` : ""} ${ex.soustitres}\n\nVidéo à citer et à lier (ne pas reprendre les images) : ${credit}`;
   const embed = v ? `https://www.youtube-nocookie.com/embed/${v.id}?rel=0&modestbranding=1${lecture ? `&start=${lecture.debut}&end=${lecture.fin}&autoplay=1` : ""}` : "";
 
   return (
@@ -74,9 +93,12 @@ export default function VideosPage() {
           <div style={{ flex: "1 1 360px", display: "flex", flexDirection: "column", gap: 6 }}>
             <Link href="/veille" className="tv-gris" style={{ textDecoration: "none", fontWeight: 600 }}>← Veille</Link>
             <h1 className="tv-titre">Vidéos à reprendre</h1>
-            <span style={{ fontSize: 14, color: "#33425C" }}>Uniquement des vidéos YouTube réutilisables (licence CC BY). VOA repère les passages à couper pour vos réseaux.</span>
+            <span style={{ fontSize: 14, color: "#33425C" }}>Les dernières vidéos tech de vos chaînes suivies ({chaines.filter((c) => c.id).length}). VOA repère les moments chocs des interviews et des documentaires.</span>
           </div>
-          <button type="button" className="btn" onClick={() => charger(true)} disabled={Boolean(busy)}><Trait d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5" size={16} />{busy === "maj" ? "Recherche…" : "Chercher de nouvelles vidéos"}</button>
+          <div className="row" style={{ gap: 8 }}>
+            {admin ? <button type="button" className="btn" onClick={() => setGerer((g) => !g)}>{gerer ? "Fermer" : "Chaînes suivies"}</button> : null}
+            <button type="button" className="tv-btn-nuit" style={{ height: 44, letterSpacing: 0 }} onClick={() => charger(true)} disabled={Boolean(busy)}><Trait d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5" size={16} />{busy === "maj" ? "Recherche…" : "Chercher les nouvelles vidéos"}</button>
+          </div>
         </div>
 
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
@@ -84,15 +106,40 @@ export default function VideosPage() {
         {info ? <p className="notice vert" role="status">{info}</p> : null}
 
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-          {[{ id: "tout", nom: "Tous les thèmes" }, ...themes].map((t) => <button key={t.id} type="button" className="tv-chip" aria-selected={theme === t.id} onClick={() => setTheme(t.id)}>{t.nom}</button>)}
-          <span style={{ width: 12 }} />
-          {[["toutes", "Toutes langues"], ["fr", "Français"], ["autres", "Autres (sous-titrées)"]].map(([k, l]) => <button key={k} type="button" className="tv-chip" aria-selected={langue === k} onClick={() => setLangue(k)}>{l}</button>)}
+          {GENRES.map(([k, l]) => <button key={k} type="button" className="tv-chip" aria-selected={genre === k} onClick={() => setGenre(k)}>{l}<small>{k === "tout" ? (videos ?? []).length : (videos ?? []).filter((x) => x.info.genre === k).length}</small></button>)}
+          <select className="tv-chip" value={chaine} onChange={(e) => setChaine(e.target.value)} aria-label="Chaîne" style={{ paddingRight: 10 }}>
+            <option value="toutes">Toutes les chaînes</option>
+            {presentes.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
+          </select>
         </div>
+
+        {gerer && admin ? (
+          <section className="tv-carte" style={{ gap: 12 }}>
+            <div className="row" style={{ alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <h2 className="tv-h2" style={{ flex: 1 }}>Chaînes suivies</h2>
+              <span className="tv-gris" style={{ fontSize: 12 }}>« Actu générale » : seuls les sujets tech sont gardés.</span>
+            </div>
+            <div className="tv-vid-chaines">
+              {chaines.map((c) => (
+                <div key={c.handle} className="tv-vid-chaine" data-ko={Boolean(c.introuvable)}>
+                  <span style={{ flex: 1, minWidth: 0 }}><strong>{c.nom}</strong><small>{c.handle} · {c.type === "info" ? "actu générale" : "tech"}{c.introuvable ? " · introuvable" : ""}</small></span>
+                  <label title="Cochez seulement si la chaîne vous a autorisé par écrit à reprendre ses images"><input type="checkbox" checked={Boolean(c.autorisee)} disabled={busy === "chaine"} onChange={(e) => actionChaine("chaine-autoriser", c.handle, { autorisee: e.target.checked })} /> Autorisation obtenue</label>
+                  <button type="button" className="btn link small" disabled={busy === "chaine"} onClick={() => actionChaine("chaine-retirer", c.handle)}>Retirer</button>
+                </div>
+              ))}
+            </div>
+            <form className="row" style={{ gap: 8, flexWrap: "wrap" }} onSubmit={(e) => { e.preventDefault(); if (nouvelle.trim()) void actionChaine("chaine-ajouter", nouvelle, { type: nouvType }); }}>
+              <input className="tv-vid-input" value={nouvelle} onChange={(e) => setNouvelle(e.target.value)} placeholder="@nomdelachaine ou lien YouTube" aria-label="Chaîne à ajouter" />
+              <select className="tv-chip" value={nouvType} onChange={(e) => setNouvType(e.target.value as "tech" | "info")} aria-label="Type de chaîne"><option value="tech">Chaîne tech</option><option value="info">Actu générale</option></select>
+              <button type="submit" className="btn primary" disabled={busy === "chaine" || !nouvelle.trim()}>Ajouter</button>
+            </form>
+          </section>
+        ) : null}
 
         <div className="tv-vid">
           <section className="tv-vid-liste" aria-label="Vidéos proposées">
-            <span className="tv-kicker" style={{ color: "#5B6B86" }}>PROPOSÉES · 7 JOURS · PAR PERTINENCE</span>
-            {videos === null ? <p className="tv-gris">Chargement…</p> : liste.length === 0 ? <p className="tv-gris" style={{ fontSize: 13 }}>Aucune vidéo réutilisable pour ce filtre. Lancez « Chercher de nouvelles vidéos ».</p> : null}
+            <span className="tv-kicker" style={{ color: "#5B6B86" }}>14 DERNIERS JOURS · PAR PERTINENCE</span>
+            {videos === null ? <p className="tv-gris">Chargement…</p> : liste.length === 0 ? <p className="tv-gris" style={{ fontSize: 13 }}>Aucune vidéo pour ce filtre. Lancez « Chercher les nouvelles vidéos ».</p> : null}
             {vListe.visibles.map((x) => (
               <button key={x.id} type="button" className="tv-vid-carte" aria-pressed={sel === x.id} onClick={() => { setSel(x.id); setExt(0); setLecture(null); }}>
                 <span className="mini">
@@ -102,11 +149,12 @@ export default function VideosPage() {
                 </span>
                 <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
                   <strong>{x.info.titre}</strong>
-                  <small>{x.info.chaine} · {(x.info.langue || "?").toUpperCase()} · {ilya(x.info.publie)}</small>
+                  <small>{x.info.chaine} · {ilya(x.info.publie)}{x.info.langue && x.info.langue !== "fr" ? ` · ${x.info.langue.toUpperCase()}` : ""}</small>
                   <span className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                    <span className="tv-pill vert">CC BY</span>
+                    {x.info.genre !== "actu" ? <span className="tv-pill" style={{ background: x.info.genre === "docu" ? "#EDE5FF" : "#FFE8DC", color: x.info.genre === "docu" ? "#5B21B6" : "#B23A00" }}>{GENRE_NOM[x.info.genre]}</span> : null}
+                    <span className={`tv-pill ${LIC[x.licence].cls}`}>{LIC[x.licence].nom}</span>
                     {x.extraits?.length ? <span style={{ fontSize: 12, fontWeight: 800, color: "#2563EB" }}>{x.extraits.length} extraits</span> : null}
-                    <span style={{ fontSize: 12, color: "#5B6B86" }}>pertinence {x.pertinence}</span>
+                    <span style={{ fontSize: 12, color: "#5B6B86" }}>{x.info.vues >= 1000 ? `${Math.round(x.info.vues / 100) / 10} k vues` : `${x.info.vues} vues`}</span>
                   </span>
                 </span>
               </button>
@@ -135,21 +183,25 @@ export default function VideosPage() {
                       <div className="row" style={{ justifyContent: "space-between", fontSize: 11, color: "#5B6B86", fontFamily: "ui-monospace, monospace" }}><span>00:00</span><span>{mmss(v.info.duree / 2)}</span><span>{mmss(v.info.duree)}</span></div>
                     </>
                   ) : null}
-                  <div className="tv-vid-licence"><Trait d="M20 6L9 17l-5-5" size={18} stroke={2.6} /><span><strong>Licence Creative Commons (CC BY), vérifiée sur YouTube.</strong> Vous pouvez couper et republier en citant la chaîne : VOA ajoute le crédit sur la vidéo et dans le texte.</span></div>
+                  {libre ? (
+                    <div className="tv-vid-licence"><Trait d="M20 6L9 17l-5-5" size={18} stroke={2.6} /><span><strong>{v.licence === "cc" ? "Licence Creative Commons (CC BY), vérifiée sur YouTube." : `Autorisation de ${v.info.chaine} enregistrée.`}</strong> Vous pouvez couper et republier en citant la chaîne : VOA ajoute le crédit sur la vidéo et dans le texte.</span></div>
+                  ) : (
+                    <div className="tv-vid-licence" data-reserve="true"><Trait d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" size={18} stroke={2.2} /><span><strong>Droits réservés par {v.info.chaine}.</strong> Vous pouvez en parler, citer une phrase courte avec la source et partager le lien. Pour couper et republier les images, il faut l&apos;accord écrit de la chaîne{admin ? " (cochez ensuite « Autorisation obtenue » dans Chaînes suivies)" : ""}.</span></div>
+                  )}
                 </div>
 
                 {!extraits.length ? (
                   <div className="tv-carte" style={{ alignItems: "flex-start", gap: 10 }}>
-                    <strong style={{ fontSize: 16 }}>VOA n&apos;a pas encore regardé cette vidéo.</strong>
-                    <span className="tv-gris" style={{ fontSize: 13 }}>Il repère 3 ou 4 passages de 20 à 45 s qui tiennent seuls, avec les sous-titres en français. Compter une à deux minutes.</span>
+                    <strong style={{ fontSize: 16 }}>{v.info.genre === "actu" ? "VOA n'a pas encore regardé cette vidéo." : "Trouver les moments chocs de cette vidéo"}</strong>
+                    <span className="tv-gris" style={{ fontSize: 13 }}>{v.info.genre === "actu" ? "VOA repère 3 ou 4 passages de 20 à 45 s qui tiennent seuls, avec les sous-titres en français." : "VOA regarde toute la vidéo et sort les 4 moments les plus forts : révélations, aveux, chiffres qui frappent, phrases à partager."} Compter une à trois minutes.</span>
                     <div className="row" style={{ gap: 8 }}>
-                      <button type="button" className="tv-btn-nuit" onClick={reperer} disabled={Boolean(busy)}>{busy === "extraits" ? "VOA REGARDE LA VIDÉO…" : "REPÉRER LES EXTRAITS"}</button>
+                      <button type="button" className="tv-btn-nuit" onClick={reperer} disabled={Boolean(busy)}>{busy === "extraits" ? "VOA REGARDE LA VIDÉO…" : v.info.genre === "actu" ? "REPÉRER LES EXTRAITS" : "TROUVER LES MOMENTS CHOCS"}</button>
                       <button type="button" className="btn" onClick={() => ecarter(v.id)}>Écarter cette vidéo</button>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <div className="row" style={{ alignItems: "baseline", gap: 10 }}><h2 className="tv-h2" style={{ flex: 1 }}>{extraits.length} extraits repérés par VOA</h2><button type="button" className="btn link small" onClick={reperer} disabled={Boolean(busy)}>{busy === "extraits" ? "…" : "Relancer"}</button></div>
+                    <div className="row" style={{ alignItems: "baseline", gap: 10 }}><h2 className="tv-h2" style={{ flex: 1 }}>{extraits.length} {v.info.genre === "actu" ? "extraits repérés" : "moments chocs repérés"} par VOA</h2><button type="button" className="btn link small" onClick={reperer} disabled={Boolean(busy)}>{busy === "extraits" ? "…" : "Relancer"}</button></div>
                     {extraits.map((x, i) => (
                       <div key={i} className="tv-vid-extrait" data-on={i === ext}>
                         <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
@@ -157,12 +209,14 @@ export default function VideosPage() {
                           <button type="button" className="titre" onClick={() => setExt(i)}>{x.titre}</button>
                           <code>{mmss(x.debut)} → {mmss(x.fin)} · {x.fin - x.debut} s</code>
                         </div>
+                        {x.citation ? <blockquote className="tv-vid-citation">« {x.citation} »</blockquote> : null}
                         <span style={{ fontSize: 13, color: "#33425C" }}>{x.pourquoi}</span>
                         {i === ext && x.soustitres ? <div className="st"><b>SOUS-TITRES FR · </b>{x.soustitres}</div> : null}
                         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                           <button type="button" className="btn small" onClick={() => { setExt(i); setLecture({ debut: x.debut, fin: x.fin }); }}><Trait d="M8 5v14l11-7z" size={14} />Lire</button>
-                          <button type="button" className={i === ext ? "tv-btn-nuit" : "btn small"} style={i === ext ? { height: 40, fontSize: 13 } : undefined} onClick={() => { setExt(i); setDecoupe(x); }}><Trait d="M6 2v20M18 2v20M2 12h20" size={14} />Couper en Reel 9:16</button>
-                          <Link href={`/creer/actu?idee=${encodeURIComponent(idee(x))}`} className="btn small">Écrire le post</Link>
+                          {libre ? <button type="button" className={i === ext ? "tv-btn-nuit" : "btn small"} style={i === ext ? { height: 40, fontSize: 13 } : undefined} onClick={() => { setExt(i); setDecoupe(x); }}><Trait d="M6 2v20M18 2v20M2 12h20" size={14} />Couper en Reel 9:16</button> : null}
+                          <Link href={`/creer/actu?idee=${encodeURIComponent(idee(x))}`} className={!libre && i === ext ? "tv-btn-nuit" : "btn small"} style={!libre && i === ext ? { height: 40, fontSize: 13 } : undefined}>Écrire le post</Link>
+                          {x.citation ? <button type="button" className="btn small" onClick={() => { void navigator.clipboard?.writeText(`« ${x.citation} » — ${v.info.chaine} (youtu.be/${v.id}?t=${x.debut})`); setInfo("Citation copiée avec sa source."); }}>Copier la citation</button> : null}
                           <button type="button" className="btn small" onClick={() => { void navigator.clipboard?.writeText(lien(x)); setInfo("Lien horodaté copié."); }}>Copier le lien du moment</button>
                         </div>
                       </div>
@@ -175,11 +229,11 @@ export default function VideosPage() {
 
           <aside className="tv-vid-side">
             <section className="tv-carte-side">
-              <h2 className="tv-h2" style={{ fontSize: 17 }}>Comment couper un extrait</h2>
+              <h2 className="tv-h2" style={{ fontSize: 17 }}>Ce que vous pouvez en faire</h2>
               <ol className="tv-vid-etapes">
-                <li><b>1</b><span>Choisissez l&apos;extrait, puis « Couper en Reel 9:16 ».</span></li>
-                <li><b>2</b><span>Importez le fichier de la vidéo. YouTube n&apos;autorise pas le téléchargement depuis le site : demandez-le à la chaîne, ou utilisez une copie fournie par son auteur.</span></li>
-                <li><b>3</b><span>VOA coupe au bon minutage, recadre en vertical, incruste les sous-titres en français, le logo TUVOA et le crédit de la chaîne.</span></li>
+                <li><b>1</b><span><strong>Toutes les vidéos</strong> : écrire un post qui raconte et commente le moment, citer une phrase courte avec la source, partager le lien horodaté.</span></li>
+                <li><b>2</b><span><strong>CC BY ou chaîne autorisée</strong> : « Couper en Reel 9:16 ». Importez le fichier fourni par la chaîne ; VOA coupe, recadre, incruste les sous-titres, le logo et le crédit.</span></li>
+                <li><b>3</b><span>Pour obtenir une autorisation, écrivez à la chaîne (adresse dans l&apos;onglet « À propos » de YouTube) en précisant l&apos;extrait et l&apos;usage.</span></li>
               </ol>
             </section>
             {e ? (
@@ -191,7 +245,7 @@ export default function VideosPage() {
           </aside>
         </div>
       </div>
-      {decoupe && v ? <Decoupe extrait={decoupe} credit={`Source : ${v.info.chaine} (CC BY)`} titre={decoupe.titre} fermer={() => setDecoupe(null)} /> : null}
+      {decoupe && v && libre ? <Decoupe extrait={decoupe} credit={`Source : ${v.info.chaine}${v.licence === "cc" ? " (CC BY)" : ""}`} titre={decoupe.titre} fermer={() => setDecoupe(null)} /> : null}
     </div>
   );
 }
@@ -282,7 +336,7 @@ function Decoupe({ extrait, credit, titre, fermer }: { extrait: Extrait; credit:
           <label className="tv-vid-depot">
             <Trait d="M12 16V4M6 10l6-6 6 6M4 20h16" size={26} />
             <strong>Importer le fichier de la vidéo</strong>
-            <span>MP4 ou WebM fourni par la chaîne (licence CC BY).</span>
+            <span>MP4 ou WebM fourni par la chaîne.</span>
             <input type="file" accept="video/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) setFichier(URL.createObjectURL(f)); }} />
           </label>
         ) : (
