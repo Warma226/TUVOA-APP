@@ -13,6 +13,8 @@ import {
   type Boucle, type Doc, type El, type Entree, type Format, type Genre, type Ombre, type Page,
 } from "@/lib/creation";
 import { GALERIE, GENRES, type Maquette } from "@/lib/modeles";
+import { STYLES, VOIX, type StyleVoix } from "@/lib/voix-liste";
+import { useVoirPlus } from "@/components/VoirPlus";
 import { logo as elementsLogo } from "@/lib/creation";
 import { listPosts } from "@/lib/client";
 
@@ -20,6 +22,11 @@ const CLE_BROUILLON = "tuvoa-studio-brouillon";
 const ENTREES: [Entree, string][] = [["aucune", "Aucune"], ["fondu", "Fondu"], ["glisser-haut", "Glisse du bas"], ["glisser-bas", "Glisse du haut"], ["glisser-gauche", "Glisse de la droite"], ["glisser-droite", "Glisse de la gauche"], ["zoom", "Zoom"], ["pop", "Pop (rebond)"], ["machine", "Machine à écrire"]];
 const BOUCLES: [Boucle, string][] = [["aucune", "Aucune"], ["flotter", "Flotter"], ["pulser", "Pulser"], ["balancer", "Balancer"], ["tourner", "Tourner"], ["defiler", "Défiler (bandeau)"], ["clignoter", "Clignoter"], ["trembler", "Trembler"]];
 const OMBRES: [Ombre, string][] = [["aucune", "Aucune"], ["douce", "Douce"], ["forte", "Forte"], ["neon", "Néon bleu"], ["verre", "Verre"]];
+const INFO_GENRE: Record<Genre, { taille: string; sous: string; ideal: string[] }> = {
+  visuel: { taille: "4:5 · 1:1", sous: "Une image pour le fil Facebook et LinkedIn", ideal: ["Actu", "Citation", "CyberBase", "Portrait"] },
+  carrousel: { taille: "4:5 · 2 à 10 pages", sous: "Plusieurs pages à faire défiler", ideal: ["Réflexes", "Pas à pas", "Chiffres clés"] },
+  video: { taille: "9:16 · 60 s max", sous: "Reel, story ou TikTok animé, avec voix off", ideal: ["Reel", "Story", "Narration"] },
+};
 const NUANCIER = ["#FFFFFF", "#0A0A0A", "#2563EB", "#6E9BFF", "#0A2A66", "#E94A06", "#F2B21B", "#DCE6FF", "#F3F4F6"];
 
 type Glisse = { mode: "deplacer" | "redim"; id: string; x0: number; y0: number; el0: El } | null;
@@ -112,7 +119,14 @@ export default function Studio() {
   const [envoye, setEnvoye] = useState<string | null>(null);
   const [zone, setZone] = useState(true);
   const [actus, setActus] = useState<string[]>([]);
+  const [voixNom, setVoixNom] = useState("Charon");
+  const [filtreModeles, setFiltreModeles] = useState<Genre | "tous">("tous");
+  const [dernierEp, setDernierEp] = useState<{ numero?: number; titre: string; statut?: string; audio?: string } | null>(null);
+  const [voixStyle, setVoixStyle] = useState<StyleVoix>("narration");
+  const [voixTexte, setVoixTexte] = useState<string | null>(null);
   useEffect(() => {
+    fetch("/api/minute", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "etat" }) })
+      .then((r) => (r.ok ? r.json() : null)).then((d: { episodes?: { numero?: number; titre: string; statut?: string; audio?: string }[] } | null) => { if (d?.episodes?.length) setDernierEp(d.episodes[0]); }).catch(() => {});
     listPosts().then((ps) => setActus(ps.filter((p) => p.rubrique === "actu" && p.status === "publie").slice(0, 8).map((p) => p.title || p.idea).filter(Boolean))).catch(() => {});
   }, []);
 
@@ -397,6 +411,28 @@ export default function Studio() {
   }
 
   const ouvrir = (m: Maquette) => { setPasse([]); setFutur([]); setDoc(m.doc()); setPageIdx(0); setSel(null); setEnvoye(null); setEnVideo(m.doc().genre === "video"); setLecture(m.doc().genre === "video"); setEtape("editeur"); };
+  const texteNarration = doc.pages.map((p) => p.elements.filter((e) => e.type === "texte" && e.texte?.trim() && e.role !== "logo").map((e) => e.texte!.trim()).join(". ")).filter(Boolean).join("\n\n");
+  async function genererVoix() {
+    const texte = (voixTexte ?? texteNarration).trim();
+    if (!texte) return;
+    setBusy("voix"); setError("");
+    try {
+      const r = await fetch("/api/voix", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texte, voix: voixNom, style: voixStyle }) });
+      const d = (await r.json().catch(() => ({}))) as { url?: string; duree?: number; error?: string };
+      if (!r.ok || !d.url) throw new Error(d.error || `Erreur ${r.status}`);
+      changer((x) => {
+        // Les scènes s'allongent si la voix dure plus longtemps que la vidéo.
+        const total = x.pages.reduce((s, p) => s + (p.duree ?? x.duree), 0);
+        const k = d.duree && d.duree + 0.5 > total ? (d.duree + 0.5) / total : 1;
+        return { ...x, audio: d.url, sequence: true, pages: x.pages.map((p) => ({ ...p, duree: Math.round((p.duree ?? x.duree) * k * 10) / 10 })) };
+      });
+      setMsg("Voix off ajoutée : elle sera jouée et exportée avec la vidéo.");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(""); }
+  }
+  const tousModeles = useMemo(() => (Object.keys(GALERIE) as Genre[]).flatMap((g) => GALERIE[g].map((m) => ({ m, d: m.doc(), g }))), []);
+  const vModeles = useVoirPlus(tousModeles.filter((x) => filtreModeles === "tous" || x.g === filtreModeles), 12, filtreModeles);
+  const vActus = useVoirPlus(actus, 3);
+  const depuisActu = (titre: string, g: Genre) => { ouvrir(GALERIE[g][0]); setSujet(titre); setMsg("Sujet repris : cliquez « Réécrire tous les textes avec VOA » pour adapter les textes."); };
   const reprendre = () => { if (!brouillon) return; setDoc(brouillon); setPageIdx(0); setSel(null); setEnVideo(brouillon.genre === "video"); setEtape("editeur"); };
   const minis = useMemo(() => doc.pages.map((p) => p.id), [doc.pages]);
   const directions = useMemo(() => GALERIE[doc.genre ?? "visuel"].slice(0, 3).map((m) => ({ m, d: m.doc() })), [doc.genre]);
@@ -430,41 +466,116 @@ export default function Studio() {
         </header>
       ) : null}
       {etape === "accueil" ? (
-        <main className="page sub wide" style={{ paddingTop: 8, maxWidth: 1100 }}>
-          <div className="row" style={{ gap: 18, alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
-            <Voa humeur="parle" taille={110} />
-            <div>
-              <h1 style={{ fontSize: 40, fontWeight: 800, letterSpacing: -1, margin: 0 }}>Que veux-tu créer ?</h1>
-              <p className="muted" style={{ margin: "6px 0 0" }}>Choisis le format : VOA te propose 10 maquettes d&apos;inspiration à personnaliser.</p>
-            </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
-            {GENRES.map((g) => {
-              const ex = exemples[g.id];
-              return (
-                <button key={g.id} type="button" onClick={() => { setGenre(g.id); setEtape("galerie"); }} className="card" style={{ cursor: "pointer", gap: 12, alignItems: "center", textAlign: "center", padding: 20 }}>
-                  <div style={{ display: "flex", gap: 6, justifyContent: "center", height: 220, alignItems: "flex-end" }}>
-                    {(g.id === "carrousel" ? ex.pages.slice(0, 3) : [ex.pages[0]]).map((p, i) => (
-                      <div key={p.id} style={{ transform: g.id === "carrousel" ? `rotate(${(i - 1) * 6}deg) translateY(${i === 1 ? -10 : 0}px)` : undefined }}>
-                        <Miniature page={p} format={ex.format} images={images.current} version={version} actif={false} onClick={() => undefined} numero={i + 1} largeur={g.id === "video" ? 124 : 150} anime={g.id === "video"} duree={ex.duree} charger={chargerImage} />
-                      </div>
-                    ))}
+        <main className="tv-studio-accueil">
+          <div className="tv-sa-main">
+            <section aria-labelledby="t-sa-format" className="tv-sa-bloc">
+              <div className="row" style={{ gap: 12 }}>
+                <Voa humeur="parle" taille={52} />
+                <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <h2 id="t-sa-format" className="tv-h2" style={{ fontSize: 24 }}>Que voulez-vous créer ?</h2>
+                  <span className="tv-gris" style={{ fontSize: 13 }}>Choisissez un format : VOA propose 10 maquettes d&apos;inspiration, toutes modifiables.</span>
+                </span>
+              </div>
+              <div className="tv-sa-formats">
+                {GENRES.map((g) => {
+                  const ex = exemples[g.id];
+                  const info = INFO_GENRE[g.id];
+                  return (
+                    <button key={g.id} type="button" className="tv-sa-format" onClick={() => { setGenre(g.id); setEtape("galerie"); }}>
+                      <span className="scene">
+                        {(g.id === "carrousel" ? ex.pages.slice(0, 3) : [ex.pages[0]]).map((p, i) => (
+                          <span key={p.id} style={{ transform: g.id === "carrousel" ? `rotate(${(i - 1) * 7}deg) translateY(${i === 1 ? -8 : 0}px)` : undefined, zIndex: i === 1 ? 1 : 0 }}>
+                            <Miniature page={p} format={ex.format} images={images.current} version={version} actif={false} onClick={() => undefined} numero={i + 1} largeur={g.id === "video" ? 96 : g.id === "carrousel" ? 96 : 120} anime={g.id === "video"} duree={ex.duree} charger={chargerImage} />
+                          </span>
+                        ))}
+                      </span>
+                      <span className="row" style={{ alignItems: "baseline", gap: 8 }}><strong className="nom">{g.nom}</strong><span className="taille">{info.taille}</span></span>
+                      <span className="sous">{info.sous}</span>
+                      <span className="row" style={{ gap: 6, flexWrap: "wrap" }}>{info.ideal.map((x) => <span key={x} className="tv-pill">{x}</span>)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <Link href="/minute-cyber" className="tv-sa-minute">
+              <span className="badge60">60s</span>
+              <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                <strong style={{ fontFamily: "var(--font-mont)", fontSize: 18 }}>La minute cyber</strong>
+                <span style={{ fontSize: 13, color: "#C9D3E3" }}>{dernierEp ? `Ép. ${dernierEp.numero ?? "?"} « ${dernierEp.titre} » : ${dernierEp.statut === "envoye" ? "envoyé au calendrier" : dernierEp.statut === "monte" ? "monté, à publier" : dernierEp.audio ? "voix prête, à monter" : "voix off à faire"}` : "L'assistant de la série vidéo : script, storyboard, voix off et montage."}</span>
+              </span>
+              <span className="go">{dernierEp && dernierEp.statut !== "envoye" ? "Continuer l'épisode" : "Ouvrir"}</span>
+            </Link>
+
+            {actus.length ? (
+              <section aria-labelledby="t-sa-actu" className="tv-carte" style={{ gap: 4 }}>
+                <div className="row" style={{ alignItems: "baseline", gap: 10, flexWrap: "wrap", paddingBottom: 6 }}>
+                  <h2 id="t-sa-actu" className="tv-h2" style={{ fontSize: 18, flex: 1 }}>Partir d&apos;une actu publiée</h2>
+                  <Link href="/veille" style={{ fontSize: 13, fontWeight: 800, textDecoration: "none" }}>Toute la veille →</Link>
+                </div>
+                <span className="tv-gris" style={{ fontSize: 12, paddingBottom: 4 }}>La maquette s&apos;ouvre avec ce sujet : VOA réécrit les textes d&apos;un clic.</span>
+                {vActus.visibles.map((t) => (
+                  <div key={t} className="tv-sa-actu">
+                    <strong>{t}</strong>
+                    <span className="row" style={{ gap: 6, flexShrink: 0 }}>
+                      <button type="button" className="btn small" onClick={() => depuisActu(t, "visuel")}>Visuel</button>
+                      <button type="button" className="btn small" onClick={() => depuisActu(t, "carrousel")}>Carrousel</button>
+                    </span>
                   </div>
-                  <strong style={{ fontSize: 26 }}>{g.nom}</strong>
-                  <span className="muted">{g.sous}</span>
-                </button>
-              );
-            })}
+                ))}
+                {vActus.bouton}
+              </section>
+            ) : null}
+
+            <section aria-labelledby="t-sa-modeles" className="tv-carte">
+              <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                <h2 id="t-sa-modeles" className="tv-h2" style={{ fontSize: 18, flex: 1 }}>Modèles TUVOA</h2>
+                <div className="tv-segments" role="tablist" aria-label="Filtrer les modèles">
+                  {([["tous", "Tous"], ...GENRES.map((g) => [g.id, g.nom])] as [Genre | "tous", string][]).map(([k, l]) => (
+                    <button key={k} type="button" role="tab" aria-selected={filtreModeles === k} aria-pressed={filtreModeles === k} onClick={() => setFiltreModeles(k)}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="tv-sa-modeles">
+                {vModeles.visibles.map(({ m, d }) => (
+                  <button key={m.id} type="button" onClick={() => ouvrir(m)} title={m.idee}>
+                    <Miniature page={d.pages[0]} format={d.format} images={images.current} version={version} actif={false} onClick={() => undefined} numero={1} largeur={118} charger={chargerImage} />
+                    <span>{m.nom}</span>
+                  </button>
+                ))}
+              </div>
+              {vModeles.bouton}
+            </section>
           </div>
-          <Link href="/minute-cyber" className="card" style={{ flexDirection: "row", alignItems: "center", gap: 16, textDecoration: "none", color: "#fff", background: "#0A0A0A", borderColor: "#0A0A0A", padding: 18 }}>
-            <span style={{ width: 64, height: 64, borderRadius: 14, background: "#E94A06", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 26, flexShrink: 0 }}>60s</span>
-            <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-              <strong style={{ fontSize: 22 }}>La minute cyber</strong>
-              <span style={{ color: "#C7CBD6", fontSize: 14 }}>L&apos;assistant de la série vidéo : script, storyboard, voix off et montage automatique.</span>
-            </span>
-            <span className="btn small primary">Ouvrir</span>
-          </Link>
-          {brouillon ? <button type="button" className="btn ghost" onClick={reprendre}>Reprendre ma dernière création</button> : null}
+
+          <aside className="tv-sa-side">
+            {brouillon ? (
+              <section className="tv-carte-side" aria-labelledby="t-sa-crea">
+                <h2 id="t-sa-crea" className="tv-h2" style={{ fontSize: 17 }}>Ma dernière création</h2>
+                <button type="button" className="tv-sa-reprendre" onClick={reprendre}>
+                  {brouillon.pages[0] ? <Miniature page={brouillon.pages[0]} format={brouillon.format} images={images.current} version={version} actif={false} onClick={() => undefined} numero={1} largeur={64} charger={chargerImage} /> : null}
+                  <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3, textAlign: "left" }}>
+                    <strong style={{ fontSize: 14 }}>{brouillon.titre || "Sans titre"}</strong>
+                    <span style={{ fontSize: 12, color: "#5B6B86" }}>{GENRES.find((g) => g.id === (brouillon.genre ?? "visuel"))?.nom} · {brouillon.pages.length} page{brouillon.pages.length > 1 ? "s" : ""}{brouillon.audio ? " · voix off" : ""}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "#2563EB" }}>Reprendre →</span>
+                  </span>
+                </button>
+                <span className="tv-gris" style={{ fontSize: 12 }}>Gardée dans ce navigateur. Exportez ou envoyez-la au calendrier pour la retrouver ailleurs.</span>
+              </section>
+            ) : null}
+            <section className="tv-carte-side" aria-labelledby="t-sa-charte">
+              <h2 id="t-sa-charte" className="tv-h2" style={{ fontSize: 17 }}>La charte, toujours appliquée</h2>
+              <div className="row" style={{ gap: 8 }}>{[["Nuit", "#0A2A66"], ["Bleu", "#2563EB"], ["Orange", "#E94A06"], ["Noir", "#0A0A0A"], ["Blanc", "#FFFFFF"]].map(([n, c]) => <span key={n} title={n} style={{ width: 30, height: 30, borderRadius: 9, background: c, border: "1px solid rgba(0,0,0,0.08)" }} />)}</div>
+              <span style={{ fontSize: 13, color: "#33425C", lineHeight: 1.45 }}>Montserrat pour les titres, logo TUVOA en haut à gauche, zone sûre réservée aux interfaces de TikTok et des Reels.</span>
+            </section>
+            <section className="tv-sa-voix" aria-labelledby="t-sa-voix">
+              <Voa humeur="veille" taille={40} />
+              <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <strong id="t-sa-voix" style={{ fontSize: 14 }}>{VOIX.length} voix de narration</strong>
+                <span style={{ fontSize: 13, color: "#C9D6F2", lineHeight: 1.45 }}>Dans une vidéo, ouvrez « Ajouter une voix off » : choisissez la voix et le ton (conteur, flash info, pub), VOA enregistre.</span>
+              </span>
+            </section>
+          </aside>
         </main>
       ) : etape === "galerie" ? (
         <main className="page sub wide" style={{ paddingTop: 8, maxWidth: 1400 }}>
@@ -777,8 +888,27 @@ export default function Studio() {
               <div className="row" style={{ gap: 10 }}>
                 <span className="tv-studio-gris" style={{ width: 64, fontSize: 11, fontWeight: 700 }}>Voix off</span>
                 <audio src={doc.audio} controls style={{ flex: 1, height: 34 }} />
+                <button type="button" className="btn small" onClick={() => changer((d) => ({ ...d, audio: undefined }))}>Retirer</button>
               </div>
             ) : null}
+            <details className="tv-studio-narration" open={!doc.audio}>
+              <summary>{doc.audio ? "Refaire la voix off" : "Ajouter une voix off"}</summary>
+              <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                <label className="field" style={{ flex: "1 1 220px" }}>Voix
+                  <select value={voixNom} onChange={(e) => setVoixNom(e.target.value)}>
+                    <optgroup label="Voix masculines">{VOIX.filter((v) => v.genre === "m").map((v) => <option key={v.id} value={v.id}>{v.nom}</option>)}</optgroup>
+                    <optgroup label="Voix féminines">{VOIX.filter((v) => v.genre === "f").map((v) => <option key={v.id} value={v.id}>{v.nom}</option>)}</optgroup>
+                  </select>
+                </label>
+                <label className="field" style={{ flex: "1 1 180px" }}>Ton
+                  <select value={voixStyle} onChange={(e) => setVoixStyle(e.target.value as StyleVoix)}>{STYLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                </label>
+              </div>
+              <label className="field">Texte lu <span className="tv-studio-gris" style={{ fontWeight: 400, fontSize: 12 }}>seul ce texte est prononcé ; le ton est donné à part</span>
+                <textarea rows={4} value={voixTexte ?? texteNarration} onChange={(e) => setVoixTexte(e.target.value)} />
+              </label>
+              <button type="button" className="btn primary" style={{ alignSelf: "flex-start" }} disabled={!!busy || !(voixTexte ?? texteNarration).trim()} onClick={genererVoix}>{busy === "voix" ? "VOA enregistre…" : "Générer la voix off"}</button>
+            </details>
             <span className="tv-studio-gris" style={{ fontSize: 12 }}>Chaque page est une scène ; réglez la durée de la scène choisie dans le panneau de droite.</span>
           </section>
         ) : null}

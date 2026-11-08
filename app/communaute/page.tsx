@@ -4,7 +4,8 @@
 // réponses enregistrées, humeur du grin, questions qui reviennent, radar à arnaques, grin du jeudi, piliers, brief du soir.
 import { useVoirPlus } from "@/components/VoirPlus";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { VOIX_BRIEF } from "@/lib/voix-liste";
 import type { CmFil, CmLigne, CmRapport, CmReglages } from "@/lib/cm";
 import Voa, { HUMEURS, type Humeur } from "@/components/Voa";
 import { Trait } from "@/components/BottomNav";
@@ -61,12 +62,14 @@ export default function Grin() {
   const [choix, setChoix] = useState<string | null>(null);
   const [brouillon, setBrouillon] = useState("");
   const [lecture, setLecture] = useState(false);
+  const sonBrief = useRef<HTMLAudioElement | null>(null);
+  const audioBrief = useRef<{ texte: string; url: string } | null>(null);
 
   const charger = (diag = false) => api(undefined, diag).then((d: Etat) => setE((old) => ({ ...d, diagnostic: d.diagnostic ?? old?.diagnostic }))).catch((x: Error) => setError(x.message));
   useEffect(() => {
     void charger(true);
     const t = setInterval(() => void charger(), 60000);
-    return () => { clearInterval(t); if (typeof window !== "undefined") window.speechSynthesis?.cancel(); };
+    return () => { clearInterval(t); sonBrief.current?.pause(); if (typeof window !== "undefined") window.speechSynthesis?.cancel(); };
   }, []);
 
   async function regler(patch: Partial<CmReglages>) {
@@ -147,24 +150,47 @@ export default function Grin() {
     void regler({ reponsesTypes: [...reponsesTypes, { titre: titre.trim(), texte: brouillon.trim() }].slice(-12) });
   }
 
-  function ecouter() {
-    const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
-    if (!synth || !r) return;
-    if (lecture) { synth.cancel(); setLecture(false); return; }
+  function texteBrief() {
+    if (!r) return "";
     const gain = r.abonnes != null && r.abonnesVeille != null ? r.abonnes - r.abonnesVeille : null;
-    const texte = [
-      "Bonsoir. Ici VOA, le brief du grin.", r.resume,
+    return [
+      "Bonsoir ! Ici VOA, avec le brief du grin.", r.resume,
       gain != null ? `La Page compte ${r.abonnes} abonnés, ${gain >= 0 ? `soit ${gain} de plus` : `soit ${-gain} de moins`} qu'hier.` : "",
       r.questions.length ? `Les questions qui reviennent : ${r.questions.join(". ")}.` : "",
       r.idees.length ? `Mes idées pour demain : ${r.idees.join(". ")}.` : "",
-      nbValider ? `${nbValider} échange${nbValider > 1 ? "s attendent" : " attend"} votre validation. Bonne soirée.` : "Rien ne vous attend. Bonne soirée.",
-    ].filter(Boolean).join(" ");
+      nbValider ? `${nbValider} échange${nbValider > 1 ? "s attendent" : " attend"} votre validation. Bonne soirée !` : "Rien ne vous attend. Bonne soirée !",
+    ].filter(Boolean).join("\n\n");
+  }
+  function lireNavigateur(texte: string) {
+    const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
+    if (!synth) { setLecture(false); return; }
     const u = new SpeechSynthesisUtterance(texte);
     u.lang = "fr-FR"; u.rate = 1.02;
     const v = synth.getVoices().find((x) => x.lang.startsWith("fr"));
     if (v) u.voice = v;
     u.onend = () => setLecture(false);
-    synth.cancel(); synth.speak(u); setLecture(true);
+    synth.cancel(); synth.speak(u);
+  }
+  // Brief lu par une voix de synthèse chaleureuse (Gemini) ; la voix du navigateur prend le relais si elle est indisponible.
+  async function ecouter() {
+    if (!r) return;
+    if (lecture) { sonBrief.current?.pause(); window.speechSynthesis?.cancel(); setLecture(false); return; }
+    const texte = texteBrief();
+    setLecture(true);
+    try {
+      let url = audioBrief.current?.texte === texte ? audioBrief.current.url : "";
+      if (!url) {
+        const res = await fetch("/api/voix", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texte, voix: VOIX_BRIEF, style: "brief" }) });
+        const d = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+        if (!res.ok || !d.url) throw new Error(d.error || "voix indisponible");
+        url = d.url; audioBrief.current = { texte, url };
+      }
+      const a = new Audio(url); sonBrief.current = a;
+      a.onended = () => setLecture(false);
+      await a.play();
+    } catch {
+      lireNavigateur(texte.replace(/\n\n/g, " "));
+    }
   }
 
   const annulable = (l: CmLigne) => ANNULABLES.includes(l.action) && l.canal !== "message" && Date.now() - new Date(l.created_at).getTime() < (e?.delaiAnnulation ?? 0);
