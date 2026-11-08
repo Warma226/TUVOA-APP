@@ -49,16 +49,22 @@ async function synthese(texte: string, voix: string): Promise<{ url: string; dur
   if (!cle) throw new Error("La voix de synthèse demande une clé GEMINI_API_KEY dans Vercel. En attendant, enregistre ta voix ou importe un fichier audio.");
   const modeles = [process.env.GEMINI_TTS_MODEL, "gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"].filter(Boolean) as string[];
   let derniere = "";
+  // Le ton est donné à part (instruction système) : seul le texte des scènes est envoyé à lire, la voix ne prononce jamais la consigne.
+  // Si un modèle refuse l'instruction système, on renvoie le texte seul, sans consigne.
+  const TON = "Tu es un narrateur de série documentaire francophone. Voix posée et captivante, rythme vif mais clair, petite pause entre les paragraphes, ton grave au moment de la révélation. Lis uniquement le texte fourni, sans rien ajouter.";
+  const appel = (m: string, avecTon: boolean) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": cle },
+    body: JSON.stringify({
+      ...(avecTon ? { systemInstruction: { parts: [{ text: TON }] } } : {}),
+      contents: [{ role: "user", parts: [{ text: texte }] }],
+      generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voix } } } },
+    }),
+    signal: AbortSignal.timeout(100000),
+  });
   for (const m of modeles) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": cle },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `Lis ce texte en français, comme un conteur de série documentaire : voix posée, captivante, rythme vif mais clair, petite pause entre les paragraphes, ton grave au moment de la révélation.\n\n${texte}` }] }],
-        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voix } } } },
-      }),
-      signal: AbortSignal.timeout(100000),
-    });
+    let res = await appel(m, true);
+    if (res.status === 400) res = await appel(m, false);
     if (!res.ok) { derniere = `${res.status} ${(await res.text()).slice(0, 200)}`; continue; }
     const j = (await res.json()) as { candidates?: { content?: { parts?: { inlineData?: { data?: string; mimeType?: string } }[] } }[] };
     const part = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;

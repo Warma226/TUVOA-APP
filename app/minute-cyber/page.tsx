@@ -166,16 +166,17 @@ export default function MinuteCyber() {
   const trop = total > DUREE_MAX;
 
   const [sel, setSel] = useState(0);
+  const [onglet, setOnglet] = useState<"scenes" | "voix" | "post">("scenes");
+  const [nouveau, setNouveau] = useState(false);
   useEffect(() => { setSel(0); }, [ep?.id]);
   const vEps = useVoirPlus(episodes);
   const sc = ep?.scenes[Math.min(sel, (ep?.scenes.length ?? 1) - 1)];
   const iSel = ep ? Math.min(sel, ep.scenes.length - 1) : 0;
-  const etapes: [string, "fait" | "cours" | ""][] = !ep ? [["Sujet", "cours"], ["Script", ""], ["Voix", ""], ["Montage", ""], ["Publication", ""]] : [
-    ["Sujet", "fait"], ["Script", "fait"],
-    ["Voix", ep.audio ? "fait" : "cours"],
-    ["Montage", ep.statut === "monte" || ep.statut === "envoye" ? "fait" : ep.audio ? "cours" : ""],
-    ["Publication", ep.statut === "envoye" ? "fait" : ep.statut === "monte" ? "cours" : ""],
-  ];
+  const onglets: ["scenes" | "voix" | "post", string, boolean][] = ep ? [
+    ["scenes", "Scènes", true],
+    ["voix", "Voix off", Boolean(ep.audio)],
+    ["post", "Post et vérifications", Boolean(ep.legende.trim())],
+  ] : [];
   const gardes: [string, boolean][] = ep ? [
     [trop ? `Durée : ${Math.round(total)} s, au-delà de 60 s` : `Durée sous 60 s : ${Math.round(total)} s`, !trop],
     [ep.titre && ep.menace && ep.titre.toLowerCase().includes(ep.menace.toLowerCase()) ? "Le titre dévoile la technique : gardez la surprise" : "Le titre garde la surprise de la révélation", !(ep.titre && ep.menace && ep.titre.toLowerCase().includes(ep.menace.toLowerCase()))],
@@ -202,11 +203,15 @@ export default function MinuteCyber() {
             ) : <h1 className="tv-titre">La minute cyber</h1>}
             <span style={{ fontSize: 14, color: "#33425C" }}>{ep ? `${ep.menace} · ${ep.scenes.length} scènes · ${fmt(total)}${ep.audio ? " · voix prête" : ""}` : "Une histoire à vivre, la technique révélée à la fin, trois réflexes. Un épisode à la fois."}</span>
           </div>
-          <ol className="tv-etapes" aria-label="Étapes de l'épisode">
-            {etapes.map(([l, e], i) => (
-              <li key={l}><span className="tv-etape-fixe" aria-current={e === "cours" ? "step" : undefined} data-etat={e}><span>{e === "fait" ? <Trait d="M20 6L9 17l-5-5" size={14} stroke={3} /> : i + 1}</span>{l}</span></li>
-            ))}
-          </ol>
+          {ep ? (
+            <div className="tv-etapes" role="tablist" aria-label="Parties de l'épisode">
+              {onglets.map(([k, l, fait], i) => (
+                <button key={k} type="button" role="tab" aria-selected={onglet === k} className="tv-etape-fixe" aria-current={onglet === k ? "step" : undefined} data-etat={fait ? "fait" : ""} onClick={() => setOnglet(k)}>
+                  <span>{fait && onglet !== k ? <Trait d="M20 6L9 17l-5-5" size={14} stroke={3} /> : i + 1}</span>{l}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
@@ -215,16 +220,21 @@ export default function MinuteCyber() {
         <div className="tv-minute">
           {/* Épisodes */}
           <aside className="tv-minute-eps" aria-labelledby="t-eps">
-            <form className="tv-carte-side" onSubmit={(e) => { e.preventDefault(); if (sujet.trim()) void ecrire(sujet.trim()); }}>
+            {episodes.length > 0 && !nouveau && busy !== "script" ? (
+              <button type="button" className="tv-btn-nuit" style={{ justifyContent: "center", height: 48 }} onClick={() => setNouveau(true)}><Trait d="M12 5v14M5 12h14" size={16} stroke={2.2} />NOUVEL ÉPISODE</button>
+            ) : (
+            <form className="tv-carte-side" onSubmit={(e) => { e.preventDefault(); if (sujet.trim()) { setNouveau(false); setOnglet("scenes"); void ecrire(sujet.trim()); } }}>
               <div className="row" style={{ gap: 10 }}><Voa humeur={busy ? "parle" : "veille"} taille={48} /><strong style={{ fontFamily: "var(--font-mont)", fontSize: 16 }}>Nouvel épisode</strong></div>
               <label className="field" style={{ fontSize: 13 }}>Une menace à raconter<input value={sujet} onChange={(e) => setSujet(e.target.value)} placeholder="Ex. faux recrutement, QR code piégé" /></label>
               <button className="tv-btn-nuit" style={{ justifyContent: "center" }} disabled={!!busy || !sujet.trim()}>{busy === "script" ? "VOA ÉCRIT…" : "ÉCRIRE L'ÉPISODE"}</button>
+              {episodes.length > 0 && busy !== "script" ? <button type="button" className="btn small ghost" onClick={() => setNouveau(false)}>Annuler</button> : null}
             </form>
+            )}
             <h2 id="t-eps" className="tv-kicker" style={{ color: "#5B6B86", margin: "6px 0 0" }}>MES ÉPISODES</h2>
             <div className="tv-minute-liste">
               {episodes.length === 0 ? <p className="tv-gris" style={{ padding: 10, fontSize: 13 }}>Aucun épisode pour l&apos;instant.</p> : null}
               {vEps.visibles.map((e) => (
-                <button key={e.id} type="button" onClick={() => choisir(e)} aria-current={e.id === ep?.id ? "true" : undefined}>
+                <button key={e.id} type="button" onClick={() => { choisir(e); setOnglet("scenes"); }} aria-current={e.id === ep?.id ? "true" : undefined}>
                   <span className="vignette">{e.numero ?? "?"}</span>
                   <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2, textAlign: "left" }}>
                     <strong style={{ fontSize: 14 }}>{e.titre}</strong>
@@ -239,6 +249,7 @@ export default function MinuteCyber() {
 
           {ep && sc ? (
             <div className="tv-minute-centre">
+              {onglet === "scenes" ? (<>
               {/* La minute */}
               <section className="tv-carte" aria-labelledby="t-minute">
                 <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
@@ -307,7 +318,10 @@ export default function MinuteCyber() {
                   </div>
                 </section>
               )}
+              <button type="button" className="tv-btn-nuit" style={{ alignSelf: "flex-end" }} onClick={() => setOnglet("voix")}>PASSER À LA VOIX OFF →</button>
+              </>) : null}
 
+              {onglet === "post" ? (<>
               <section className="tv-carte" aria-labelledby="t-tech">
                 <h2 id="t-tech" className="tv-h2" style={{ fontSize: 18 }}>La technique révélée et le post</h2>
                 <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
@@ -320,8 +334,21 @@ export default function MinuteCyber() {
                 <Jauge n={ep.legende.length} ideal={[40, 477]} pli={125} max={800} />
               </section>
 
-              <div className="tv-veille">
-                <section className="tv-carte" aria-labelledby="t-voix" style={{ flex: "1 1 320px", minWidth: 0 }}>
+              <section className="tv-carte" aria-labelledby="t-gardes" >
+                <h2 id="t-gardes" className="tv-h2" style={{ fontSize: 18 }}>Garde-fous de l&apos;épisode</h2>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {gardes.map(([t, ok]) => (
+                    <li key={t} className="row" style={{ gap: 10, alignItems: "flex-start", fontSize: 13, lineHeight: 1.4 }}>
+                      <span style={{ width: 18, height: 18, borderRadius: 9, flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", background: ok ? "#16A34A" : "#E94A06" }}><Trait d={ok ? "M20 6L9 17l-5-5" : "M12 8v5M12 17h.01"} size={11} stroke={3.2} /></span>
+                      <span style={{ color: ok ? "#33425C" : "#9A3412", fontWeight: ok ? 400 : 600 }}>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+              </>) : null}
+
+              {onglet === "voix" ? (<>
+                <section className="tv-carte" aria-labelledby="t-voix">
                   <h2 id="t-voix" className="tv-h2" style={{ fontSize: 18 }}>Voix off</h2>
                   {ep.audio ? (
                     <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
@@ -349,18 +376,13 @@ export default function MinuteCyber() {
                     </div>
                   </div>
                 </section>
-                <section className="tv-carte" aria-labelledby="t-gardes" style={{ flex: "1 1 260px", minWidth: 0 }}>
-                  <h2 id="t-gardes" className="tv-h2" style={{ fontSize: 18 }}>Garde-fous de l&apos;épisode</h2>
-                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                    {gardes.map(([t, ok]) => (
-                      <li key={t} className="row" style={{ gap: 10, alignItems: "flex-start", fontSize: 13, lineHeight: 1.4 }}>
-                        <span style={{ width: 18, height: 18, borderRadius: 9, flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", background: ok ? "#16A34A" : "#E94A06" }}><Trait d={ok ? "M20 6L9 17l-5-5" : "M12 8v5M12 17h.01"} size={11} stroke={3.2} /></span>
-                        <span style={{ color: ok ? "#33425C" : "#9A3412", fontWeight: ok ? 400 : 600 }}>{t}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              </div>
+                <details className="tv-carte" style={{ gap: 10 }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 800 }}>Ce que la voix va lire</summary>
+                  <span className="tv-gris" style={{ fontSize: 12 }}>Uniquement le texte des scènes, dans l&apos;ordre. Le ton (conteur, posé, grave à la révélation) est donné à part et n&apos;est jamais prononcé.</span>
+                  <div style={{ fontSize: 14, lineHeight: 1.6, color: "#33425C", whiteSpace: "pre-wrap" }}>{scriptVoix(ep)}</div>
+                </details>
+                <button type="button" className="tv-btn-nuit" style={{ alignSelf: "flex-end" }} onClick={() => setOnglet("post")}>PASSER AU POST →</button>
+              </>) : null}
             </div>
           ) : (
             <section className="tv-carte" style={{ flex: "999 1 560px", alignItems: "center", textAlign: "center", padding: 40 }}>
