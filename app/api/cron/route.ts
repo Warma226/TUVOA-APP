@@ -5,7 +5,7 @@ import { fetchVeille, fetchArticle, similar } from "@/lib/veille";
 import { generatePost, generateRecap, aiConfigured, sameStoryAs } from "@/lib/claude";
 import { publishPost, connectionStatus } from "@/lib/publish";
 import { coverUrl, itemUrl, endUrl } from "@/lib/recap-url";
-import { GUARDRAILS, TOPICS, categorieWp, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
+import { GUARDRAILS, gardeFous, TOPICS, categorieWp, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
 import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts, postedUrls, publishedSince, recapExists } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -65,13 +65,14 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
     const last = recent[0] ? new Date(recent[0].created_at).getTime() : 0;
     const pending = recent.some((p) => p.status === "planifie");
 
+    const gf = gardeFous(settings.garde);
     const why =
       !settings.autopilot ? "autopilote coupé (Déclencheurs)"
       : opts.force ? ""
-      : hour < GUARDRAILS.autoStartHour || hour >= GUARDRAILS.autoEndHour ? `hors plage horaire (${GUARDRAILS.autoStartHour} h – ${GUARDRAILS.autoEndHour} h)`
-      : autoToday >= GUARDRAILS.maxAutoPerDay ? "plafond du jour atteint"
+      : hour < gf.debut || hour >= gf.fin ? `hors plage horaire (${gf.debut} h – ${gf.fin} h)`
+      : autoToday >= gf.maxParJour ? "plafond du jour atteint"
       : pending ? "une publication automatique est déjà en attente"
-      : Date.now() - last < GUARDRAILS.minGapMinutes * 60000 ? `prochaine publication dans ${Math.ceil((GUARDRAILS.minGapMinutes * 60000 - (Date.now() - last)) / 60000)} min`
+      : Date.now() - last < gf.ecart * 60000 ? `prochaine publication dans ${Math.ceil((gf.ecart * 60000 - (Date.now() - last)) / 60000)} min`
       : "";
 
     if (why) {
@@ -86,7 +87,7 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
           !it.blocked &&
           (!it.publishedAt || Date.now() - new Date(it.publishedAt).getTime() < 24 * 3.6e6) &&
           (it.triggers.length > 0 || it.topics.some((t) => (TOPICS.find((x) => x.id === t)?.poids ?? 0) > 0)) &&
-          it.score >= GUARDRAILS.minAutoScore &&
+          it.score >= gf.scoreMin &&
           !already.some((p) => p.source_url === it.url || similar(p.title ?? "", it.title))
       );
       const unseen = await filterUnseen(fresh.map((c) => c.url));

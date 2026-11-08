@@ -218,6 +218,18 @@ export const GUARDRAILS = {
   maxGenerationsPerRun: 2,
 };
 
+// Garde-fous effectifs : réglages de l'écran Déclencheurs, sinon valeurs par défaut.
+export function gardeFous(g?: { debut?: number; fin?: number; maxParJour?: number; ecart?: number; scoreMin?: number } | null) {
+  const n = (v: unknown, def: number, min: number, max: number) => (typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : def);
+  return {
+    debut: n(g?.debut, GUARDRAILS.autoStartHour, 0, 23),
+    fin: n(g?.fin, GUARDRAILS.autoEndHour, 1, 24),
+    maxParJour: n(g?.maxParJour, GUARDRAILS.maxAutoPerDay, 1, 60),
+    ecart: n(g?.ecart, GUARDRAILS.minGapMinutes, 10, 240),
+    scoreMin: n(g?.scoreMin, GUARDRAILS.minAutoScore, 30, 95),
+  };
+}
+
 // Guide de style donné à l'IA à chaque rédaction
 export const STYLE_GUIDE = `
 Tu écris pour TUVOA Tech Media (anciennement Warmachiner Tech), média burkinabè et africain d'infos et de formation en technologies, fondé en 2021 (site : www.tuvoa.media).

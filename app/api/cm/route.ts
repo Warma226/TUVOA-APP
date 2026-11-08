@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cmAnnuler, cmDiagnostic, cmEtat, cmFinCrise, cmMarquerTraite, cmPassage, cmRapport, cmSauverReglages, type CmReglages } from "@/lib/cm";
+import { cmAimer, cmAnnuler, cmDebutCrise, cmDiagnostic, cmEtat, cmFinCrise, cmMarquerTraite, cmMasquer, cmPassage, cmRapport, cmReformuler, cmRepondre, cmSauverReglages, type CmReglages } from "@/lib/cm";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -17,7 +17,15 @@ export async function GET(req: Request) {
 // POST → { reglages } | { traite: id } | { lancer: true } | { rapport: true } | { annuler: id } | { finCrise: true }
 export async function POST(req: Request) {
   try {
-    const b = (await req.json().catch(() => ({}))) as { reglages?: Partial<CmReglages>; traite?: string; lancer?: boolean; rapport?: boolean; annuler?: string; finCrise?: boolean };
+    const b = (await req.json().catch(() => ({}))) as {
+      reglages?: Partial<CmReglages>; traite?: string; lancer?: boolean; rapport?: boolean; annuler?: string; finCrise?: boolean;
+      repondre?: string; texte?: string; aimer?: string; masquer?: string; reformuler?: string; ton?: string; crise?: string;
+    };
+    if (b.repondre) return NextResponse.json({ log: [await cmRepondre(b.repondre, b.texte ?? "")] });
+    if (b.aimer) return NextResponse.json({ log: [await cmAimer(b.aimer)] });
+    if (b.masquer) return NextResponse.json({ log: [await cmMasquer(b.masquer)] });
+    if (b.reformuler) return NextResponse.json({ reponse: await cmReformuler(b.reformuler, b.ton ?? "rassurant", b.texte) });
+    if (b.crise) return NextResponse.json({ reglages: await cmDebutCrise(b.crise) });
     if (b.annuler) return NextResponse.json({ log: [await cmAnnuler(b.annuler)] });
     if (b.finCrise) return NextResponse.json({ reglages: await cmFinCrise() });
     if (b.reglages) return NextResponse.json({ reglages: await cmSauverReglages(b.reglages) });
