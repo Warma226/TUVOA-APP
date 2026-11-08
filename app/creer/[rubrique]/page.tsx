@@ -81,7 +81,7 @@ function AtelierRubrique({ rub }: { rub: RubriqueId }) {
 
   // Champs
   const [idea, setIdea] = useState(() => q.get("idee") ?? "");
-  const [photo, setPhoto] = useState("");
+  const [photo, setPhoto] = useState(() => q.get("image") ?? "");
   const [citTexte, setCitTexte] = useState("");
   const [auteur, setAuteur] = useState("");
   const [fonction, setFonction] = useState("");

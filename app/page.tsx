@@ -1,5 +1,6 @@
 "use client";
 // Tableau de bord : courbe des publications, rubriques, alertes de VOA et médiathèque.
+import { useVoirPlus } from "@/components/VoirPlus";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -99,6 +100,7 @@ export default function Dashboard() {
   if (d?.grin.aTraiter) alertes.push({ type: "LE GRIN", tag: ["#FDE68A", "#7A4A00"], txt: `${pl(d.grin.aTraiter, "message")} de la communauté ${d.grin.aTraiter > 1 ? "attendent" : "attend"} une réponse.`, cta: "Ouvrir le Grin", href: "/communaute" });
   if (info && !auto) alertes.push({ type: "RÉGLAGE", tag: ["rgba(255,255,255,0.15)", "#fff"], txt: "Le pilote automatique est en pause : rien ne part sans toi.", cta: "Le réactiver", action: basculer });
   if (info && !info.ai) alertes.push({ type: "RÉGLAGE", tag: ["rgba(255,255,255,0.15)", "#fff"], txt: "Rédaction par l'IA inactive : ajoute la clé GEMINI_API_KEY dans Vercel.", cta: "Ouvrir les connexions", href: "/connexions" });
+  const vAl = useVoirPlus(alertes, 3, alertes.length);
   const bulle = !d ? "Je regarde ce qui se passe…" : alertes.length === 0 ? "Tout est en ordre. Je garde un œil sur la Page." : alertes.length === 1 ? "Une seule chose pour vous. Rien de grave." : `${["", "", "Deux", "Trois", "Quatre", "Cinq", "Six"][alertes.length] ?? alertes.length} choses pour vous. La première est facile, promis.`;
 
   const segs = (vals: number[], cols: [string, string][]) => (
@@ -301,13 +303,14 @@ export default function Dashboard() {
                 <span style={{ marginTop: 6, padding: "8px 12px", borderRadius: "14px 14px 14px 4px", background: "rgba(255,255,255,0.12)", fontSize: 13, lineHeight: 1.35 }}>{bulle}</span>
               </div>
             </div>
-            {alertes.slice(0, 4).map((a, i) => (
+            {vAl.visibles.map((a, i) => (
               <div key={i} className="tv-voa-alerte">
                 <span className="tv-tag" style={{ background: a.tag[0], color: a.tag[1] }}>{a.type}</span>
                 <span style={{ fontSize: 15, lineHeight: 1.4, fontWeight: 600 }}>{a.txt}</span>
                 {a.href ? <Link href={a.href}>{a.cta} →</Link> : <button type="button" onClick={a.action} style={{ alignSelf: "flex-start", border: 0, background: "none", padding: 0, fontSize: 13, fontWeight: 700, color: "#FFB48A", cursor: "pointer" }}>{a.cta} →</button>}
               </div>
             ))}
+            <div className="tv-sombre">{vAl.bouton}</div>
             <Link href="/communaute" style={{ fontSize: 13, fontWeight: 700, color: "#C9D6F2", textDecoration: "none" }}>Ouvrir le Grin de VOA →</Link>
           </aside>
         </div>

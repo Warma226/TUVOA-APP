@@ -42,7 +42,7 @@ export async function GET() {
   incidents.sort((a, b) => b.at.localeCompare(a.at));
   return NextResponse.json({
     dernier,
-    incidents: incidents.slice(0, 8),
+    incidents: incidents.slice(0, 40),
     jeton,
     diagnostic: diag,
     stockage,
