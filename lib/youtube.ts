@@ -9,9 +9,11 @@ export type Licence = "cc" | "autorisee" | "reservee";
 export type VideoYT = { id: string; titre: string; chaine: string; chaineId: string; publie: string; duree: number; langue: string; vues: number; miniature: string; description: string; genre: Genre; cc: boolean; tri?: number; theme?: string };
 export type Extrait = { debut: number; fin: number; titre: string; pourquoi: string; soustitres: string; citation?: string; format: "reel" | "carrousel" };
 export type LigneVideo = { id: string; info: VideoYT; extraits: Extrait[] | null; statut: string; pertinence: number; publie_at: string | null; licence: Licence };
-export type Chaine = { handle: string; nom: string; type: "tech" | "info"; id?: string; uploads?: string; autorisee?: boolean; introuvable?: boolean };
+export type TypeChaine = "tech" | "info" | "interview";
+export type Chaine = { handle: string; nom: string; type: TypeChaine; id?: string; uploads?: string; autorisee?: boolean; introuvable?: boolean; cherche?: boolean };
 
 // « tech » : toute la chaîne parle de tech. « info » : chaîne d'actualité générale, on ne garde que les sujets tech.
+// « interview » : émissions de personnalités (longs entretiens) ; on garde les épisodes où la tech ou le numérique est central.
 export const CHAINES_DEFAUT: Chaine[] = [
   { handle: "@Micode", nom: "Micode", type: "tech" },
   { handle: "@Underscore_", nom: "Underscore_", type: "tech" },
@@ -25,6 +27,11 @@ export const CHAINES_DEFAUT: Chaine[] = [
   { handle: "@lesnumeriques", nom: "Les Numériques", type: "tech" },
   { handle: "@frandroid", nom: "Frandroid", type: "tech" },
   { handle: "@MonsieurBidouille", nom: "Monsieur Bidouille", type: "tech" },
+  { handle: "@rabbindesbois", nom: "Rabbin des bois", type: "tech" },
+  { handle: "@LEGEND", nom: "LEGEND (Guillaume Pley, ex-Le QG)", type: "interview" },
+  { handle: "@LeQG", nom: "Le QG", type: "interview" },
+  { handle: "@thinkerview", nom: "Thinkerview", type: "interview" },
+  { handle: "@GDIY", nom: "Génération Do It Yourself", type: "interview" },
 ];
 
 // Mots qui signalent un sujet tech dans une chaîne d'info générale.
@@ -54,17 +61,26 @@ async function yt(chemin: string, params: Record<string, string>) {
 
 // Chaînes anglophones retirées de la liste par défaut (français uniquement).
 const RETIREES = ["@TheVerge", "@WIRED", "@BloombergTechnology"];
+const JOURS = 30; // fenêtre : les émissions d'interviews publient chaque semaine
+const VERSION_LISTE = 2; // version de CHAINES_DEFAUT
 const TRI = 2; // version du tri : les vidéos triées avec une version plus ancienne sont retriées
 
 // Liste des chaînes suivies (settings, ligne 7).
 export async function lireChaines(): Promise<Chaine[]> {
   const { data } = await db().from("settings").select("data").eq("id", 7).maybeSingle();
-  const l = (data?.data as { chaines?: Chaine[] } | null)?.chaines;
-  return Array.isArray(l) && l.length ? l.filter((c) => !RETIREES.includes(c.handle)) : CHAINES_DEFAUT;
+  const d = data?.data as { chaines?: Chaine[]; version?: number } | null;
+  const l = d?.chaines;
+  if (!Array.isArray(l) || !l.length) return CHAINES_DEFAUT;
+  const liste = l.filter((c) => !RETIREES.includes(c.handle));
+  if ((d?.version ?? 1) < VERSION_LISTE) { // nouvelles chaînes par défaut ajoutées une seule fois
+    for (const c of CHAINES_DEFAUT) if (!liste.some((x) => x.handle.toLowerCase() === c.handle.toLowerCase())) liste.push(c);
+    await ecrireChaines(liste);
+  }
+  return liste;
 }
-async function ecrireChaines(chaines: Chaine[]) { await db().from("settings").upsert({ id: 7, data: { chaines } }); }
+async function ecrireChaines(chaines: Chaine[]) { await db().from("settings").upsert({ id: 7, data: { chaines, version: VERSION_LISTE } }); }
 
-export async function ajouterChaine(saisie: string, type: Chaine["type"]) {
+export async function ajouterChaine(saisie: string, type: TypeChaine) {
   let h = saisie.trim().replace(/^https?:\/\/(www\.)?youtube\.com\//i, "").replace(/\/.*$/, "");
   if (!h) throw new Error("Indiquez le @nom de la chaîne.");
   if (!h.startsWith("@") && !h.startsWith("UC")) h = `@${h}`;
@@ -82,12 +98,22 @@ export async function majChaine(handle: string, champs: Partial<Pick<Chaine, "au
 }
 
 async function resoudre(c: Chaine) {
-  if (c.uploads || c.introuvable) return;
+  if (c.uploads || (c.introuvable && c.cherche)) return;
+  c.introuvable = false;
   const p: Record<string, string> = { part: "snippet,contentDetails" };
   if (c.handle.startsWith("UC")) p.id = c.handle; else p.forHandle = c.handle;
-  const r = await yt("channels", p).catch(() => ({ items: [] }));
+  let r = await yt("channels", p).catch(() => ({ items: [] as Record<string, unknown>[] }));
+  if (!r.items?.length) {
+    c.cherche = true;
+    // @nom inconnu : on cherche la chaîne par son nom (une seule fois, le résultat est gardé)
+    const q = await yt("search", { part: "snippet", type: "channel", q: c.nom.replace(/\(.*\)/, "").trim(), maxResults: "1", relevanceLanguage: "fr" }).catch(() => ({ items: [] as Record<string, unknown>[] }));
+    const cid = (q.items?.[0]?.snippet as { channelId?: string } | undefined)?.channelId;
+    if (cid) r = await yt("channels", { part: "snippet,contentDetails", id: cid }).catch(() => ({ items: [] }));
+  }
   const it = r.items?.[0];
   if (!it) { c.introuvable = true; return; }
+  const h = (it.snippet as { customUrl?: string })?.customUrl;
+  if (h && !c.handle.startsWith("UC")) c.handle = h.startsWith("@") ? h : `@${h}`;
   c.id = it.id as string;
   c.nom = (it.snippet as { title?: string })?.title || c.nom;
   c.uploads = (it.contentDetails as { relatedPlaylists?: { uploads?: string } })?.relatedPlaylists?.uploads;
@@ -99,10 +125,10 @@ export async function rafraichir(): Promise<number> {
   const chaines = await lireChaines();
   for (const c of chaines) await resoudre(c);
   await ecrireChaines(chaines);
-  const depuis = Date.now() - 14 * 864e5;
+  const depuis = Date.now() - JOURS * 864e5;
   const ids: string[] = [];
   for (const c of chaines.filter((x) => x.uploads)) {
-    const r = await yt("playlistItems", { part: "contentDetails", playlistId: c.uploads!, maxResults: c.type === "info" ? "50" : "20" }).catch(() => ({ items: [] }));
+    const r = await yt("playlistItems", { part: "contentDetails", playlistId: c.uploads!, maxResults: c.type === "tech" ? "20" : "50" }).catch(() => ({ items: [] }));
     for (const it of r.items ?? []) {
       const d = it.contentDetails as { videoId?: string; videoPublishedAt?: string };
       if (d?.videoId && (!d.videoPublishedAt || new Date(d.videoPublishedAt).getTime() > depuis)) ids.push(d.videoId);
@@ -127,14 +153,14 @@ export async function rafraichir(): Promise<number> {
       if (HORS.test(s.title)) return [];
       const texte = `${s.title} ${(s.description ?? "").slice(0, 250)}`;
       if (c.type === "info" && !TECH.test(texte) && !SIGLES.test(texte)) return []; // chaîne d'info : sujets tech seulement
-      const genre: Genre = duree >= 1200 || DOCU.test(s.title) ? "docu" : INTERVIEW.test(s.title) ? "interview" : "actu";
+      const genre: Genre = c.type === "interview" ? (DOCU.test(s.title) ? "docu" : "interview") : duree >= 1200 || DOCU.test(s.title) ? "docu" : INTERVIEW.test(s.title) ? "interview" : "actu";
       const vues = Number((v.statistics as { viewCount?: string })?.viewCount ?? 0);
       const info: VideoYT = {
         id: v.id as string, titre: s.title, chaine: s.channelTitle, chaineId: s.channelId, publie: s.publishedAt, duree, langue, vues,
         miniature: s.thumbnails?.high?.url ?? s.thumbnails?.medium?.url ?? "", description: (s.description ?? "").slice(0, 600), genre, cc: st?.license === "creativeCommon", tri: TRI,
       };
       const jours = (Date.now() - new Date(s.publishedAt).getTime()) / 864e5;
-      const pertinence = Math.max(1, Math.min(99, Math.round(30 + Math.log10(vues + 10) * 8 + (langue === "fr" ? 10 : 0) + (genre !== "actu" ? 8 : 0) + (c.type === "info" ? 6 : 0) - jours * 2.5)));
+      const pertinence = Math.max(1, Math.min(99, Math.round(30 + Math.log10(vues + 10) * 8 + (langue === "fr" ? 10 : 0) + (genre !== "actu" ? 8 : 0) + (c.type !== "tech" ? 6 : 0) - jours * (c.type === "interview" ? 1.2 : 2.5))));
       return [{ id: info.id, info, pertinence, publie_at: s.publishedAt }];
     });
     if (!lignes.length) continue;
@@ -160,7 +186,7 @@ async function trier(videos: VideoYT[]): Promise<Set<string>> {
         `Tu es rédacteur en chef de TUVOA Tech Media, un média d'actualité tech francophone. Tu tries des vidéos YouTube avec rigueur : dans le doute, tu écartes.
 GARDER seulement si les deux conditions sont vraies :
 1. La vidéo est en français.
-2. Son sujet principal est l'actualité de la tech et du numérique : IA, cybersécurité et arnaques en ligne, réseaux sociaux et plateformes, géants de la tech et leurs dirigeants, télécoms et mobile money, startups, spatial, data centers, crypto (sous l'angle technologique), lois et politique du numérique, sorties et annonces de produits tech, enquêtes, documentaires et interviews sur la tech.
+2. Son sujet principal est l'actualité de la tech et du numérique : IA, cybersécurité et arnaques en ligne, réseaux sociaux et plateformes, géants de la tech et leurs dirigeants, télécoms et mobile money, startups, spatial, data centers, crypto (sous l'angle technologique), lois et politique du numérique, sorties et annonces de produits tech, enquêtes, documentaires et interviews sur la tech. Pour un entretien avec une personnalité (hacker, entrepreneur du numérique, dirigeant tech, chercheur en IA…), garde-le si la tech, le numérique, la cybersécurité ou l'IA occupe une place centrale dans l'échange.
 ÉCARTER : tutoriels, formations, cours, conseils pour débutants, guides d'achat, « top » et comparatifs d'achat, bons plans, beauté et électroménager, finance et bourse pure, politique, sport, climat, culture ou société sans angle tech central, journaux d'information multi-sujets, Shorts.
 Réponds uniquement en JSON : {"garder": ["id", ...]}`,
         lot.map((v) => `${v.id} | ${v.chaine} | ${v.titre} | ${v.description.replace(/\s+/g, " ").slice(0, 200)}`).join("\n"),
@@ -179,7 +205,7 @@ export async function lister(): Promise<{ videos: LigneVideo[]; chaines: Chaine[
   const chaines = await lireChaines();
   const suivies = chaines.filter((c) => c.id).map((c) => c.id!);
   if (!suivies.length) return { videos: [], chaines };
-  const { data, error } = await db().from("videos_yt").select("id,info,extraits,statut,pertinence,publie_at").not("statut", "in", "(ecarte,hors_sujet)").eq("info->>tri", String(TRI)).in("info->>chaineId", suivies).gte("publie_at", new Date(Date.now() - 14 * 864e5).toISOString()).order("publie_at", { ascending: false }).limit(150);
+  const { data, error } = await db().from("videos_yt").select("id,info,extraits,statut,pertinence,publie_at").not("statut", "in", "(ecarte,hors_sujet)").eq("info->>tri", String(TRI)).in("info->>chaineId", suivies).gte("publie_at", new Date(Date.now() - JOURS * 864e5).toISOString()).order("publie_at", { ascending: false }).limit(150);
   if (error) throw new Error(error.message);
   const auto = new Set(chaines.filter((c) => c.autorisee).map((c) => c.id));
   const videos = ((data ?? []) as Omit<LigneVideo, "licence">[])

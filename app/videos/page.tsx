@@ -25,7 +25,7 @@ export default function VideosPage() {
   const [chaine, setChaine] = useState("toutes");
   const [gerer, setGerer] = useState(false);
   const [nouvelle, setNouvelle] = useState("");
-  const [nouvType, setNouvType] = useState<"tech" | "info">("tech");
+  const [nouvType, setNouvType] = useState<"tech" | "info" | "interview">("tech");
   const [sel, setSel] = useState<string | null>(null);
   const [ext, setExt] = useState(0);
   const [busy, setBusy] = useState("");
@@ -122,7 +122,7 @@ export default function VideosPage() {
             <div className="tv-vid-chaines">
               {chaines.map((c) => (
                 <div key={c.handle} className="tv-vid-chaine" data-ko={Boolean(c.introuvable)}>
-                  <span style={{ flex: 1, minWidth: 0 }}><strong>{c.nom}</strong><small>{c.handle} · {c.type === "info" ? "actu générale" : "tech"}{c.introuvable ? " · introuvable" : ""}</small></span>
+                  <span style={{ flex: 1, minWidth: 0 }}><strong>{c.nom}</strong><small>{c.handle} · {c.type === "info" ? "actu générale" : c.type === "interview" ? "interviews" : "tech"}{c.introuvable ? " · introuvable" : ""}</small></span>
                   <label title="Cochez seulement si la chaîne vous a autorisé par écrit à reprendre ses images"><input type="checkbox" checked={Boolean(c.autorisee)} disabled={busy === "chaine"} onChange={(e) => actionChaine("chaine-autoriser", c.handle, { autorisee: e.target.checked })} /> Autorisation obtenue</label>
                   <button type="button" className="btn link small" disabled={busy === "chaine"} onClick={() => actionChaine("chaine-retirer", c.handle)}>Retirer</button>
                 </div>
@@ -130,7 +130,7 @@ export default function VideosPage() {
             </div>
             <form className="row" style={{ gap: 8, flexWrap: "wrap" }} onSubmit={(e) => { e.preventDefault(); if (nouvelle.trim()) void actionChaine("chaine-ajouter", nouvelle, { type: nouvType }); }}>
               <input className="tv-vid-input" value={nouvelle} onChange={(e) => setNouvelle(e.target.value)} placeholder="@nomdelachaine ou lien YouTube" aria-label="Chaîne à ajouter" />
-              <select className="tv-chip" value={nouvType} onChange={(e) => setNouvType(e.target.value as "tech" | "info")} aria-label="Type de chaîne"><option value="tech">Chaîne tech</option><option value="info">Actu générale</option></select>
+              <select className="tv-chip" value={nouvType} onChange={(e) => setNouvType(e.target.value as "tech" | "info" | "interview")} aria-label="Type de chaîne"><option value="tech">Chaîne tech</option><option value="info">Actu générale</option><option value="interview">Interviews de personnalités</option></select>
               <button type="submit" className="btn primary" disabled={busy === "chaine" || !nouvelle.trim()}>Ajouter</button>
             </form>
           </section>
@@ -138,7 +138,7 @@ export default function VideosPage() {
 
         <div className="tv-vid">
           <section className="tv-vid-liste" aria-label="Vidéos proposées">
-            <span className="tv-kicker" style={{ color: "#5B6B86" }}>14 DERNIERS JOURS · PAR PERTINENCE</span>
+            <span className="tv-kicker" style={{ color: "#5B6B86" }}>30 DERNIERS JOURS · PAR PERTINENCE</span>
             {videos === null ? <p className="tv-gris">Chargement…</p> : liste.length === 0 ? <p className="tv-gris" style={{ fontSize: 13 }}>Aucune vidéo pour ce filtre. Lancez « Chercher les nouvelles vidéos ».</p> : null}
             {vListe.visibles.map((x) => (
               <button key={x.id} type="button" className="tv-vid-carte" aria-pressed={sel === x.id} onClick={() => { setSel(x.id); setExt(0); setLecture(null); }}>

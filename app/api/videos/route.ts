@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     if (b.action?.startsWith("chaine-")) {
       if ((await moi()).role !== "admin") return NextResponse.json({ error: "Réservé à l'administration." }, { status: 403 });
       if (!b.handle) return NextResponse.json({ error: "Chaîne manquante." }, { status: 400 });
-      if (b.action === "chaine-ajouter") return NextResponse.json({ chaine: await ajouterChaine(b.handle, b.type === "info" ? "info" : "tech") });
+      if (b.action === "chaine-ajouter") return NextResponse.json({ chaine: await ajouterChaine(b.handle, b.type === "info" || b.type === "interview" ? b.type : "tech") });
       if (b.action === "chaine-retirer") { await majChaine(b.handle, {}, true); return NextResponse.json({ ok: true }); }
       if (b.action === "chaine-autoriser") { await majChaine(b.handle, { autorisee: Boolean(b.autorisee) }); return NextResponse.json({ ok: true }); }
     }
