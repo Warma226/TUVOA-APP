@@ -245,7 +245,7 @@ export default function VideosPage() {
           </aside>
         </div>
       </div>
-      {decoupe && v ? <Decoupe videoId={v.id} extrait={decoupe} credit={`Source : ${v.info.chaine}${v.licence === "cc" ? " (CC BY)" : ""}`} titre={decoupe.citation ? `« ${decoupe.citation} »` : decoupe.titre} fermer={() => setDecoupe(null)} /> : null}
+      {decoupe && v ? <Decoupe videoId={v.id} extrait={decoupe} credit={`Source : ${v.info.chaine}${v.licence === "cc" ? " (CC BY)" : ""}`} titre={decoupe.citation ? `« ${decoupe.citation.replace(/^[«"\s]+|[»"\s]+$/g, "")} »` : decoupe.titre} fermer={() => setDecoupe(null)} /> : null}
     </div>
   );
 }
@@ -259,8 +259,12 @@ type CropTargetCtor = { fromElement(el: Element): Promise<unknown> };
 
 function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId: string; extrait: Extrait; credit: string; titre: string; fermer: () => void }) {
   const [titre, setTitre] = useState(titre0);
-  const [mise, setMise] = useState<"plein" | "centre">("plein");
-  const [cadre, setCadre] = useState(50); // position horizontale du recadrage plein écran (0 = gauche, 100 = droite)
+  const [mise, setMise] = useState<"choc" | "plein" | "centre">("choc");
+  const [contexte, setContexte] = useState(extrait.contexte ?? "");
+  const [silences, setSilences] = useState(true); // couper les silences (jump cuts)
+  const [stChoc, setStChoc] = useState(false); // sous-titres dans le style choc
+  const plan = useRef(0); // numéro du plan : change à chaque coupe, alterne plan large / plan serré
+  const [cadre, setCadre] = useState(extrait.cadre ?? 50); // position horizontale du recadrage plein écran (0 = gauche, 100 = droite)
   const ecranOk = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices && "getDisplayMedia" in navigator.mediaDevices);
   const [mode, setMode] = useState<"youtube" | "fichier">(ecranOk ? "youtube" : "fichier");
   const [fichier, setFichier] = useState<string | null>(null);
@@ -273,6 +277,11 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
   const vid = useRef<HTMLVideoElement>(null);
   const ifr = useRef<HTMLIFrameElement>(null);
   const tYT = useRef(0);
+  const tYTa = useRef(0); // instant (performance.now) de la dernière position reçue du lecteur
+  const lecture = useRef(false);
+  const [capture, setCapture] = useState(false); // lecteur agrandi en plein écran pendant l'enregistrement (meilleure netteté)
+  const apercu = useRef<HTMLCanvasElement>(null);
+  const [vignette, setVignette] = useState<HTMLImageElement | null>(null);
   useEffect(() => () => { if (fichier) URL.revokeObjectURL(fichier); }, [fichier]);
 
   // Lecteur YouTube : on suit sa position (messages « infoDelivery ») pour caler la découpe.
@@ -282,7 +291,7 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     const ecoute = (e: MessageEvent) => {
       try {
         if (!/youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) return;
-        const d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; const t = d?.info?.currentTime; if (typeof t === "number") tYT.current = t; } catch { /* message étranger */ }
+        const d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; const t = d?.info?.currentTime; if (typeof t === "number") { tYT.current = t; tYTa.current = performance.now(); } const etat = d?.info?.playerState; if (typeof etat === "number") lecture.current = etat === 1; } catch { /* message étranger */ }
     };
     window.addEventListener("message", ecoute);
     return () => window.removeEventListener("message", ecoute);
@@ -297,11 +306,25 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     const types = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm"];
     const mime = types.find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t));
     const mots = st.split(/\s+/).filter(Boolean), parBloc = 9;
+    // Sous-titres horodatés par VOA (si le texte n'a pas été modifié à la main) : calés sur la voix.
+    const phrases = st === extrait.soustitres && extrait.phrases?.length ? extrait.phrases.filter((ph) => ph.t < fin + 1) : null;
+    const motCourant = (t: number): { mots: string[]; actif: number } => {
+      if (phrases) {
+        let k = 0; for (let i = 0; i < phrases.length; i++) if (phrases[i].t <= t) k = i;
+        const ph = phrases[k], suiv = phrases[k + 1]?.t ?? fin;
+        const m = ph.texte.split(/\s+/).filter(Boolean);
+        const q = Math.min(0.999, Math.max(0, (t - ph.t) / Math.max(0.4, suiv - ph.t)));
+        return { mots: m, actif: t < ph.t ? -1 : Math.floor(q * m.length) };
+      }
+      const p = Math.min(1, Math.max(0, (t - debut) / Math.max(1, fin - debut)));
+      return { mots, actif: Math.min(mots.length - 1, Math.floor(p * mots.length)) };
+    };
     const blocs: string[] = []; for (let i = 0; i < mots.length; i += parBloc) blocs.push(mots.slice(i, i + parBloc).join(" "));
     const duree = Math.max(1, fin - debut);
     const dessiner = (src: Source | null, t: number) => {
       if (!ctx) return;
       ctx.fillStyle = "#061A44"; ctx.fillRect(0, 0, W, H);
+      if (mise === "choc") return styleChoc(ctx, src, t);
       if (mise === "plein") return pleinEcran(ctx, src, t);
       let y0 = 560, dh = 608;
       if (src && src.sw > 0 && src.sh > 0) {
@@ -319,7 +342,7 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
         ctx.fillStyle = "#fff"; ctx.fillText(l, W / 2, y);
       });
       const p = Math.min(1, Math.max(0, (t - debut) / duree));
-      const b = blocs[Math.min(blocs.length - 1, Math.floor(p * blocs.length))];
+      const b = phrases ? motCourant(t).mots.join(" ") : blocs[Math.min(blocs.length - 1, Math.floor(p * blocs.length))];
       if (b) {
         ctx.font = "700 54px Inter, sans-serif";
         const ls = lignes(ctx, b, W - 200, 3), hb = ls.length * 70 + 50, yb = y0 + dh + 90;
@@ -335,7 +358,6 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     };
     // Style « Short d'interview » : image plein écran recadrée sur la personne, accroche en haut,
     // gros sous-titres mot par mot (3 à 4 mots à la fois, mot prononcé surligné), logo et crédit discrets.
-    const groupes: string[][] = []; for (let i = 0; i < mots.length; i += 4) groupes.push(mots.slice(i, i + 4));
     const pleinEcran = (ctx: CanvasRenderingContext2D, src: Source | null, t: number) => {
       const p = Math.min(1, Math.max(0, (t - debut) / duree));
       if (src && src.sw > 0 && src.sh > 0) {
@@ -357,9 +379,10 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
         ctx.fillStyle = "#fff"; ctx.fillText(l, W / 2, y);
       });
       // sous-titres mot par mot
-      if (groupes.length) {
-        const iMot = Math.min(mots.length - 1, Math.floor(p * mots.length));
-        const gi = Math.floor(iMot / 4), grp = groupes[gi] ?? [];
+      const mc = motCourant(t);
+      if (mc.mots.length && mc.actif >= 0) {
+        const iMot = mc.actif;
+        const gi = Math.floor(iMot / 4), grp = mc.mots.slice(gi * 4, gi * 4 + 4);
         ctx.font = "900 92px Montserrat, sans-serif";
         ctx.lineJoin = "round"; ctx.lineWidth = 16; ctx.strokeStyle = "#000";
         const espaces = ctx.measureText(" ").width;
@@ -387,6 +410,50 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
       ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.fillRect(0, H - 12, W, 12);
       ctx.fillStyle = "#E94A06"; ctx.fillRect(0, H - 12, W * p, 12);
     };
+    // Style « coup de gueule » (Shorts de chaînes télé) : plein écran serré sur la personne, plan large / plan serré
+    // qui alternent à chaque coupe, citation en blocs blancs les premières secondes, logo discret.
+    const styleChoc = (ctx: CanvasRenderingContext2D, src: Source | null, t: number) => {
+      const p = Math.min(1, Math.max(0, (t - debut) / duree));
+      if (src && src.sw > 0 && src.sh > 0) {
+        const { img, sx, sy, sw, sh } = src;
+        const serre = plan.current % 2 === 1;
+        const k = Math.max(W / sw, H / sh) * (serre ? 1.22 : 1.04), dw = sw * k, dh = sh * k;
+        const x = (W - dw) * (cadre / 100), y = (H - dh) * (serre ? 0.38 : 0.5);
+        ctx.drawImage(img, sx, sy, sw, sh, x, y, dw, dh);
+      }
+      // citation : 9 premières secondes
+      if (t - debut < 9 && titre.trim()) {
+        ctx.textAlign = "left"; ctx.font = "800 54px 'Arial Narrow', 'Roboto Condensed', Montserrat, sans-serif";
+        const ls = lignes(ctx, titre, W - 240, 4);
+        const x0 = 90; let y = H * 0.6;
+        ls.forEach((l) => {
+          const w = ctx.measureText(l).width;
+          ctx.fillStyle = "#fff"; ctx.fillRect(x0 - 14, y - 50, w + 28, 66);
+          ctx.fillStyle = "#0B0B0B"; ctx.fillText(l, x0, y);
+          y += 72;
+        });
+        if (contexte.trim()) {
+          ctx.font = "600 30px Inter, sans-serif"; ctx.fillStyle = "#fff";
+          ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 8; ctx.fillText(contexte, x0 - 10, y + 6); ctx.shadowBlur = 0;
+        }
+      }
+      // sous-titres (option)
+      if (stChoc) {
+        const mc = motCourant(t);
+        if (mc.mots.length && mc.actif >= 0) {
+          const gi = Math.floor(mc.actif / 4), grp = mc.mots.slice(gi * 4, gi * 4 + 4).join(" ").toUpperCase();
+          ctx.textAlign = "center"; ctx.font = "900 76px Montserrat, sans-serif"; ctx.lineJoin = "round"; ctx.lineWidth = 14; ctx.strokeStyle = "#000";
+          lignes(ctx, grp, W - 140, 2).forEach((l, i) => { const y = H - 360 + i * 92; ctx.strokeText(l, W / 2, y); ctx.fillStyle = "#FFD60A"; ctx.fillText(l, W / 2, y); });
+        }
+      }
+      // logo TUVOA discret, crédit, progression
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#2563EB"; ctx.fillRect(W - 220, 110, 150, 46);
+      ctx.fillStyle = "#fff"; ctx.font = "900 30px Montserrat, sans-serif"; ctx.fillText("TUVOA", W - 145, 144);
+      ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.font = "600 22px Inter, sans-serif"; ctx.fillText("TECH MEDIA", W - 145, 96);
+      ctx.fillStyle = "rgba(255,255,255,0.8)"; ctx.font = "600 24px Inter, sans-serif"; ctx.shadowColor = "rgba(0,0,0,0.8)"; ctx.shadowBlur = 6; ctx.fillText(credit, W / 2, H - 60); ctx.shadowBlur = 0;
+      ctx.fillStyle = "#E94A06"; ctx.fillRect(0, H - 8, W * p, 8);
+    };
     return { c, ctx, mime, duree, dessiner };
   }
 
@@ -398,18 +465,43 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     const morceaux: Blob[] = [];
     rec.ondataavailable = (e) => { if (e.data.size) morceaux.push(e.data); };
     const arret = new Promise<void>((ok) => { rec.onstop = () => ok(); });
+    // Détection des silences sur le son : l'enregistreur se met en pause pendant les blancs (jump cuts).
+    let niveau: (() => number) | null = null, ac: AudioContext | null = null;
+    if (silences && son.length) {
+      ac = new AudioContext();
+      const an = ac.createAnalyser(); an.fftSize = 1024;
+      ac.createMediaStreamSource(new MediaStream(son)).connect(an);
+      const buf = new Float32Array(an.fftSize);
+      niveau = () => { an.getFloatTimeDomainData(buf); let q = 0; for (const x of buf) q += x * x; return 10 * Math.log10(q / buf.length + 1e-10); };
+    }
+    let pic = -30, blancDepuis = 0, enPause = false;
+    plan.current = 0;
+    await demarrer(); // pré-lecture : l'enregistrement commence pile au début de l'extrait
     rec.start(200);
-    await demarrer();
     await new Promise<void>((ok) => {
       const pas = () => {
         const f = image();
+        if (niveau) {
+          const db = niveau(), maintenant = performance.now();
+          pic = Math.max(db, pic - 0.05); // niveau de voix récent (redescend lentement)
+          const seuil = Math.max(-50, pic - 24);
+          if (db < seuil) {
+            if (!blancDepuis) blancDepuis = maintenant;
+            if (!enPause && maintenant - blancDepuis > 350 && rec.state === "recording") { rec.pause(); enPause = true; }
+          } else {
+            blancDepuis = 0;
+            if (enPause && rec.state === "paused") { plan.current++; rec.resume(); enPause = false; }
+          }
+        }
         dessiner(f.src, f.t);
         setMsg(`Enregistrement… ${Math.min(100, Math.round(((f.t - debut) / duree) * 100))} %`);
         if (f.fini) ok(); else requestAnimationFrame(pas);
       };
       requestAnimationFrame(pas);
     });
+    if (rec.state === "paused") rec.resume();
     rec.stop(); await arret;
+    void ac?.close();
     const type = mime.split(";")[0];
     setSortie({ url: URL.createObjectURL(new Blob(morceaux, { type })), ext: type === "video/mp4" ? "mp4" : "webm" });
   }
@@ -443,24 +535,31 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     const CT = (window as unknown as { CropTarget?: CropTargetCtor }).CropTarget;
     if (CT) { try { await (piste as MediaStreamTrack & { cropTo(t: unknown): Promise<void> }).cropTo(await CT.fromElement(el)); recadre = true; } catch { /* non pris en charge */ } }
     const cap = document.createElement("video"); cap.muted = true; cap.playsInline = true; cap.srcObject = ecran; await cap.play();
+    setCapture(true); // lecteur agrandi : YouTube passe en HD et l'image capturée est nette
+    await new Promise((ok) => setTimeout(ok, 1500));
     const zone = (): Source => {
       if (recadre) return { img: cap, sx: 0, sy: 0, sw: cap.videoWidth, sh: cap.videoHeight };
       const r = el.getBoundingClientRect(), k = cap.videoWidth / window.innerWidth;
       return { img: cap, sx: r.left * k, sy: r.top * k, sw: r.width * k, sh: r.height * k };
     };
+    // Position estimée entre deux messages du lecteur (il ne l'envoie que quelques fois par seconde).
+    const position = () => tYT.current + (lecture.current ? (performance.now() - tYTa.current) / 1000 : 0);
     try {
-      ecouterYT(); yt("pauseVideo"); yt("seekTo", [debut, true]); yt("unMute"); yt("setVolume", [100]);
-      await new Promise((ok) => setTimeout(ok, 1200));
-      tYT.current = debut;
+      ecouterYT(); yt("unMute"); yt("setVolume", [100]);
+      // 3 s de pré-lecture : le titre YouTube disparaît et la vidéo se charge en HD avant le début de l'extrait
+      yt("seekTo", [Math.max(0, debut - 3), true]); yt("playVideo");
       const depart = performance.now();
-      await enregistrer(c, mime, ecran.getAudioTracks(), () => { yt("playVideo"); }, () => {
-        const t = Math.max(tYT.current, debut);
+      await enregistrer(c, mime, ecran.getAudioTracks(), async () => {
+        const t0 = performance.now();
+        await new Promise<void>((ok) => { const v = () => (position() >= debut - 0.05 || performance.now() - t0 > 15000 ? ok() : requestAnimationFrame(v)); v(); });
+      }, () => {
+        const t = Math.max(position(), debut);
         const ecoule = (performance.now() - depart) / 1000;
-        return { src: zone(), t, fini: t >= fin || ecoule > duree + 20 };
+        return { src: zone(), t, fini: t >= fin || ecoule > duree + 25 };
       }, dessiner, duree);
       yt("pauseVideo");
       if (!ecran.getAudioTracks().length) setErr("Le Reel est prêt, mais sans le son : à la prochaine capture, activez « Partager l'audio de l'onglet ».");
-    } finally { fermerEcran(); }
+    } finally { fermerEcran(); setCapture(false); }
   }
 
   async function creer() {
@@ -469,6 +568,23 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     catch (x) { setErr((x as Error).message); }
     finally { setMsg(""); }
   }
+
+  // Image d'aperçu : une image de la vidéo (YouTube) ou l'image en cours du fichier.
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => setVignette(img);
+    img.onerror = () => { if (!img.src.includes("hq2")) img.src = `https://i.ytimg.com/vi/${videoId}/hq2.jpg`; };
+    img.src = `https://i.ytimg.com/vi/${videoId}/maxres2.jpg`;
+  }, [videoId]);
+  useEffect(() => {
+    const cv = apercu.current; if (!cv || capture || msg) return;
+    const { c, dessiner } = preparer();
+    const v = vid.current;
+    let src: Source | null = null;
+    if (mode === "fichier" && v && v.videoWidth) src = { img: v, sx: 0, sy: 0, sw: v.videoWidth, sh: v.videoHeight };
+    else if (vignette) { const h = vignette.naturalWidth * 9 / 16; src = { img: vignette, sx: 0, sy: (vignette.naturalHeight - h) / 2, sw: vignette.naturalWidth, sh: h }; }
+    try { dessiner(src, debut + Math.min(4, (fin - debut) / 3)); cv.getContext("2d")?.drawImage(c, 0, 0, cv.width, cv.height); } catch { /* image indisponible */ }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pret = mode === "youtube" ? ecranOk : Boolean(fichier);
   return (
@@ -481,7 +597,7 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
         </div>
         {mode === "youtube" ? (
           <>
-            <div className="tv-vid-lecteur">
+            <div className={capture ? "tv-vid-capture" : "tv-vid-lecteur"}>
               {origine ? <iframe ref={ifr} onLoad={ecouterYT} src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&start=${debut}&controls=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&origin=${encodeURIComponent(origine)}`} title="Lecteur YouTube" allow="autoplay; encrypted-media" /> : null}
             </div>
             {ecranOk ? (
@@ -502,20 +618,33 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
         )}
         <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <span className="tv-gris" style={{ fontSize: 13, fontWeight: 700 }}>Mise en page</span>
+          <button type="button" className="tv-chip" aria-selected={mise === "choc"} onClick={() => setMise("choc")}>Choc · citation + jump cuts</button>
           <button type="button" className="tv-chip" aria-selected={mise === "plein"} onClick={() => setMise("plein")}>Plein écran · sous-titres mot par mot</button>
           <button type="button" className="tv-chip" aria-selected={mise === "centre"} onClick={() => setMise("centre")}>Vidéo centrée</button>
         </div>
-        {mise === "plein" ? (
-          <label className="field">Cadrage : placez la personne au centre ({cadre < 40 ? "gauche" : cadre > 60 ? "droite" : "centre"})
-            <input type="range" min={0} max={100} value={cadre} onChange={(e) => setCadre(Number(e.target.value))} />
-          </label>
-        ) : null}
+        <div className="row" style={{ gap: 14, alignItems: "center" }}>
+          <canvas ref={apercu} width={180} height={320} className="tv-vid-apercu" aria-label="Aperçu du Reel" />
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+            <strong style={{ fontSize: 13 }}>Aperçu</strong>
+            {mise === "plein" ? (
+              <label className="field">Cadrage : la personne doit être au centre de l&apos;aperçu
+                <input type="range" min={0} max={100} value={cadre} onChange={(e) => setCadre(Number(e.target.value))} />
+              </label>
+            ) : null}
+            <span className="tv-gris" style={{ fontSize: 12 }}>{extrait.phrases?.length && st === extrait.soustitres ? "Sous-titres calés sur la voix par VOA." : "Sous-titres répartis sur la durée (relancez le repérage pour les caler sur la voix)."}</span>
+          </div>
+        </div>
         <div className="row" style={{ gap: 10 }}>
           <label className="field" style={{ flex: 1 }}>Début (s)<input type="number" min={0} value={debut} onChange={(e) => { const d = Math.max(0, Number(e.target.value)); setDebut(d); if (fin > d + 60) setFin(d + 60); }} /></label>
           <label className="field" style={{ flex: 1 }}>Fin (s)<input type="number" min={debut + 1} max={debut + 60} value={fin} onChange={(e) => setFin(Math.min(debut + 60, Number(e.target.value)))} /></label>
           <span className="tv-pill" style={{ alignSelf: "flex-end", marginBottom: 10 }}>{fin - debut} s / 60 s max</span>
         </div>
-        <label className="field">Accroche (en haut du Reel)<input value={titre} maxLength={120} onChange={(e) => setTitre(e.target.value)} /></label>
+        <div className="row" style={{ gap: 16, flexWrap: "wrap" }}>
+          <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 14, fontWeight: 600 }}><input type="checkbox" checked={silences} onChange={(e) => setSilences(e.target.checked)} /> Couper les silences (montage dynamique)</label>
+          {mise === "choc" ? <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 14, fontWeight: 600 }}><input type="checkbox" checked={stChoc} onChange={(e) => setStChoc(e.target.checked)} /> Ajouter les sous-titres</label> : null}
+        </div>
+        <label className="field">{mise === "choc" ? "Citation choc (affichée les 9 premières secondes)" : "Accroche (en haut du Reel)"}<input value={titre} maxLength={140} onChange={(e) => setTitre(e.target.value)} /></label>
+        {mise === "choc" ? <label className="field">Ligne de contexte<input value={contexte} maxLength={80} placeholder="Ex. : L'énorme coup de gueule de …" onChange={(e) => setContexte(e.target.value)} /></label> : null}
         <label className="field">Sous-titres en français<textarea rows={3} value={st} onChange={(e) => setSt(e.target.value)} /></label>
         <span className="tv-gris" style={{ fontSize: 12 }}>Crédit incrusté : {credit}</span>
         {err ? <p className="notice rouge">{err}</p> : null}
