@@ -87,18 +87,8 @@ export async function POST(req: Request) {
 
     if (b.action === "etat") return NextResponse.json(etat);
 
-    if (b.action === "saison") {
-      if (!aiConfigured()) return NextResponse.json({ error: "IA non configurée." }, { status: 400 });
-      const deja = [...etat.episodes.map((e) => e.menace), ...etat.saison.map((p) => p.menace)].join(", ");
-      const r = await aiJson<{ saison?: Proposition[] }>(CADRE,
-        `Propose une saison de 10 épisodes, du plus courant au plus sournois, sur des menaces qui touchent vraiment le public d'Afrique de l'Ouest (ingénierie sociale, faux agents mobile money, SIM swap, arnaque au faux colis, piratage de compte WhatsApp par code SMS, faux recrutements, sextorsion, faux investissements crypto, hameçonnage, faux support technique, deepfake vocal, QR code piégé, etc.).
-${deja ? `Déjà traité ou déjà proposé, à ne pas répéter : ${deja}.` : ""}
-Pour chaque épisode : "titre" accrocheur (6 mots max, sans dévoiler la technique), "menace" (nom exact de la technique), "pitch" (2 phrases : l'histoire racontée, sans la chute).
-Réponds uniquement en JSON : {"saison": [{"titre","menace","pitch"}]}`, 3000);
-      etat.saison = (r.saison ?? []).filter((p) => p?.titre && p?.menace).slice(0, 10);
-      await ecrire(etat);
-      return NextResponse.json(etat);
-    }
+    // Plus de saison : un épisode à la fois.
+    if (b.action === "saison") return NextResponse.json({ error: "Créez un épisode à la fois." }, { status: 400 });
 
     if (b.action === "script") {
       if (!aiConfigured()) return NextResponse.json({ error: "IA non configurée." }, { status: 400 });
