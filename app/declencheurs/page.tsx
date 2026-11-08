@@ -134,8 +134,7 @@ export default function Declencheurs() {
         {demo ? <p className="notice ambre">Mode démo : les déclencheurs repèrent les actus dans la Veille, mais la création et la publication automatiques démarrent une fois Supabase branché.</p> : null}
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
 
-        <div className="tv-veille">
-          <div className="tv-veille-main">
+        <section className="tv-regles-zone" aria-label="Vos règles">
             <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
               <h2 className="tv-h2" style={{ fontSize: 22 }}>Vos règles</h2>
               <span className="tv-gris" style={{ flex: "1 1 260px" }}>Chaque règle se lit de gauche à droite, de la source à la publication.</span>
@@ -209,6 +208,10 @@ export default function Declencheurs() {
               <Link href="/declencheurs/modifier" className="tv-regle2-nouveau"><Trait d={NAV_ICONS.plus} size={18} stroke={2.2} />Nouvelle règle</Link>
             </div>
 
+        </section>
+
+        <div className="tv-veille">
+          <div className="tv-veille-main">
             {/* Banc d'essai */}
             <section id="banc" className="tv-carte" aria-labelledby="t-banc">
               <div className="row" style={{ alignItems: "baseline", flexWrap: "wrap", gap: 10 }}>

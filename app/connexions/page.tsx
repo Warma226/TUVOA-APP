@@ -1,7 +1,6 @@
 "use client";
 // Connexions : l'état de santé de chaque compte et service (dernière publication réussie, autorisations,
 // expiration du jeton Facebook, quotas, incidents), avec la marche à suivre pour relier ce qui manque.
-// Les clés restent dans Vercel : cette page n'en affiche jamais le contenu.
 import { useVoirPlus } from "@/components/VoirPlus";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -272,7 +271,7 @@ export default function Connexions() {
             </Carte>
             <Carte ini="V" couleur="linear-gradient(145deg, #FCA5A5, #B91C1C)" nom="Voix off" role="Synthèse vocale Gemini" etat={!sante ? "off" : sante.voix ? "ok" : "off"}
               actions={<Link className="btn small" href="/minute-cyber">Ouvrir La minute cyber</Link>}>
-              <Puce ok={sante ? sante.voix : null}>{sante?.voix ? "Voix de Mara disponible pour La minute cyber et le Studio" : "Ajoutez GEMINI_API_KEY dans Vercel pour la voix off"}</Puce>
+              {sante && !sante.voix ? <Puce ok={false}>Ajoutez GEMINI_API_KEY dans Vercel pour la voix off</Puce> : null}
             </Carte>
             <Carte ini="DB" couleur="linear-gradient(145deg, #5EEAD4, #0E9F8E)" nom="Base de données" role="Supabase" etat={!info ? "off" : info.demo ? "warn" : "ok"}
               actions={info?.demo ? btnAide("db", false) : <Link className="btn small" href="/mediatheque">Ouvrir la médiathèque</Link>}
@@ -310,7 +309,6 @@ export default function Connexions() {
               <Trait d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01" size={18} />
               <span>TikTok demande une validation de l'application avant toute publication publique. Comptez quelques jours.</span>
             </p>
-            <span className="tv-gris" style={{ fontSize: 12, lineHeight: 1.45, padding: "0 6px" }}>Les clés et mots de passe restent dans Vercel : cette page n'en affiche jamais le contenu.</span>
             <button
               type="button"
               className="btn"
