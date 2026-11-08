@@ -43,6 +43,7 @@ export function PostRow({ post }: { post: Post }) {
       <span className="stack" style={{ gap: 6, minWidth: 0, flex: 1 }}>
         <span style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.35 }}>{postTitle(post)}</span>
         <span className="wrap">
+          {post.rubrique === "citation" && !post.visual?.photo && !post.visual?.image && post.status !== "publie" ? <span className="badge" style={{ background: "#FDE3E6", color: "#B42318" }}>Sans photo</span> : null}
           {post.platforms.map((pl) => (
             <span key={pl} className="badge bleu">{PLATFORM_LABEL[pl]}</span>
           ))}

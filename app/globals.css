@@ -988,3 +988,5 @@ button.tv-etape-fixe:hover:not([aria-current="step"]) { background: rgba(10,42,1
   .tv-ap { padding-bottom: 150px !important; }
   .tv-ap-barre { display: flex; flex-direction: column; gap: 10px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; padding: 12px 16px calc(14px + env(safe-area-inset-bottom)); background: rgba(255,255,255,.97); border-top: 1px solid #e3e9f3; }
 }
+.tv-ap-alerte { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 16px; border-radius: 18px; background: #fde3e6; color: #7a1414; border: 1px solid #f3c7c7; font-size: 14px; line-height: 1.45; }
+.tv-ap-alerte > span { flex: 1 1 240px; }

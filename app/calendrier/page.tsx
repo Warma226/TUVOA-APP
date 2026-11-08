@@ -20,13 +20,14 @@ const LIGNES: { id: Ligne; nom: string; rythme: string; c: [string, string] }[] 
   { id: "recap", nom: "Récap du vendredi", rythme: "Chaque vendredi", c: ["#93C5FD", "#0A2A66"] },
   { id: "portrait", nom: "Portrait", rythme: "Sur accord de la personne", c: RUB.portrait.c },
 ];
-const FILTRES: { id: "tout" | PostStatus; label: string }[] = [
+const FILTRES: { id: "tout" | "sansphoto" | PostStatus; label: string }[] = [
   { id: "tout", label: "Tout" },
   { id: "planifie", label: "Planifiés" },
   { id: "a_valider", label: "À valider" },
   { id: "publie", label: "Publiés" },
   { id: "erreur", label: "À corriger" },
   { id: "brouillon", label: "Brouillons" },
+  { id: "sansphoto", label: "Sans photo" },
 ];
 const ETAT: Record<string, [string, string, string]> = {
   publie: ["Publié", "#D9F7E6", "#05603A"],
@@ -93,7 +94,7 @@ function Calendrier() {
   }, [posts, recents, recherche]);
   const filtres = useMemo(
     () => tous
-      .filter((p) => filtre === "tout" || p.status === filtre)
+      .filter((p) => filtre === "tout" || (filtre === "sansphoto" ? sansPhoto(p) && ["planifie", "erreur", "a_valider"].includes(p.status) : p.status === filtre))
       .filter((p) => !recherche || [p.title, p.idea, p.source_name, p.visual?.nom, p.visual?.titre, p.texts?.facebook].some((t) => (t ?? "").toLowerCase().includes(recherche))),
     [tous, filtre, recherche]
   );
@@ -193,12 +194,12 @@ function Calendrier() {
         {/* À régler + filtres */}
         <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
           {nbSansPhoto || nbErreurs || videsCyber.length ? <span className="tv-kicker" style={{ color: "#5B6B86" }}>À RÉGLER</span> : null}
-          {nbSansPhoto ? <button type="button" className="tv-regler rouge" onClick={() => setFiltre("tout")}><i /><strong>{nbSansPhoto}</strong> citation{nbSansPhoto > 1 ? "s" : ""} sans photo</button> : null}
+          {nbSansPhoto ? <button type="button" className="tv-regler rouge" onClick={() => { setFiltre("sansphoto"); setVue("liste"); }}><i /><strong>{nbSansPhoto}</strong> citation{nbSansPhoto > 1 ? "s" : ""} sans photo</button> : null}
           {videsCyber.length ? <Link href="/creer/cyberbase" className="tv-regler orange"><i /><strong>{videsCyber.length}</strong> jour{videsCyber.length > 1 ? "s" : ""} sans #CyberBase</Link> : null}
           {nbErreurs ? <button type="button" className="tv-regler rouge" onClick={() => setFiltre("erreur")}><i /><strong>{nbErreurs}</strong> en erreur</button> : null}
           <span style={{ flex: 1 }} />
           <div className="hscroll" role="tablist" aria-label="Statut" style={{ gap: 6 }}>
-            {FILTRES.map((f) => (
+            {FILTRES.filter((f) => f.id !== "sansphoto" || nbSansPhoto > 0 || filtre === "sansphoto").map((f) => (
               <button key={f.id} type="button" role="tab" className="tv-chip" aria-selected={filtre === f.id} onClick={() => setFiltre(f.id)}>
                 {f.label}{posts ? <small>{compte(f.id)}</small> : null}
               </button>
@@ -299,7 +300,7 @@ function Calendrier() {
                     const d = quand(p) as Date;
                     const e = ETAT[p.status] ?? ETAT.brouillon;
                     const photo = sansPhoto(p) && p.status !== "publie";
-                    const cta = p.status === "erreur" ? (photo ? "Ajouter la photo" : "Corriger") : ["planifie", "a_valider"].includes(p.status) ? "Ouvrir" : p.status === "brouillon" ? "Reprendre" : "";
+                    const cta = photo ? "Ajouter la photo" : p.status === "erreur" ? "Corriger" : ["planifie", "a_valider"].includes(p.status) ? "Ouvrir" : p.status === "brouillon" ? "Reprendre" : "";
                     const lg = ligneDe(p);
                     return (
                       <li key={p.id}>
@@ -308,12 +309,13 @@ function Calendrier() {
                         <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
                           <span className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                             <span className="tv-pill" style={lg === "recap" ? { background: "#DBE7FF", color: "#0A2A66" } : { background: RUB[lg].pastille[0], color: RUB[lg].pastille[1] }}>{lg === "recap" ? "Récap" : RUB[lg].nom}</span>
-                            <span className="tv-pill" style={{ background: e[1], color: e[2] }}>{photo && p.status === "erreur" ? "Sans photo" : e[0]}</span>
+                            <span className="tv-pill" style={{ background: e[1], color: e[2] }}>{e[0]}</span>
+                            {photo ? <span className="tv-pill" style={{ background: "#FDE3E6", color: "#B42318" }}>SANS PHOTO</span> : null}
                           </span>
                           <Link href={postHref(p)} style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.35, color: "#0B1A33", textDecoration: "none" }}>{postTitle(p)}</Link>
                           <span className="row" style={{ gap: 10, fontSize: 12, color: "#5B6B86" }}>
                             {p.platforms.map((x) => ({ facebook: "Facebook", linkedin: "LinkedIn", wordpress: "Site", tiktok: "TikTok" })[x]).join(" · ")}
-                            {cta ? <Link href={postHref(p)} style={{ marginLeft: "auto", fontWeight: 700, textDecoration: "none" }}>{cta} →</Link> : null}
+                            {cta ? <Link href={photo ? `/editeur?id=${p.id}` : postHref(p)} style={{ marginLeft: "auto", fontWeight: 700, textDecoration: "none", color: photo ? "#B42318" : undefined }}>{cta} →</Link> : null}
                           </span>
                         </span>
                       </li>

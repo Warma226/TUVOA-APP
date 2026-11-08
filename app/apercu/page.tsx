@@ -200,6 +200,13 @@ function Apercu() {
               })}
             </div>
             {current.platforms.length === 0 ? <p className="notice ambre">Aucune plateforme choisie pour ce post.</p> : null}
+            {current.rubrique === "citation" && !current.visual.photo && !current.visual.image && !dejaPub ? (
+              <div className="tv-ap-alerte" role="alert">
+                <Trait d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" size={20} stroke={2} />
+                <span><strong>Citation sans photo.</strong> {planifie ? `Elle ne partira pas à ${jourHeure(planifie).h} tant que la photo de l'auteur n'est pas ajoutée.` : "Ajoutez la photo de l'auteur avant de la programmer."}</span>
+                <Link href={`/editeur?id=${current.id}`} className="btn small">Ajouter la photo</Link>
+              </div>
+            ) : null}
             <div className="tv-ap-contenu">
               <div className="tv-ap-tel">
                 <div className="ecran">
