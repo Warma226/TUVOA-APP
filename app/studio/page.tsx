@@ -4,7 +4,7 @@
 // et envoi au calendrier. VOA peut réécrire tous les textes d'un modèle à partir d'un sujet.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { TopBar } from "@/components/BottomNav";
+import { Trait } from "@/components/BottomNav";
 import { ImageField } from "@/components/ImageField";
 import Voa from "@/components/Voa";
 import { montserrat } from "@/lib/studio-font";
@@ -13,6 +13,8 @@ import {
   type Boucle, type Doc, type El, type Entree, type Format, type Genre, type Ombre, type Page,
 } from "@/lib/creation";
 import { GALERIE, GENRES, type Maquette } from "@/lib/modeles";
+import { logo as elementsLogo } from "@/lib/creation";
+import { listPosts } from "@/lib/client";
 
 const CLE_BROUILLON = "tuvoa-studio-brouillon";
 const ENTREES: [Entree, string][] = [["aucune", "Aucune"], ["fondu", "Fondu"], ["glisser-haut", "Glisse du bas"], ["glisser-bas", "Glisse du haut"], ["glisser-gauche", "Glisse de la droite"], ["glisser-droite", "Glisse de la gauche"], ["zoom", "Zoom"], ["pop", "Pop (rebond)"], ["machine", "Machine à écrire"]];
@@ -23,6 +25,68 @@ const NUANCIER = ["#FFFFFF", "#0A0A0A", "#2563EB", "#6E9BFF", "#0A2A66", "#E94A0
 type Glisse = { mode: "deplacer" | "redim"; id: string; x0: number; y0: number; el0: El } | null;
 
 function clone<T>(x: T): T { return JSON.parse(JSON.stringify(x)) as T; }
+
+// ─── Décliner dans un autre format : positions proportionnelles, tailles à l'échelle, fonds pleine page étirés ───
+function decliner(d: Doc, f: Format): Doc {
+  if (d.format === f) return d;
+  const A = FORMATS[d.format], B = FORMATS[f];
+  const sx = B.w / A.w, sy = B.h / A.h, k = Math.min(sx, sy);
+  const pages = d.pages.map((p) => ({
+    ...p,
+    elements: p.elements.map((e) => {
+      if (e.w >= A.w * 0.95 && e.h >= A.h * 0.95) return { ...e, x: e.x * sx, y: e.y * sy, w: e.w * sx, h: e.h * sy };
+      const w = e.w * k, h = e.h * k;
+      return {
+        ...e, w, h, x: (e.x + e.w / 2) * sx - w / 2, y: (e.y + e.h / 2) * sy - h / 2,
+        police: e.police ? Math.round(e.police * k) : e.police, rayon: e.rayon ? e.rayon * k : e.rayon, marge: e.marge ? e.marge * k : e.marge, epaisseur: e.epaisseur ? e.epaisseur * k : e.epaisseur,
+      };
+    }),
+  }));
+  return { ...d, format: f, pages };
+}
+
+// ─── Contrôle qualité ───
+// Zone sûre : marges où les interfaces (TikTok, stories, recadrages) masquent le contenu.
+const ZONE: Record<Format, { g: number; d: number; h: number; b: number }> = {
+  portrait: { g: 0.05, d: 0.05, h: 0.04, b: 0.04 },
+  carre: { g: 0.05, d: 0.05, h: 0.05, b: 0.05 },
+  story: { g: 0.06, d: 0.12, h: 0.13, b: 0.2 },
+};
+function hexRgb(c?: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec((c ?? "").trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? m[1].split("").map((x) => x + x).join("") : m[1];
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
+}
+function contraste(a?: string, b?: string): number | null {
+  const ca = hexRgb(a), cb = hexRgb(b);
+  if (!ca || !cb) return null;
+  const L = (c: number[]) => { const [r, g, bl] = c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * bl; };
+  const [x, y] = [L(ca), L(cb)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+}
+type Point = { ok: boolean; texte: string; el?: string; page?: number };
+function controler(doc: Doc): Point[] {
+  const { w: W, h: H } = FORMATS[doc.format];
+  const vu = 390 / W; // taille affichée sur un téléphone de 390 px de large
+  const textes = doc.pages.flatMap((p, i) => p.elements.filter((e) => e.type === "texte" && (e.texte ?? "").trim() && !(e.nom ?? "").startsWith("Logo")).map((e) => ({ e, i, p })));
+  const out: Point[] = [];
+  const grand = textes.reduce<{ e: El; i: number } | null>((m, t) => (!m || (t.e.police ?? 0) > (m.e.police ?? 0) ? t : m), null);
+  if (grand) out.push({ ok: (grand.e.police ?? 0) * vu >= 20, texte: `Titre lisible sur téléphone : ${Math.round((grand.e.police ?? 0) * vu)} px affichés${(grand.e.police ?? 0) * vu >= 20 ? "" : ", visez 20 au moins"}`, el: grand.e.id, page: grand.i });
+  const petit = textes.reduce<{ e: El; i: number } | null>((m, t) => (!m || (t.e.police ?? 99) < (m.e.police ?? 99) ? t : m), null);
+  if (petit && petit !== grand) {
+    const px = (petit.e.police ?? 0) * vu;
+    out.push({ ok: px >= 11, texte: px >= 11 ? `Plus petit texte : ${Math.round(px)} px affichés, lisible` : `Texte trop petit sur téléphone : « ${(petit.e.texte ?? "").slice(0, 24)}… » (${Math.round(px)} px, visez 11)`, el: petit.e.id, page: petit.i });
+  }
+  const faibles = textes.filter(({ e, p }) => { const c = contraste(e.couleur ?? "#FFFFFF", e.fond ?? p.fond); return c !== null && c < ((e.police ?? 0) * vu >= 18 ? 3 : 4.5); });
+  out.push({ ok: faibles.length === 0, texte: faibles.length ? `Contraste trop faible : « ${(faibles[0].e.texte ?? "").slice(0, 24)}… »` : "Contraste suffisant sur les fonds unis", el: faibles[0]?.e.id, page: faibles[0]?.i });
+  const sansLogo = doc.pages.findIndex((p) => !p.elements.some((e) => (e.nom ?? "").startsWith("Logo") || (e.texte ?? "").trim().toUpperCase() === "TUVOA"));
+  out.push({ ok: sansLogo === -1 || (doc.pages.length > 1 && sansLogo > 0), texte: sansLogo === -1 ? "Logo TUVOA présent" : sansLogo === 0 ? "Logo TUVOA absent de la première page" : "Logo TUVOA sur la couverture", page: sansLogo === 0 ? 0 : undefined });
+  const z = ZONE[doc.format];
+  const hors = doc.pages.flatMap((p, i) => p.elements.filter((e) => ["texte", "icone", "carte"].includes(e.type) && (e.x < W * z.g - 2 || e.y < H * z.h - 2 || e.x + e.w > W * (1 - z.d) + 2 || e.y + e.h > H * (1 - z.b) + 2)).map((e) => ({ e, i })));
+  out.push({ ok: hors.length === 0, texte: hors.length ? `${hors.length} élément${hors.length > 1 ? "s" : ""} hors de la zone sûre (« ${hors[0].e.nom ?? hors[0].e.type} »)` : `Tout est dans la zone sûre${doc.format === "story" ? " de TikTok et des stories" : ""}`, el: hors[0]?.e.id, page: hors[0]?.i });
+  return out;
+}
 
 export default function Studio() {
   const [doc, setDoc] = useState<Doc>(() => GALERIE.visuel[0].doc());
@@ -46,6 +110,11 @@ export default function Studio() {
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
   const [envoye, setEnvoye] = useState<string | null>(null);
+  const [zone, setZone] = useState(true);
+  const [actus, setActus] = useState<string[]>([]);
+  useEffect(() => {
+    listPosts().then((ps) => setActus(ps.filter((p) => p.rubrique === "actu" && p.status === "publie").slice(0, 8).map((p) => p.title || p.idea).filter(Boolean))).catch(() => {});
+  }, []);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boiteRef = useRef<HTMLDivElement>(null);
@@ -350,7 +419,25 @@ export default function Studio() {
 
   return (
     <div className={montserrat.className} style={{ display: "contents" }}>
-      <TopBar title="Studio de VOA" back="/communaute" wide />
+      <header className="tv-studio-haut">
+        <div style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+          <Link href="/creer" className="tv-gris" style={{ textDecoration: "none", fontWeight: 600 }}>← Créer</Link>
+          <h1 className="tv-titre" style={{ fontFamily: "var(--font-mont), sans-serif" }}>Studio</h1>
+          <span style={{ fontSize: 14, color: "#33425C" }}>{etape === "editeur" ? `${GENRES.find((g) => g.id === (doc.genre ?? "visuel"))?.nom ?? "Création"} · ${doc.pages.length} page${doc.pages.length > 1 ? "s" : ""} · ${FORMATS[doc.format].nom} · enregistré sur cet appareil` : "Visuels, carrousels et vidéos aux couleurs de TUVOA"}</span>
+        </div>
+        {etape === "editeur" ? (
+          <>
+            <div role="radiogroup" aria-label="Format" className="tv-segments">
+              {(Object.keys(FORMATS) as Format[]).map((f) => (
+                <button key={f} type="button" role="radio" aria-checked={doc.format === f} aria-pressed={doc.format === f} onClick={() => { changer((d) => decliner(d, f)); setSel(null); }}>
+                  {f === "portrait" ? "4:5 Post" : f === "carre" ? "1:1 Carré" : "9:16 Story"}
+                </button>
+              ))}
+            </div>
+            <a href="#exporter" className="tv-btn-nuit"><Trait d="M3 5h18v16H3zM16 3v4M8 3v4M3 10h18" size={16} stroke={2} />EXPORTER ET PLANIFIER</a>
+          </>
+        ) : null}
+      </header>
       {etape === "accueil" ? (
         <main className="page sub wide" style={{ paddingTop: 8, maxWidth: 1100 }}>
           <div className="row" style={{ gap: 18, alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
@@ -456,6 +543,7 @@ export default function Studio() {
               <canvas ref={canvasRef} width={W} height={H} style={{ width: "100%", height: "100%", display: "block" }} aria-label="Création en cours" />
               {guide.v ? <div style={{ position: "absolute", left: largeurVue / 2, top: 0, bottom: 0, width: 1, background: "#E94A06" }} /> : null}
               {guide.h ? <div style={{ position: "absolute", top: (H * echelle) / 2, left: 0, right: 0, height: 1, background: "#E94A06" }} /> : null}
+              {zone && !lecture ? <div aria-hidden="true" style={{ position: "absolute", left: `${ZONE[doc.format].g * 100}%`, right: `${ZONE[doc.format].d * 100}%`, top: `${ZONE[doc.format].h * 100}%`, bottom: `${ZONE[doc.format].b * 100}%`, border: "1.5px dashed rgba(233,74,6,0.75)", borderRadius: 4, pointerEvents: "none" }} /> : null}
               {elSel && !lecture ? (
                 <div style={{ position: "absolute", left: elSel.x * echelle, top: elSel.y * echelle, width: elSel.w * echelle, height: elSel.h * echelle, border: "2px solid #2563EB", pointerEvents: "none" }}>
                   <div style={{ position: "absolute", right: -9, bottom: -9, width: 18, height: 18, background: "#FFFFFF", border: "2px solid #2563EB", borderRadius: 4 }} />
@@ -466,11 +554,48 @@ export default function Studio() {
                   style={{ position: "absolute", left: elSel.x * echelle, top: elSel.y * echelle, width: Math.max(120, elSel.w * echelle), minHeight: Math.max(40, elSel.h * echelle), fontSize: Math.max(12, (elSel.police ?? 40) * echelle), fontWeight: elSel.graisse ?? 800, fontFamily: POLICE.famille, lineHeight: elSel.interligne ?? 1.1, textAlign: elSel.align ?? "left", background: "rgba(255,255,255,.92)", color: "#0A0A0A", border: "2px solid #2563EB", padding: 4, resize: "both" }} />
               ) : null}
             </div>
+            <label className="row" style={{ gap: 8, fontSize: 13, fontWeight: 600, color: "#33425C", cursor: "pointer" }}>
+              <input type="checkbox" checked={zone} onChange={(e) => setZone(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#E94A06" }} />
+              Afficher la zone sûre (pointillés orange)
+            </label>
             <p className="muted" style={{ fontSize: 12, textAlign: "center" }}>Glisse pour déplacer · poignée en bas à droite pour redimensionner (Maj : garder les proportions, Alt : agrandir le texte) · double-clic pour écrire · flèches pour ajuster</p>
           </div>
 
           {/* Propriétés */}
           <aside className="stack" style={{ flex: "1 1 320px", minWidth: 0, gap: 12 }}>
+            {(() => {
+              const pts = controler(doc);
+              const bons = pts.filter((x) => x.ok).length;
+              return (
+                <section className="tv-carte-side" aria-labelledby="t-qualite">
+                  <div className="row" style={{ alignItems: "baseline" }}><h2 id="t-qualite" className="tv-h2" style={{ fontSize: 16, flex: 1 }}>Contrôle qualité</h2><span style={{ fontSize: 12, fontWeight: 800, color: bons === pts.length ? "#05603A" : "#E94A06" }}>{bons} / {pts.length}</span></div>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {pts.map((x) => (
+                      <li key={x.texte} className="row" style={{ gap: 10, alignItems: "flex-start", fontSize: 13, lineHeight: 1.4 }}>
+                        <span style={{ width: 18, height: 18, borderRadius: 9, flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", background: x.ok ? "#16A34A" : "#E94A06" }}><Trait d={x.ok ? "M20 6L9 17l-5-5" : "M12 8v5M12 17h.01"} size={11} stroke={3.2} /></span>
+                        {!x.ok && (x.el || x.page !== undefined) ? (
+                          <button type="button" className="btn link" style={{ fontSize: 13, color: "#9A3412", fontWeight: 600, textAlign: "left", padding: 0, minHeight: 0 }} onClick={() => { if (x.page !== undefined) setPageIdx(x.page); setSel(x.el ?? null); }}>{x.texte}</button>
+                        ) : <span style={{ color: x.ok ? "#33425C" : "#9A3412", fontWeight: x.ok ? 400 : 600 }}>{x.texte}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            })()}
+            <section className="tv-carte-side" aria-labelledby="t-charte">
+              <h2 id="t-charte" className="tv-h2" style={{ fontSize: 16 }}>Charte TUVOA</h2>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                {([["#0A2A66", "Nuit"], ["#2563EB", "Bleu"], ["#6E9BFF", "Bleu clair"], ["#E94A06", "Orange"], ["#F2EFE8", "Crème"], ["#FFFFFF", "Blanc"]] as const).map(([c, n]) => (
+                  <button key={c} type="button" title={elSel ? `Appliquer ${n}` : n} aria-label={elSel ? `Appliquer la couleur ${n} à l'élément` : `Couleur ${n}`} disabled={!elSel}
+                    onClick={() => elSel && majEl(elSel.id, elSel.type === "texte" || elSel.type === "icone" || elSel.type === "rayons" ? { couleur: c } : { fond: c })}
+                    style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, fontSize: 10, color: "#5B6B86", background: "none", border: 0, padding: 0, cursor: elSel ? "pointer" : "default" }}>
+                    <span style={{ width: 34, height: 34, borderRadius: 10, background: c, border: "1px solid #E3E9F3" }} />{n}
+                  </button>
+                ))}
+              </div>
+              <span className="tv-gris" style={{ fontSize: 12 }}>Montserrat pour les titres, Inter pour les textes. {elSel ? "Cliquez une couleur pour l'appliquer à l'élément choisi." : "Choisissez un élément pour lui appliquer une couleur."}</span>
+              <button type="button" className="btn small" style={{ alignSelf: "flex-start" }} onClick={() => { const els = elementsLogo(Math.round(FORMATS[doc.format].w * ZONE[doc.format].g) + 8, Math.round(FORMATS[doc.format].h * ZONE[doc.format].h) + 8, true); changer((d) => { d.pages[pageIdx].elements.push(...els); return d; }); }}>Ajouter le logo TUVOA</button>
+            </section>
             {elSel ? (
               <section className="card" style={{ gap: 10 }}>
                 <div className="row" style={{ justifyContent: "space-between" }}>
@@ -566,10 +691,18 @@ export default function Studio() {
                 <p className="section-title" style={{ flex: 1 }}>VOA écrit les textes</p>
               </div>
               <label className="field">Sujet ou occasion<input type="text" value={sujet} onChange={(e) => setSujet(e.target.value)} placeholder="Ex. bon week-end et prudence en ligne" /></label>
+              {actus.length ? (
+                <label className="field">Ou partir d'une actu publiée
+                  <select value="" onChange={(e) => e.target.value && setSujet(e.target.value)}>
+                    <option value="">Choisir une actu…</option>
+                    {actus.map((t) => <option key={t} value={t}>{t.length > 80 ? `${t.slice(0, 79)}…` : t}</option>)}
+                  </select>
+                </label>
+              ) : null}
               <button type="button" className="btn primary" disabled={!!busy} onClick={rediger}>{busy === "rediger" ? "VOA écrit…" : "Réécrire tous les textes avec VOA"}</button>
             </section>
 
-            <section className="card" style={{ gap: 10 }}>
+            <section id="exporter" className="card" style={{ gap: 10, scrollMarginTop: 16 }}>
               <p className="section-title">Exporter et publier</p>
               <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
                 {btn(busy === "png" ? "…" : "PNG de la page", () => exporterPNG(false))}

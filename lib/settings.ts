@@ -8,7 +8,10 @@ export type Settings = {
   // null = déclencheurs par défaut (lib/config.ts) ; sinon la liste modifiée dans l'app
   triggers: Trigger[] | null;
   customSources: Source[];
+  // Garde-fous réglables depuis l'écran Déclencheurs (sinon valeurs par défaut de GUARDRAILS)
+  garde?: Garde;
 };
+export type Garde = { debut?: number; fin?: number; maxParJour?: number; ecart?: number; scoreMin?: number };
 
 export const DEFAULT_SETTINGS: Settings = {
   autopilot: false,
@@ -26,5 +29,6 @@ export function mergeSettings(base: Partial<Settings>, patch: Partial<Settings> 
     sourcesEnabled: { ...DEFAULT_SETTINGS.sourcesEnabled, ...(base.sourcesEnabled ?? {}), ...(patch.sourcesEnabled ?? {}) },
     triggers: patch.triggers !== undefined ? patch.triggers : base.triggers ?? null,
     customSources: patch.customSources !== undefined ? patch.customSources : base.customSources ?? [],
+    garde: { ...(base.garde ?? {}), ...(patch.garde ?? {}) },
   };
 }

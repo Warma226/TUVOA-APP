@@ -80,7 +80,7 @@ function AtelierRubrique({ rub }: { rub: RubriqueId }) {
   const [custom, setCustom] = useState("");
 
   // Champs
-  const [idea, setIdea] = useState("");
+  const [idea, setIdea] = useState(() => q.get("idee") ?? "");
   const [photo, setPhoto] = useState("");
   const [citTexte, setCitTexte] = useState("");
   const [auteur, setAuteur] = useState("");
