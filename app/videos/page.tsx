@@ -259,6 +259,8 @@ type CropTargetCtor = { fromElement(el: Element): Promise<unknown> };
 
 function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId: string; extrait: Extrait; credit: string; titre: string; fermer: () => void }) {
   const [titre, setTitre] = useState(titre0);
+  const [mise, setMise] = useState<"plein" | "centre">("plein");
+  const [cadre, setCadre] = useState(50); // position horizontale du recadrage plein écran (0 = gauche, 100 = droite)
   const ecranOk = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices && "getDisplayMedia" in navigator.mediaDevices);
   const [mode, setMode] = useState<"youtube" | "fichier">(ecranOk ? "youtube" : "fichier");
   const [fichier, setFichier] = useState<string | null>(null);
@@ -300,6 +302,7 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
     const dessiner = (src: Source | null, t: number) => {
       if (!ctx) return;
       ctx.fillStyle = "#061A44"; ctx.fillRect(0, 0, W, H);
+      if (mise === "plein") return pleinEcran(ctx, src, t);
       let y0 = 560, dh = 608;
       if (src && src.sw > 0 && src.sh > 0) {
         const { img, sx, sy, sw, sh } = src;
@@ -329,6 +332,60 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
       ctx.fillStyle = "#C9D6F2"; ctx.font = "600 30px Inter, sans-serif"; ctx.fillText(credit, W / 2, H - 120);
       ctx.fillStyle = "rgba(255,255,255,0.18)"; ctx.fillRect(0, H - 14, W, 14);
       ctx.fillStyle = "#E94A06"; ctx.fillRect(0, H - 14, W * p, 14);
+    };
+    // Style « Short d'interview » : image plein écran recadrée sur la personne, accroche en haut,
+    // gros sous-titres mot par mot (3 à 4 mots à la fois, mot prononcé surligné), logo et crédit discrets.
+    const groupes: string[][] = []; for (let i = 0; i < mots.length; i += 4) groupes.push(mots.slice(i, i + 4));
+    const pleinEcran = (ctx: CanvasRenderingContext2D, src: Source | null, t: number) => {
+      const p = Math.min(1, Math.max(0, (t - debut) / duree));
+      if (src && src.sw > 0 && src.sh > 0) {
+        const { img, sx, sy, sw, sh } = src;
+        // zoom lent (effet « Ken Burns ») pour garder l'image vivante
+        const k = Math.max(W / sw, H / sh) * (1 + 0.06 * p), dw = sw * k, dh = sh * k;
+        const x = (W - dw) * (cadre / 100), y = (H - dh) / 2;
+        ctx.drawImage(img, sx, sy, sw, sh, x, y, dw, dh);
+      }
+      // dégradés haut et bas pour la lisibilité
+      let g = ctx.createLinearGradient(0, 0, 0, 520); g.addColorStop(0, "rgba(0,0,0,0.75)"); g.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 520);
+      g = ctx.createLinearGradient(0, H - 760, 0, H); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,0.8)"); ctx.fillStyle = g; ctx.fillRect(0, H - 760, W, 760);
+      ctx.textAlign = "center";
+      // accroche
+      ctx.font = "900 58px Montserrat, sans-serif";
+      lignes(ctx, titre, W - 180, 3).forEach((l, i) => {
+        const w = ctx.measureText(l).width + 40, y = 250 + i * 76;
+        ctx.fillStyle = "#E94A06"; ctx.beginPath(); ctx.roundRect((W - w) / 2, y - 56, w, 72, 12); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.fillText(l, W / 2, y);
+      });
+      // sous-titres mot par mot
+      if (groupes.length) {
+        const iMot = Math.min(mots.length - 1, Math.floor(p * mots.length));
+        const gi = Math.floor(iMot / 4), grp = groupes[gi] ?? [];
+        ctx.font = "900 92px Montserrat, sans-serif";
+        ctx.lineJoin = "round"; ctx.lineWidth = 16; ctx.strokeStyle = "#000";
+        const espaces = ctx.measureText(" ").width;
+        // retour à la ligne si le groupe est trop large
+        const lignesMots: string[][] = [[]]; let larg = 0;
+        for (const m of grp) { const lm = ctx.measureText(m.toUpperCase()).width; if (larg + lm > W - 140 && lignesMots[lignesMots.length - 1].length) { lignesMots.push([]); larg = 0; } lignesMots[lignesMots.length - 1].push(m); larg += lm + espaces; }
+        let n = gi * 4;
+        lignesMots.forEach((lm, li) => {
+          const textes = lm.map((m) => m.toUpperCase()), total = textes.reduce((a, m) => a + ctx.measureText(m).width, 0) + espaces * (textes.length - 1);
+          let x = (W - total) / 2; const y = H - 470 + li * 108;
+          ctx.textAlign = "left";
+          textes.forEach((m) => {
+            const actif = n === iMot;
+            ctx.strokeText(m, x, y);
+            ctx.fillStyle = actif ? "#FFD60A" : "#fff"; ctx.fillText(m, x, y);
+            x += ctx.measureText(m).width + espaces; n++;
+          });
+          ctx.textAlign = "center";
+        });
+      }
+      // logo et crédit discrets
+      ctx.fillStyle = "#2563EB"; ctx.beginPath(); ctx.roundRect(W - 190, 60, 130, 52, 14); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.font = "800 28px Montserrat, sans-serif"; ctx.textAlign = "center"; ctx.fillText("TUVOA", W - 125, 96);
+      ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.font = "600 28px Inter, sans-serif"; ctx.fillText(credit, W / 2, H - 70);
+      ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.fillRect(0, H - 12, W, 12);
+      ctx.fillStyle = "#E94A06"; ctx.fillRect(0, H - 12, W * p, 12);
     };
     return { c, ctx, mime, duree, dessiner };
   }
@@ -443,6 +500,16 @@ function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId:
         ) : (
           <video ref={vid} src={fichier} controls playsInline style={{ width: "100%", maxHeight: 260, borderRadius: 14, background: "#000" }} onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = debut; }} />
         )}
+        <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span className="tv-gris" style={{ fontSize: 13, fontWeight: 700 }}>Mise en page</span>
+          <button type="button" className="tv-chip" aria-selected={mise === "plein"} onClick={() => setMise("plein")}>Plein écran · sous-titres mot par mot</button>
+          <button type="button" className="tv-chip" aria-selected={mise === "centre"} onClick={() => setMise("centre")}>Vidéo centrée</button>
+        </div>
+        {mise === "plein" ? (
+          <label className="field">Cadrage : placez la personne au centre ({cadre < 40 ? "gauche" : cadre > 60 ? "droite" : "centre"})
+            <input type="range" min={0} max={100} value={cadre} onChange={(e) => setCadre(Number(e.target.value))} />
+          </label>
+        ) : null}
         <div className="row" style={{ gap: 10 }}>
           <label className="field" style={{ flex: 1 }}>Début (s)<input type="number" min={0} value={debut} onChange={(e) => { const d = Math.max(0, Number(e.target.value)); setDebut(d); if (fin > d + 60) setFin(d + 60); }} /></label>
           <label className="field" style={{ flex: 1 }}>Fin (s)<input type="number" min={debut + 1} max={debut + 60} value={fin} onChange={(e) => setFin(Math.min(debut + 60, Number(e.target.value)))} /></label>
