@@ -399,6 +399,7 @@ export default function Studio() {
   const ouvrir = (m: Maquette) => { setPasse([]); setFutur([]); setDoc(m.doc()); setPageIdx(0); setSel(null); setEnvoye(null); setEnVideo(m.doc().genre === "video"); setLecture(m.doc().genre === "video"); setEtape("editeur"); };
   const reprendre = () => { if (!brouillon) return; setDoc(brouillon); setPageIdx(0); setSel(null); setEnVideo(brouillon.genre === "video"); setEtape("editeur"); };
   const minis = useMemo(() => doc.pages.map((p) => p.id), [doc.pages]);
+  const directions = useMemo(() => GALERIE[doc.genre ?? "visuel"].slice(0, 3).map((m) => ({ m, d: m.doc() })), [doc.genre]);
 
   // ─── Rendu de l'interface ──────────────────────────────────────
   const btn = (label: string, f: () => void, opts: { actif?: boolean; titre?: string; off?: boolean } = {}) => (
@@ -419,7 +420,7 @@ export default function Studio() {
 
   return (
     <div className={montserrat.className} style={{ display: "contents" }}>
-      <header className="tv-studio-haut">
+      {etape !== "editeur" ? <header className="tv-studio-haut">
         <div style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
           <Link href="/creer" className="tv-gris" style={{ textDecoration: "none", fontWeight: 600 }}>← Créer</Link>
           <h1 className="tv-titre" style={{ fontFamily: "var(--font-mont), sans-serif" }}>Studio</h1>
@@ -437,7 +438,7 @@ export default function Studio() {
             <a href="#exporter" className="tv-btn-nuit"><Trait d="M3 5h18v16H3zM16 3v4M8 3v4M3 10h18" size={16} stroke={2} />EXPORTER ET PLANIFIER</a>
           </>
         ) : null}
-      </header>
+      </header> : null}
       {etape === "accueil" ? (
         <main className="page sub wide" style={{ paddingTop: 8, maxWidth: 1100 }}>
           <div className="row" style={{ gap: 18, alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
@@ -505,47 +506,63 @@ export default function Studio() {
           </div>
         </main>
       ) : (
-      <main className="page sub wide" style={{ paddingTop: 4, maxWidth: 1400 }}>
+      <main className="tv-studio-scene">
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
         {msg ? <p className="notice" role="status">{msg}</p> : null}
 
-        {/* Barre d'outils */}
-        <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-          {btn("← Nouveau", () => setEtape("accueil"))}
-          {btn("Changer de maquette", () => { setGenre(doc.genre ?? "visuel"); setEtape("galerie"); }, { actif: true })}
-          {btn("+ Texte", () => ajouter(nouveau.texte()))}
-          {btn("+ Pastille", () => ajouter(nouveau.pastille()))}
-          {btn("+ Photo", () => ajouter(nouveau.image({ w: 600, h: 750, rayon: 24 })))}
-          {btn("+ Forme", () => ajouter(nouveau.forme()))}
-          {btn("+ Carte", () => ajouter(nouveau.carte()))}
-          {btn("+ Icône", () => ajouter(nouveau.icone()))}
-          {btn("+ Rayons", () => { const r = nouveau.rayons(); changer((d) => { d.pages[pageIdx].elements.unshift(r); return d; }); })}
-          <span style={{ flex: 1 }} />
-          {btn("Annuler", annuler, { off: !passe.length, titre: "Ctrl+Z" })}
-          {btn("Rétablir", retablir, { off: !futur.length, titre: "Ctrl+Maj+Z" })}
-          {btn(lecture ? "■ Arrêter" : "▶ Lecture", () => setLecture(!lecture), { actif: lecture })}
+        {/* Barre du haut */}
+        <div className="tv-studio-barre">
+          <button type="button" className="tv-verre-btn" aria-label="Revenir à l'accueil du Studio" onClick={() => setEtape("accueil")}><Trait d="M15 18l-6-6 6-6" size={20} stroke={2.2} /></button>
+          <div style={{ flex: "1 1 260px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+            <span className="tv-kicker" style={{ color: "#FFB48A", letterSpacing: 2 }}>STUDIO · {(GENRES.find((g) => g.id === (doc.genre ?? "visuel"))?.nom ?? "Création").toUpperCase()}</span>
+            <label><span className="sr-only">Nom de la création</span><input className="tv-studio-titre" value={doc.titre ?? ""} placeholder="Sans titre" onChange={(e) => changer((d) => ({ ...d, titre: e.target.value }), false)} /></label>
+          </div>
+          <div role="radiogroup" aria-label="Format" className="tv-studio-formats">
+            {(Object.keys(FORMATS) as Format[]).map((f) => (
+              <button key={f} type="button" role="radio" aria-checked={doc.format === f} onClick={() => { changer((d) => decliner(d, f)); setSel(null); }}>{f === "portrait" ? "4:5" : f === "carre" ? "1:1" : "9:16"}</button>
+            ))}
+          </div>
+          <button type="button" className="tv-verre-btn" aria-label="Annuler" title="Ctrl+Z" disabled={!passe.length} onClick={annuler}><Trait d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" size={18} stroke={2} /></button>
+          <button type="button" className="tv-verre-btn" aria-label="Rétablir" title="Ctrl+Maj+Z" disabled={!futur.length} onClick={retablir}><Trait d="M15 14l5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" size={18} stroke={2} /></button>
+          <button type="button" className="tv-verre-btn" aria-label={lecture ? "Arrêter la lecture" : "Lire l'animation"} aria-pressed={lecture} onClick={() => setLecture(!lecture)}><Trait d={lecture ? "M6 4h4v16H6zM14 4h4v16h-4z" : "M7 4l13 8-13 8z"} size={18} stroke={2} /></button>
+          <a href="#exporter" className="tv-studio-publier"><Trait d="M3 5h18v16H3zM16 3v4M8 3v4M3 10h18" size={16} stroke={2} />PUBLIER</a>
         </div>
 
-        <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-start", gap: 20 }}>
-          {/* Pages */}
-          <aside className="stack" style={{ flex: "0 0 120px", gap: 8 }}>
-            <p className="label">Pages</p>
-            {minis.map((id, i) => <Miniature key={id} page={doc.pages[i]} format={doc.format} images={images.current} version={version} actif={i === pageIdx} onClick={() => { setPageIdx(i); setSel(null); }} numero={i + 1} />)}
-            {btn("+ Page", ajouterPage, { titre: "Duplique la page en cours" })}
-            <div className="row" style={{ gap: 4 }}>{btn("↑", () => deplacerPage(-1))}{btn("↓", () => deplacerPage(1))}{btn("✕", supprimerPage, { off: doc.pages.length < 2 })}</div>
+        <div className="tv-studio-grille">
+          {/* Gauche : directions et briques */}
+          <aside className="tv-studio-gauche">
+            <section className="tv-studio-panneau" aria-labelledby="t-directions">
+              <div className="row" style={{ gap: 10 }}><Voa humeur={busy === "rediger" ? "parle" : "veille"} taille={40} /><span style={{ display: "flex", flexDirection: "column" }}><h2 id="t-directions" className="tv-studio-h2">Trois directions</h2><span className="tv-studio-gris">d&apos;autres styles pour ce format</span></span></div>
+              {directions.map(({ m, d }) => (
+                <button key={m.id} type="button" className="tv-direction" onClick={() => { if (window.confirm(`Passer au style « ${m.nom} » ? Vos modifications actuelles seront remplacées (« Annuler » reste possible).`)) { changer(() => m.doc()); setPageIdx(0); setSel(null); } }}>
+                  <Miniature page={d.pages[0]} format={d.format} images={images.current} version={version} actif={false} onClick={() => undefined} numero={1} largeur={58} charger={chargerImage} />
+                  <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0, textAlign: "left" }}><strong style={{ fontSize: 13 }}>{m.nom}</strong><span className="tv-studio-gris" style={{ fontSize: 11 }}>{m.idee}</span></span>
+                </button>
+              ))}
+              <button type="button" className="tv-studio-pointille" onClick={() => { setGenre(doc.genre ?? "visuel"); setEtape("galerie"); }}>Voir les 10 styles</button>
+            </section>
+            <section className="tv-studio-panneau" aria-labelledby="t-briques">
+              <h2 id="t-briques" className="tv-studio-h2">Briques</h2>
+              <span className="tv-studio-gris">Ajoutées sur la page en cours, aux couleurs de la charte.</span>
+              <div className="tv-briques">
+                {([["Texte", "M4 7V4h16v3M9 20h6M12 4v16", () => ajouter(nouveau.texte())], ["Pastille", "M4 8h16v8H4z", () => ajouter(nouveau.pastille())], ["Photo", "M3 5h18v14H3zM8 11a2 2 0 1 0 0-.01M21 15l-5-5L5 19", () => ajouter(nouveau.image({ w: 600, h: 750, rayon: 24 }))], ["Forme", "M12 3l9 16H3z", () => ajouter(nouveau.forme())], ["Carte", "M3 6h18v12H3zM7 10h6M7 14h10", () => ajouter(nouveau.carte())], ["Icône", "M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z", () => ajouter(nouveau.icone())], ["Rayons", "M12 2v20M2 12h20M5 5l14 14M19 5L5 19", () => { const r = nouveau.rayons(); changer((d) => { d.pages[pageIdx].elements.unshift(r); return d; }); }], ["Logo", "M12 3l8 4.5v9L12 21l-8-4.5v-9z", () => { const els = elementsLogo(Math.round(FORMATS[doc.format].w * ZONE[doc.format].g) + 8, Math.round(FORMATS[doc.format].h * ZONE[doc.format].h) + 8, true); changer((d) => { d.pages[pageIdx].elements.push(...els); return d; }); }]] as const).map(([l, d, f]) => (
+                  <button key={l} type="button" onClick={f}><Trait d={d} size={20} />{l}</button>
+                ))}
+              </div>
+            </section>
           </aside>
 
-          {/* Canvas */}
-          <div ref={boiteRef} style={{ flex: "1 1 420px", minWidth: 280, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-            <div style={{ position: "relative", width: largeurVue, height: H * echelle, boxShadow: "0 10px 40px rgba(0,0,0,.25)", touchAction: "none", userSelect: "none" }}
+          {/* Centre : la scène */}
+          <div ref={boiteRef} className="tv-studio-centre">
+            <div style={{ position: "relative", width: largeurVue, height: H * echelle, boxShadow: "0 30px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.08)", touchAction: "none", userSelect: "none" }}
               onPointerDown={toucher} onPointerMove={bouger} onPointerUp={lacher} onPointerCancel={lacher}
               onDoubleClick={() => { if (elSel && elSel.type === "texte") setEdition(elSel.id); }}>
               <canvas ref={canvasRef} width={W} height={H} style={{ width: "100%", height: "100%", display: "block" }} aria-label="Création en cours" />
               {guide.v ? <div style={{ position: "absolute", left: largeurVue / 2, top: 0, bottom: 0, width: 1, background: "#E94A06" }} /> : null}
               {guide.h ? <div style={{ position: "absolute", top: (H * echelle) / 2, left: 0, right: 0, height: 1, background: "#E94A06" }} /> : null}
-              {zone && !lecture ? <div aria-hidden="true" style={{ position: "absolute", left: `${ZONE[doc.format].g * 100}%`, right: `${ZONE[doc.format].d * 100}%`, top: `${ZONE[doc.format].h * 100}%`, bottom: `${ZONE[doc.format].b * 100}%`, border: "1.5px dashed rgba(233,74,6,0.75)", borderRadius: 4, pointerEvents: "none" }} /> : null}
+              {zone && !lecture ? <div aria-hidden="true" style={{ position: "absolute", left: `${ZONE[doc.format].g * 100}%`, right: `${ZONE[doc.format].d * 100}%`, top: `${ZONE[doc.format].h * 100}%`, bottom: `${ZONE[doc.format].b * 100}%`, border: "1.5px dashed rgba(255,180,138,0.75)", borderRadius: 4, pointerEvents: "none" }} /> : null}
               {elSel && !lecture ? (
-                <div style={{ position: "absolute", left: elSel.x * echelle, top: elSel.y * echelle, width: elSel.w * echelle, height: elSel.h * echelle, border: "2px solid #2563EB", pointerEvents: "none" }}>
+                <div style={{ position: "absolute", left: elSel.x * echelle, top: elSel.y * echelle, width: elSel.w * echelle, height: elSel.h * echelle, border: "2px solid #60A5FA", pointerEvents: "none" }}>
                   <div style={{ position: "absolute", right: -9, bottom: -9, width: 18, height: 18, background: "#FFFFFF", border: "2px solid #2563EB", borderRadius: 4 }} />
                 </div>
               ) : null}
@@ -554,21 +571,52 @@ export default function Studio() {
                   style={{ position: "absolute", left: elSel.x * echelle, top: elSel.y * echelle, width: Math.max(120, elSel.w * echelle), minHeight: Math.max(40, elSel.h * echelle), fontSize: Math.max(12, (elSel.police ?? 40) * echelle), fontWeight: elSel.graisse ?? 800, fontFamily: POLICE.famille, lineHeight: elSel.interligne ?? 1.1, textAlign: elSel.align ?? "left", background: "rgba(255,255,255,.92)", color: "#0A0A0A", border: "2px solid #2563EB", padding: 4, resize: "both" }} />
               ) : null}
             </div>
-            <label className="row" style={{ gap: 8, fontSize: 13, fontWeight: 600, color: "#33425C", cursor: "pointer" }}>
-              <input type="checkbox" checked={zone} onChange={(e) => setZone(e.target.checked)} style={{ width: 18, height: 18, accentColor: "#E94A06" }} />
-              Afficher la zone sûre (pointillés orange)
-            </label>
-            <p className="muted" style={{ fontSize: 12, textAlign: "center" }}>Glisse pour déplacer · poignée en bas à droite pour redimensionner (Maj : garder les proportions, Alt : agrandir le texte) · double-clic pour écrire · flèches pour ajuster</p>
+            <div className="row" style={{ gap: 14, flexWrap: "wrap", justifyContent: "center" }}>
+              <label className="row tv-studio-gris" style={{ gap: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                <input type="checkbox" checked={zone} onChange={(e) => setZone(e.target.checked)} style={{ width: 16, height: 16, accentColor: "#E94A06" }} />
+                Zone sûre
+              </label>
+              <span className="tv-studio-gris" style={{ fontSize: 12 }}>Glisser pour déplacer · poignée pour redimensionner · double-clic pour écrire</span>
+            </div>
+            <div className="tv-pellicule" aria-label="Pages">
+              {minis.map((id, i) => <Miniature key={id} page={doc.pages[i]} format={doc.format} images={images.current} version={version} actif={i === pageIdx} onClick={() => { setPageIdx(i); setSel(null); }} numero={i + 1} largeur={64} />)}
+              <button type="button" className="tv-pellicule-plus" aria-label="Ajouter une page (copie de la page en cours)" onClick={ajouterPage}>+</button>
+            </div>
+            <div className="row" style={{ gap: 6 }}>
+              <button type="button" className="tv-verre-btn petit" aria-label="Déplacer la page vers la gauche" onClick={() => deplacerPage(-1)}><Trait d="M15 18l-6-6 6-6" size={14} stroke={2.2} /></button>
+              <span className="tv-studio-gris" style={{ fontSize: 12 }}>Page {pageIdx + 1} / {doc.pages.length}</span>
+              <button type="button" className="tv-verre-btn petit" aria-label="Déplacer la page vers la droite" onClick={() => deplacerPage(1)}><Trait d="M9 18l6-6-6-6" size={14} stroke={2.2} /></button>
+              <button type="button" className="tv-verre-btn petit" aria-label="Supprimer la page" disabled={doc.pages.length < 2} onClick={supprimerPage}><Trait d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" size={14} stroke={2} /></button>
+            </div>
           </div>
 
-          {/* Propriétés */}
-          <aside className="stack" style={{ flex: "1 1 320px", minWidth: 0, gap: 12 }}>
+          {/* Droite : rendu dans le fil, lisibilité, propriétés, export */}
+          <aside className="tv-studio-droite">
+            <section className="tv-carte-side" aria-labelledby="t-fil">
+              <div className="row" style={{ alignItems: "baseline" }}><h2 id="t-fil" className="tv-h2" style={{ fontSize: 16, flex: 1 }}>Dans le fil Facebook</h2><span className="tv-gris" style={{ fontSize: 11 }}>téléphone</span></div>
+              <div className="tv-telephone">
+                <div className="ecran">
+                  <span className="barre" />
+                  <span className="post-fantome" />
+                  <div className="post">
+                    <span className="row" style={{ gap: 6, padding: 6 }}><span style={{ width: 16, height: 16, borderRadius: 8, background: "#0A2A66" }} /><span style={{ fontSize: 9, fontWeight: 700 }}>TUVOA Tech Media</span></span>
+                    <span style={{ display: "block", padding: "0 6px 6px", fontSize: 8, lineHeight: 1.35, color: "#050505" }}>{(legende || "Le texte du post apparaît ici.").slice(0, 70)}{legende.length > 70 ? "… " : " "}<span style={{ color: "#65676B" }}>Voir plus</span></span>
+                    <Miniature page={page} format={doc.format} images={images.current} version={version} actif={false} onClick={() => undefined} numero={pageIdx + 1} largeur={168} />
+                  </div>
+                  <span className="post-fantome" />
+                </div>
+              </div>
+            </section>
             {(() => {
               const pts = controler(doc);
               const bons = pts.filter((x) => x.ok).length;
+              const note = Math.round((bons / Math.max(1, pts.length)) * 100);
               return (
                 <section className="tv-carte-side" aria-labelledby="t-qualite">
-                  <div className="row" style={{ alignItems: "baseline" }}><h2 id="t-qualite" className="tv-h2" style={{ fontSize: 16, flex: 1 }}>Contrôle qualité</h2><span style={{ fontSize: 12, fontWeight: 800, color: bons === pts.length ? "#05603A" : "#E94A06" }}>{bons} / {pts.length}</span></div>
+                  <div className="row" style={{ gap: 12 }}>
+                    <span role="img" aria-label={`Note de lisibilité ${note} sur 100`} className="tv-note" style={{ background: `conic-gradient(${note >= 80 ? "#22C55E" : "#E94A06"} 0 ${note}%, #EDF1F7 ${note}% 100%)` }}><span>{note}</span></span>
+                    <span style={{ display: "flex", flexDirection: "column" }}><h2 id="t-qualite" className="tv-h2" style={{ fontSize: 16 }}>Note de lisibilité</h2><span className="tv-gris" style={{ fontSize: 12 }}>sur téléphone, dans le fil</span></span>
+                  </div>
                   <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
                     {pts.map((x) => (
                       <li key={x.texte} className="row" style={{ gap: 10, alignItems: "flex-start", fontSize: 13, lineHeight: 1.4 }}>
@@ -719,6 +767,31 @@ export default function Studio() {
             </section>
           </aside>
         </div>
+        {doc.genre === "video" || doc.sequence ? (
+          <section className="tv-studio-panneau" aria-labelledby="t-video" style={{ marginTop: 16 }}>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+              <button type="button" className="tv-studio-lire" aria-label={lecture ? "Arrêter" : "Lire"} onClick={() => setLecture(!lecture)}><Trait d={lecture ? "M6 4h4v16H6zM14 4h4v16h-4z" : "M7 4l13 8-13 8z"} size={16} stroke={2} /></button>
+              <h2 id="t-video" className="tv-studio-h2" style={{ flex: 1 }}>En vidéo · {Math.round(dureeTotale(doc) * 10) / 10} s{doc.audio ? " · avec voix off" : ""}</h2>
+            </div>
+            <div className="row" style={{ gap: 10 }}>
+              <span className="tv-studio-gris" style={{ width: 64, fontSize: 11, fontWeight: 700 }}>{doc.sequence ? "Scènes" : "Page"}</span>
+              <div className="tv-piste">
+                {(doc.sequence ? doc.pages : [page]).map((p, i) => (
+                  <button key={p.id} type="button" aria-pressed={doc.sequence ? i === pageIdx : true} onClick={() => { if (doc.sequence) { setPageIdx(i); setSel(null); } }} style={{ flex: `${doc.sequence ? p.duree ?? doc.duree : doc.duree} 1 0` }}>
+                    {doc.sequence ? `${i + 1}` : "Animation"}<span>{Math.round((doc.sequence ? p.duree ?? doc.duree : doc.duree) * 10) / 10} s</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {doc.audio ? (
+              <div className="row" style={{ gap: 10 }}>
+                <span className="tv-studio-gris" style={{ width: 64, fontSize: 11, fontWeight: 700 }}>Voix off</span>
+                <audio src={doc.audio} controls style={{ flex: 1, height: 34 }} />
+              </div>
+            ) : null}
+            <span className="tv-studio-gris" style={{ fontSize: 12 }}>Chaque page est une scène ; réglez la durée de la scène choisie dans le panneau de droite.</span>
+          </section>
+        ) : null}
       </main>
       )}
     </div>
