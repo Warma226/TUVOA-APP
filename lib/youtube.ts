@@ -164,18 +164,20 @@ ${choc
   : `Choisis 3 ou 4 extraits de 20 à 45 secondes qui tiennent seuls : l'info principale, une explication claire, un chiffre fort ou une phrase choc.`}
 Évite les génériques, les sponsors et les appels à s'abonner. Les minutages doivent être exacts.
 Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "titre accrocheur en français, 70 caractères max", "pourquoi": "pourquoi ce moment marque, une phrase en français", "citation": "la phrase la plus forte, mot pour mot, traduite en français si besoin, 160 caractères max", "soustitres": "ce qui est dit dans l'extrait, en français, 400 caractères max", "format": "reel" ou "carrousel"}]`;
-  const modeles = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  // Alias « latest » : suit le modèle Flash courant de Google, sans changer le code à chaque nouvelle version.
+  const modeles = ["gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash"];
+  const erreurs: string[] = [];
   let derniere = "";
   for (const m of modeles) {
     const generationConfig: Record<string, unknown> = { responseMimeType: "application/json", temperature: 0.4 };
-    if (info.duree > 1500 && m.startsWith("gemini-2.5")) generationConfig.mediaResolution = "MEDIA_RESOLUTION_LOW"; // longs documentaires
+    if (info.duree > 1500) generationConfig.mediaResolution = "MEDIA_RESOLUTION_LOW"; // longs documentaires
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
       method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": cle },
       body: JSON.stringify({ contents: [{ role: "user", parts: [{ fileData: { fileUri: `https://www.youtube.com/watch?v=${id}` } }, { text: consigne }] }], generationConfig }),
       signal: AbortSignal.timeout(280000),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) { derniere = (d as { error?: { message?: string } }).error?.message ?? `Erreur ${r.status}`; continue; }
+    if (!r.ok) { derniere = (d as { error?: { message?: string } }).error?.message ?? `Erreur ${r.status}`; erreurs.push(`${m} : ${derniere}`); continue; }
     const txt = ((d as { candidates?: { content?: { parts?: { text?: string }[] } }[] }).candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? "").join("");
     let liste: Extrait[] = [];
     try { liste = JSON.parse(txt.replace(/^```json\s*|```$/g, "")); } catch { derniere = "Réponse illisible."; continue; }
@@ -187,7 +189,8 @@ Réponds uniquement en JSON : [{"debut": secondes, "fin": secondes, "titre": "ti
     await db().from("videos_yt").update({ extraits: liste, statut: "analyse" }).eq("id", id);
     return liste;
   }
-  throw new Error(`Repérage impossible : ${derniere}`);
+  console.error("[videos] repérage", erreurs.join(" | "));
+  throw new Error(`Repérage impossible : ${erreurs.length > 1 ? erreurs[0].replace(/^[^:]+ : /, "") : derniere}`);
 }
 
 export async function ecarter(id: string) { await db().from("videos_yt").update({ statut: "ecarte" }).eq("id", id); }
