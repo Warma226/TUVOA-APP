@@ -232,7 +232,7 @@ export default function VideosPage() {
               <h2 className="tv-h2" style={{ fontSize: 17 }}>Ce que vous pouvez en faire</h2>
               <ol className="tv-vid-etapes">
                 <li><b>1</b><span><strong>Toutes les vidéos</strong> : écrire un post qui raconte et commente le moment, citer une phrase courte avec la source, partager le lien horodaté.</span></li>
-                <li><b>2</b><span><strong>Reel choc (1 min max)</strong> : importez le fichier de la vidéo ; VOA coupe au bon minutage, recadre en vertical, met l&apos;accroche en bandeau orange, incruste les sous-titres, le logo TUVOA et le crédit de la chaîne.</span></li>
+                <li><b>2</b><span><strong>Reel choc (1 min max)</strong> : directement depuis YouTube (Chrome sur ordinateur) ou depuis un fichier ; VOA coupe au bon minutage, recadre en vertical, met l&apos;accroche en bandeau orange, incruste les sous-titres, le logo TUVOA et le crédit de la chaîne.</span></li>
                 <li><b>3</b><span>Gardez des extraits courts et ajoutez votre commentaire dans le post : c&apos;est ce qui protège le mieux en cas de réclamation.</span></li>
               </ol>
             </section>
@@ -245,15 +245,22 @@ export default function VideosPage() {
           </aside>
         </div>
       </div>
-      {decoupe && v ? <Decoupe extrait={decoupe} credit={`Source : ${v.info.chaine}${v.licence === "cc" ? " (CC BY)" : ""}`} titre={decoupe.citation ? `« ${decoupe.citation} »` : decoupe.titre} fermer={() => setDecoupe(null)} /> : null}
+      {decoupe && v ? <Decoupe videoId={v.id} extrait={decoupe} credit={`Source : ${v.info.chaine}${v.licence === "cc" ? " (CC BY)" : ""}`} titre={decoupe.citation ? `« ${decoupe.citation} »` : decoupe.titre} fermer={() => setDecoupe(null)} /> : null}
     </div>
   );
 }
 
-// Découpe 9:16 dans le navigateur : la vidéo importée est lue de « debut » à « fin » et enregistrée sur un canvas
-// 1080 × 1920 avec sous-titres, logo TUVOA et crédit.
-function Decoupe({ extrait, credit, titre: titre0, fermer }: { extrait: Extrait; credit: string; titre: string; fermer: () => void }) {
+// Reel 9:16 fabriqué dans le navigateur, à partir de deux sources possibles :
+// - « YouTube » : la vidéo est lue dans un lecteur YouTube intégré et capturée à l'écran (Chrome sur ordinateur) ;
+// - « Fichier » : un fichier vidéo importé.
+// L'image est recadrée sur un canvas 1080 × 1920 avec accroche, sous-titres, logo TUVOA, crédit et barre de progression.
+type Source = { img: CanvasImageSource; sx: number; sy: number; sw: number; sh: number };
+type CropTargetCtor = { fromElement(el: Element): Promise<unknown> };
+
+function Decoupe({ videoId, extrait, credit, titre: titre0, fermer }: { videoId: string; extrait: Extrait; credit: string; titre: string; fermer: () => void }) {
   const [titre, setTitre] = useState(titre0);
+  const ecranOk = typeof navigator !== "undefined" && Boolean(navigator.mediaDevices && "getDisplayMedia" in navigator.mediaDevices);
+  const [mode, setMode] = useState<"youtube" | "fichier">(ecranOk ? "youtube" : "fichier");
   const [fichier, setFichier] = useState<string | null>(null);
   const [debut, setDebut] = useState(extrait.debut);
   const [fin, setFin] = useState(Math.min(extrait.fin, extrait.debut + 60));
@@ -262,91 +269,175 @@ function Decoupe({ extrait, credit, titre: titre0, fermer }: { extrait: Extrait;
   const [err, setErr] = useState("");
   const [sortie, setSortie] = useState<{ url: string; ext: string } | null>(null);
   const vid = useRef<HTMLVideoElement>(null);
+  const ifr = useRef<HTMLIFrameElement>(null);
+  const tYT = useRef(0);
   useEffect(() => () => { if (fichier) URL.revokeObjectURL(fichier); }, [fichier]);
 
-  async function couper() {
-    const v = vid.current; if (!v || !fichier) return;
-    setErr(""); setSortie(null);
+  // Lecteur YouTube : on suit sa position (messages « infoDelivery ») pour caler la découpe.
+  const [origine, setOrigine] = useState("");
+  useEffect(() => { setOrigine(window.location.origin); }, []);
+  useEffect(() => {
+    const ecoute = (e: MessageEvent) => {
+      try {
+        if (!/youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) return;
+        const d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; const t = d?.info?.currentTime; if (typeof t === "number") tYT.current = t; } catch { /* message étranger */ }
+    };
+    window.addEventListener("message", ecoute);
+    return () => window.removeEventListener("message", ecoute);
+  }, []);
+  const yt = (func: string, args: unknown[] = []) => ifr.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "*");
+  const ecouterYT = () => ifr.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: 1 }), "*");
+
+  function preparer() {
     const W = 1080, H = 1920;
     const c = document.createElement("canvas"); c.width = W; c.height = H;
-    const ctx = c.getContext("2d"); if (!ctx) return setErr("Canvas indisponible.");
+    const ctx = c.getContext("2d");
     const types = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm"];
     const mime = types.find((t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t));
-    if (!mime) return setErr("Ce navigateur ne sait pas enregistrer de vidéo. Essayez avec Chrome.");
-    // Sous-titres découpés en morceaux qui défilent sur la durée de l'extrait
     const mots = st.split(/\s+/).filter(Boolean), parBloc = 9;
     const blocs: string[] = []; for (let i = 0; i < mots.length; i += parBloc) blocs.push(mots.slice(i, i + parBloc).join(" "));
     const duree = Math.max(1, fin - debut);
-    const dessiner = () => {
+    const dessiner = (src: Source | null, t: number) => {
+      if (!ctx) return;
       ctx.fillStyle = "#061A44"; ctx.fillRect(0, 0, W, H);
-      const vw = v.videoWidth || 16, vh = v.videoHeight || 9;
-      // fond : la vidéo agrandie et assombrie ; devant : la vidéo entière, centrée
-      const sFond = Math.max(W / vw, H / vh);
-      ctx.globalAlpha = 0.35; ctx.drawImage(v, (W - vw * sFond) / 2, (H - vh * sFond) / 2, vw * sFond, vh * sFond); ctx.globalAlpha = 1;
-      ctx.fillStyle = "rgba(6,26,68,0.55)"; ctx.fillRect(0, 0, W, H);
-      const s = Math.min(W / vw, (H * 0.6) / vh), dw = vw * s, dh = vh * s, y0 = H * 0.32 - dh / 2 + 120;
-      ctx.drawImage(v, (W - dw) / 2, y0, dw, dh);
-      // accroche choc : bandeau orange, texte blanc
+      let y0 = 560, dh = 608;
+      if (src && src.sw > 0 && src.sh > 0) {
+        const { img, sx, sy, sw, sh } = src;
+        const sFond = Math.max(W / sw, H / sh);
+        ctx.globalAlpha = 0.35; ctx.drawImage(img, sx, sy, sw, sh, (W - sw * sFond) / 2, (H - sh * sFond) / 2, sw * sFond, sh * sFond); ctx.globalAlpha = 1;
+        ctx.fillStyle = "rgba(6,26,68,0.55)"; ctx.fillRect(0, 0, W, H);
+        const k = Math.min(W / sw, (H * 0.6) / sh), dw = sw * k; dh = sh * k; y0 = H * 0.32 - dh / 2 + 120;
+        ctx.drawImage(img, sx, sy, sw, sh, (W - dw) / 2, y0, dw, dh);
+      }
       ctx.font = "900 62px Montserrat, sans-serif"; ctx.textAlign = "center";
-      const la = lignes(ctx, titre, W - 200, 3);
-      la.forEach((l, i) => {
+      lignes(ctx, titre, W - 200, 3).forEach((l, i) => {
         const w = ctx.measureText(l).width + 44, y = 300 + i * 82;
         ctx.fillStyle = "#E94A06"; ctx.beginPath(); ctx.roundRect((W - w) / 2, y - 60, w, 76, 14); ctx.fill();
         ctx.fillStyle = "#fff"; ctx.fillText(l, W / 2, y);
       });
-      // sous-titre courant
-      const k = Math.min(blocs.length - 1, Math.floor(((v.currentTime - debut) / duree) * blocs.length));
-      const b = blocs[Math.max(0, k)];
+      const p = Math.min(1, Math.max(0, (t - debut) / duree));
+      const b = blocs[Math.min(blocs.length - 1, Math.floor(p * blocs.length))];
       if (b) {
         ctx.font = "700 54px Inter, sans-serif";
         const ls = lignes(ctx, b, W - 200, 3), hb = ls.length * 70 + 50, yb = y0 + dh + 90;
         ctx.fillStyle = "rgba(0,0,0,0.72)"; ctx.beginPath(); ctx.roundRect(80, yb, W - 160, hb, 28); ctx.fill();
         ctx.fillStyle = "#fff"; ls.forEach((l, i) => ctx.fillText(l, W / 2, yb + 70 + i * 70));
       }
-      // logo + crédit
       ctx.fillStyle = "#2563EB"; ctx.beginPath(); ctx.roundRect(70, 90, 150, 150, 38); ctx.fill();
       ctx.fillStyle = "#fff"; ctx.font = "800 38px Montserrat, sans-serif"; ctx.fillText("TUVOA", 145, 175);
       ctx.fillStyle = "#CFDCFF"; ctx.font = "700 15px Montserrat, sans-serif"; ctx.fillText("TECH MEDIA", 145, 205);
       ctx.fillStyle = "#C9D6F2"; ctx.font = "600 30px Inter, sans-serif"; ctx.fillText(credit, W / 2, H - 120);
-      // barre de progression (retient l'attention jusqu'au bout)
-      const p = Math.min(1, Math.max(0, (v.currentTime - debut) / duree));
       ctx.fillStyle = "rgba(255,255,255,0.18)"; ctx.fillRect(0, H - 14, W, 14);
       ctx.fillStyle = "#E94A06"; ctx.fillRect(0, H - 14, W * p, 14);
     };
-    try {
-      v.currentTime = debut; await new Promise((ok) => v.addEventListener("seeked", ok, { once: true }));
-      dessiner();
-      const flux = c.captureStream(30);
-      const son = (v as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.();
-      son?.getAudioTracks().forEach((t) => flux.addTrack(t));
-      const rec = new MediaRecorder(flux, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
-      const morceaux: Blob[] = [];
-      rec.ondataavailable = (e) => { if (e.data.size) morceaux.push(e.data); };
-      const fini = new Promise<void>((ok) => { rec.onstop = () => ok(); });
-      v.muted = false; rec.start(200); await v.play();
-      await new Promise<void>((ok) => {
-        const pas = () => {
-          dessiner();
-          setMsg(`Découpe en cours… ${Math.min(100, Math.round(((v.currentTime - debut) / duree) * 100))} %`);
-          if (v.currentTime >= fin || v.ended) ok(); else requestAnimationFrame(pas);
-        };
-        requestAnimationFrame(pas);
-      });
-      v.pause(); rec.stop(); await fini; setMsg("");
-      const type = mime.split(";")[0];
-      setSortie({ url: URL.createObjectURL(new Blob(morceaux, { type })), ext: type === "video/mp4" ? "mp4" : "webm" });
-    } catch (x) { setErr((x as Error).message); setMsg(""); }
+    return { c, ctx, mime, duree, dessiner };
   }
 
+  // Enregistre le canvas (+ le son fourni) pendant que « avancer » renvoie la position courante, jusqu'à « fin ».
+  async function enregistrer(c: HTMLCanvasElement, mime: string, son: MediaStreamTrack[], demarrer: () => Promise<void> | void, image: () => { src: Source | null; t: number; fini: boolean }, dessiner: (s: Source | null, t: number) => void, duree: number) {
+    const flux = c.captureStream(30);
+    son.forEach((t) => flux.addTrack(t));
+    const rec = new MediaRecorder(flux, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+    const morceaux: Blob[] = [];
+    rec.ondataavailable = (e) => { if (e.data.size) morceaux.push(e.data); };
+    const arret = new Promise<void>((ok) => { rec.onstop = () => ok(); });
+    rec.start(200);
+    await demarrer();
+    await new Promise<void>((ok) => {
+      const pas = () => {
+        const f = image();
+        dessiner(f.src, f.t);
+        setMsg(`Enregistrement… ${Math.min(100, Math.round(((f.t - debut) / duree) * 100))} %`);
+        if (f.fini) ok(); else requestAnimationFrame(pas);
+      };
+      requestAnimationFrame(pas);
+    });
+    rec.stop(); await arret;
+    const type = mime.split(";")[0];
+    setSortie({ url: URL.createObjectURL(new Blob(morceaux, { type })), ext: type === "video/mp4" ? "mp4" : "webm" });
+  }
+
+  async function depuisFichier() {
+    const v = vid.current; if (!v || !fichier) return;
+    const { c, ctx, mime, duree, dessiner } = preparer();
+    if (!ctx) return setErr("Canvas indisponible.");
+    if (!mime) return setErr("Ce navigateur ne sait pas enregistrer de vidéo. Essayez avec Chrome.");
+    v.currentTime = debut; await new Promise((ok) => v.addEventListener("seeked", ok, { once: true }));
+    const son = (v as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.().getAudioTracks() ?? [];
+    v.muted = false;
+    await enregistrer(c, mime, son, () => v.play(), () => ({ src: { img: v, sx: 0, sy: 0, sw: v.videoWidth, sh: v.videoHeight }, t: v.currentTime, fini: v.currentTime >= fin || v.ended }), dessiner, duree);
+    v.pause();
+  }
+
+  async function depuisYouTube() {
+    const el = ifr.current; if (!el) return;
+    const { c, ctx, mime, duree, dessiner } = preparer();
+    if (!ctx) return setErr("Canvas indisponible.");
+    if (!mime) return setErr("Ce navigateur ne sait pas enregistrer de vidéo. Essayez avec Chrome.");
+    let ecran: MediaStream;
+    try {
+      ecran = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true, preferCurrentTab: true, selfBrowserSurface: "include" } as DisplayMediaStreamOptions);
+    } catch { return setErr("Capture refusée. Cliquez à nouveau et choisissez « Cet onglet », avec « Partager l'audio de l'onglet » activé."); }
+    const piste = ecran.getVideoTracks()[0];
+    const fermerEcran = () => ecran.getTracks().forEach((t) => t.stop());
+    if ((piste.getSettings() as { displaySurface?: string }).displaySurface !== "browser") { fermerEcran(); return setErr("Choisissez « Cet onglet » (pas l'écran entier ni une fenêtre), puis recommencez."); }
+    // Recadrage exact sur le lecteur (Chrome) ; sinon, calcul à partir de sa position à l'écran.
+    let recadre = false;
+    const CT = (window as unknown as { CropTarget?: CropTargetCtor }).CropTarget;
+    if (CT) { try { await (piste as MediaStreamTrack & { cropTo(t: unknown): Promise<void> }).cropTo(await CT.fromElement(el)); recadre = true; } catch { /* non pris en charge */ } }
+    const cap = document.createElement("video"); cap.muted = true; cap.playsInline = true; cap.srcObject = ecran; await cap.play();
+    const zone = (): Source => {
+      if (recadre) return { img: cap, sx: 0, sy: 0, sw: cap.videoWidth, sh: cap.videoHeight };
+      const r = el.getBoundingClientRect(), k = cap.videoWidth / window.innerWidth;
+      return { img: cap, sx: r.left * k, sy: r.top * k, sw: r.width * k, sh: r.height * k };
+    };
+    try {
+      ecouterYT(); yt("pauseVideo"); yt("seekTo", [debut, true]); yt("unMute"); yt("setVolume", [100]);
+      await new Promise((ok) => setTimeout(ok, 1200));
+      tYT.current = debut;
+      const depart = performance.now();
+      await enregistrer(c, mime, ecran.getAudioTracks(), () => { yt("playVideo"); }, () => {
+        const t = Math.max(tYT.current, debut);
+        const ecoule = (performance.now() - depart) / 1000;
+        return { src: zone(), t, fini: t >= fin || ecoule > duree + 20 };
+      }, dessiner, duree);
+      yt("pauseVideo");
+      if (!ecran.getAudioTracks().length) setErr("Le Reel est prêt, mais sans le son : à la prochaine capture, activez « Partager l'audio de l'onglet ».");
+    } finally { fermerEcran(); }
+  }
+
+  async function creer() {
+    setErr(""); setSortie(null); setMsg("Préparation…");
+    try { if (mode === "youtube") await depuisYouTube(); else await depuisFichier(); }
+    catch (x) { setErr((x as Error).message); }
+    finally { setMsg(""); }
+  }
+
+  const pret = mode === "youtube" ? ecranOk : Boolean(fichier);
   return (
-    <div className="tv-vid-modale" role="dialog" aria-modal="true" aria-label="Couper l'extrait">
+    <div className="tv-vid-modale" role="dialog" aria-modal="true" aria-label="Créer le Reel">
       <div className="boite">
-        <div className="row" style={{ gap: 10 }}><h2 className="tv-h2" style={{ flex: 1 }}>Reel choc 9:16 · 1 min max</h2><button type="button" className="btn small" onClick={fermer}>Fermer</button></div>
-        {!fichier ? (
+        <div className="row" style={{ gap: 10 }}><h2 className="tv-h2" style={{ flex: 1 }}>Reel choc 9:16 · 1 min max</h2><button type="button" className="btn small" onClick={fermer} disabled={Boolean(msg)}>Fermer</button></div>
+        <div className="row" style={{ gap: 8 }} role="tablist">
+          <button type="button" role="tab" className="tv-chip" aria-selected={mode === "youtube"} onClick={() => setMode("youtube")} disabled={Boolean(msg)}>Depuis YouTube</button>
+          <button type="button" role="tab" className="tv-chip" aria-selected={mode === "fichier"} onClick={() => setMode("fichier")} disabled={Boolean(msg)}>Depuis un fichier</button>
+        </div>
+        {mode === "youtube" ? (
+          <>
+            <div className="tv-vid-lecteur">
+              {origine ? <iframe ref={ifr} onLoad={ecouterYT} src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&start=${debut}&controls=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3&origin=${encodeURIComponent(origine)}`} title="Lecteur YouTube" allow="autoplay; encrypted-media" /> : null}
+            </div>
+            {ecranOk ? (
+              <p className="notice" style={{ margin: 0 }}>Pas besoin de fichier. Au clic sur « Créer le Reel », Chrome demande quoi partager : choisissez <strong>« Cet onglet »</strong> et laissez <strong>« Partager l&apos;audio de l&apos;onglet »</strong> activé. VOA lit l&apos;extrait et l&apos;enregistre en temps réel : ne changez pas d&apos;onglet et ne faites pas défiler la page pendant l&apos;enregistrement.</p>
+            ) : (
+              <p className="notice ambre" style={{ margin: 0 }}>La capture depuis YouTube fonctionne avec Chrome ou Edge sur ordinateur. Sur téléphone, utilisez « Depuis un fichier ».</p>
+            )}
+          </>
+        ) : !fichier ? (
           <label className="tv-vid-depot">
             <Trait d="M12 16V4M6 10l6-6 6 6M4 20h16" size={26} />
             <strong>Importer le fichier de la vidéo</strong>
-            <span>MP4 ou WebM fourni par la chaîne.</span>
+            <span>MP4 ou WebM.</span>
             <input type="file" accept="video/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) setFichier(URL.createObjectURL(f)); }} />
           </label>
         ) : (
@@ -358,18 +449,18 @@ function Decoupe({ extrait, credit, titre: titre0, fermer }: { extrait: Extrait;
           <span className="tv-pill" style={{ alignSelf: "flex-end", marginBottom: 10 }}>{fin - debut} s / 60 s max</span>
         </div>
         <label className="field">Accroche (en haut du Reel)<input value={titre} maxLength={120} onChange={(e) => setTitre(e.target.value)} /></label>
-        <label className="field">Sous-titres en français<textarea rows={4} value={st} onChange={(e) => setSt(e.target.value)} /></label>
+        <label className="field">Sous-titres en français<textarea rows={3} value={st} onChange={(e) => setSt(e.target.value)} /></label>
         <span className="tv-gris" style={{ fontSize: 12 }}>Crédit incrusté : {credit}</span>
         {err ? <p className="notice rouge">{err}</p> : null}
         {msg ? <p className="notice">{msg}</p> : null}
         {sortie ? (
           <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
             <video src={sortie.url} controls style={{ width: 140, borderRadius: 12, background: "#000" }} />
-            <a className="tv-btn-nuit" href={sortie.url} download={`TUVOA_extrait.${sortie.ext}`}>TÉLÉCHARGER LE REEL</a>
+            <a className="tv-btn-nuit" href={sortie.url} download={`TUVOA_reel.${sortie.ext}`}>TÉLÉCHARGER LE REEL</a>
           </div>
         ) : null}
-        <button type="button" className="tv-btn-nuit" style={{ justifyContent: "center" }} onClick={couper} disabled={!fichier || Boolean(msg) || fin <= debut}>{msg ? "DÉCOUPE EN COURS…" : "CRÉER LE REEL"}</button>
-        <span className="tv-gris" style={{ fontSize: 12 }}>La découpe se fait en temps réel dans votre navigateur ({fin - debut} s). Gardez cet onglet ouvert.</span>
+        <button type="button" className="tv-btn-nuit" style={{ justifyContent: "center" }} onClick={creer} disabled={!pret || Boolean(msg) || fin <= debut}>{msg ? "ENREGISTREMENT EN COURS…" : "CRÉER LE REEL"}</button>
+        <span className="tv-gris" style={{ fontSize: 12 }}>L&apos;enregistrement se fait en temps réel ({fin - debut} s). Gardez cet onglet ouvert.</span>
       </div>
     </div>
   );
