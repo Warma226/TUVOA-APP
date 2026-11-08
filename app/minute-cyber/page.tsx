@@ -4,7 +4,9 @@
 // prépare la voix off (voix de VOA, ta voix au micro ou un fichier) et monte la vidéo dans le Studio.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { TopBar } from "@/components/BottomNav";
+import { Trait } from "@/components/BottomNav";
+import { Jauge } from "@/components/Atelier";
+import { useVoirPlus } from "@/components/VoirPlus";
 import Voa from "@/components/Voa";
 import { montserrat } from "@/lib/studio-font";
 import { FORMATS, POLICE, dessinerPage, dessinerSequence, dureeTotale, type Doc, type Page } from "@/lib/creation";
@@ -163,161 +165,228 @@ export default function MinuteCyber() {
   const total = ep ? dureeEpisode(ep) : 0;
   const trop = total > DUREE_MAX;
 
-  return (
-    <div className={montserrat.className}>
-      <TopBar title="La minute cyber" back="/studio" wide />
-      <main className="page sub wide" style={{ paddingTop: 8, maxWidth: 1400 }}>
-        <section className="row" style={{ background: "#0A0A0A", color: "#fff", borderRadius: 18, padding: "20px 24px", gap: 18, flexWrap: "wrap" }}>
-          <Voa humeur={busy ? "parle" : "veille"} taille={84} decor />
-          <div style={{ flex: "1 1 300px" }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 800, letterSpacing: 2, color: "#E94A06" }}>SÉRIE VIDÉO · 60 S MAX</p>
-            <h1 style={{ margin: "4px 0", fontSize: 38, fontWeight: 800, letterSpacing: -1 }}>La minute cyber</h1>
-            <p style={{ margin: 0, color: "#C7CBD6", lineHeight: 1.5 }}>Une histoire vraie à vivre, la technique révélée à la fin, trois réflexes. VOA écrit, découpe, fait la voix et monte la vidéo.</p>
-          </div>
-          <form className="row" style={{ flex: "1 1 360px", gap: 8 }} onSubmit={(e) => { e.preventDefault(); if (sujet.trim()) void ecrire(sujet.trim()); }}>
-            <input value={sujet} onChange={(e) => setSujet(e.target.value)} placeholder="Une menace : SIM swap, faux agent mobile money…" style={{ flex: 1, height: 52, borderRadius: 12, border: 0, padding: "0 14px", fontSize: 16 }} />
-            <button className="btn primary" disabled={!!busy || !sujet.trim()}>{busy === "script" ? "VOA écrit…" : "Écrire l'épisode"}</button>
-          </form>
-        </section>
-        {error ? <p style={{ color: "#C2410C", fontWeight: 600, margin: 0 }}>{error}</p> : null}
-        {info ? <p style={{ color: "#1D4ED8", fontWeight: 600, margin: 0 }}>{info}</p> : null}
+  const [sel, setSel] = useState(0);
+  useEffect(() => { setSel(0); }, [ep?.id]);
+  const vEps = useVoirPlus(episodes);
+  const sc = ep?.scenes[Math.min(sel, (ep?.scenes.length ?? 1) - 1)];
+  const iSel = ep ? Math.min(sel, ep.scenes.length - 1) : 0;
+  const etapes: [string, "fait" | "cours" | ""][] = !ep ? [["Sujet", "cours"], ["Script", ""], ["Voix", ""], ["Montage", ""], ["Publication", ""]] : [
+    ["Sujet", "fait"], ["Script", "fait"],
+    ["Voix", ep.audio ? "fait" : "cours"],
+    ["Montage", ep.statut === "monte" || ep.statut === "envoye" ? "fait" : ep.audio ? "cours" : ""],
+    ["Publication", ep.statut === "envoye" ? "fait" : ep.statut === "monte" ? "cours" : ""],
+  ];
+  const gardes: [string, boolean][] = ep ? [
+    [trop ? `Durée : ${Math.round(total)} s, au-delà de 60 s` : `Durée sous 60 s : ${Math.round(total)} s`, !trop],
+    [ep.titre && ep.menace && ep.titre.toLowerCase().includes(ep.menace.toLowerCase()) ? "Le titre dévoile la technique : gardez la surprise" : "Le titre garde la surprise de la révélation", !(ep.titre && ep.menace && ep.titre.toLowerCase().includes(ep.menace.toLowerCase()))],
+    [ep.scenes.some((x) => /\d{6,}|\+\d{3}\s?\d{2}/.test(`${x.detail ?? ""} ${x.ecran}`)) ? "Un vrai numéro apparaît à l'écran : floutez-le" : "Aucun numéro réel à l'écran", !ep.scenes.some((x) => /\d{6,}|\+\d{3}\s?\d{2}/.test(`${x.detail ?? ""} ${x.ecran}`))],
+    [ep.scenes.some((x) => x.type === "revelation" || x.type === "technique") ? "La technique est révélée avant les réflexes" : "Ajoutez la scène où la technique est révélée", ep.scenes.some((x) => x.type === "revelation" || x.type === "technique")],
+    [`${ep.reflexes.filter((r) => r.trim()).length} réflexe${ep.reflexes.filter((r) => r.trim()).length > 1 ? "s" : ""} (3 attendus)`, ep.reflexes.filter((r) => r.trim()).length >= 3],
+    [ep.legende.trim() ? `Texte du post : ${ep.legende.length} car.` : "Texte du post à écrire", Boolean(ep.legende.trim())],
+  ] : [];
+  const fmt = (n: number) => `${(Math.round(n * 10) / 10).toLocaleString("fr-FR")} s`;
 
-        <div className="row" style={{ alignItems: "flex-start", gap: 20, flexWrap: "wrap" }}>
-          {/* Colonne : épisodes */}
-          <aside className="stack" style={{ flex: "0 1 320px", minWidth: 260, gap: 14 }}>
-            <div className="card" style={{ gap: 8 }}>
-              <strong>Mes épisodes</strong>
-              {episodes.length === 0 ? <p className="muted" style={{ margin: 0 }}>Aucun épisode pour l&apos;instant.</p> : null}
-              {episodes.map((e) => (
-                <button key={e.id} type="button" onClick={() => choisir(e)}
-                  style={{ textAlign: "left", border: e.id === ep?.id ? "2px solid #2563EB" : "1px solid #E5E7EB", borderRadius: 12, padding: 10, background: "#fff", cursor: "pointer", display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#64748B" }}>Ép. {e.numero ?? "?"} · {e.menace} · {Math.round(dureeEpisode(e))} s{e.audio ? " · voix ✓" : ""}{e.statut === "monte" ? " · monté" : ""}</span>
-                  <strong style={{ fontSize: 15 }}>{e.titre}</strong>
+  return (
+    <div className="tv-page">
+      <div className="tv-corps" style={{ paddingTop: 20 }}>
+        <div className="tv-entete" style={{ gap: 14 }}>
+          <div style={{ flex: "1 1 360px", display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            <span className="tv-kicker" style={{ color: "#E94A06", letterSpacing: 2 }}>LA MINUTE CYBER · SÉRIE VIDÉO · 60 S MAX</span>
+            {ep ? (
+              <div className="row" style={{ gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
+                <span className="tv-titre" style={{ color: "#9AA8BE", fontFamily: "var(--font-mont)", fontWeight: 800 }}>Ép. {ep.numero ?? "?"}</span>
+                <label style={{ flex: "1 1 260px", minWidth: 0 }}><span className="sr-only">Titre de l&apos;épisode</span>
+                  <input className="tv-ed-titre" value={ep.titre} onChange={(e) => maj({ titre: e.target.value })} style={{ fontSize: "clamp(26px, 4vw, 42px)" }} />
+                </label>
+              </div>
+            ) : <h1 className="tv-titre">La minute cyber</h1>}
+            <span style={{ fontSize: 14, color: "#33425C" }}>{ep ? `${ep.menace} · ${ep.scenes.length} scènes · ${fmt(total)}${ep.audio ? " · voix prête" : ""}` : "Une histoire à vivre, la technique révélée à la fin, trois réflexes. Un épisode à la fois."}</span>
+          </div>
+          <ol className="tv-etapes" aria-label="Étapes de l'épisode">
+            {etapes.map(([l, e], i) => (
+              <li key={l}><span className="tv-etape-fixe" aria-current={e === "cours" ? "step" : undefined} data-etat={e}><span>{e === "fait" ? <Trait d="M20 6L9 17l-5-5" size={14} stroke={3} /> : i + 1}</span>{l}</span></li>
+            ))}
+          </ol>
+        </div>
+
+        {error ? <p className="notice rouge" role="alert">{error}</p> : null}
+        {info ? <p className="notice" role="status">{info}</p> : null}
+
+        <div className="tv-minute">
+          {/* Épisodes */}
+          <aside className="tv-minute-eps" aria-labelledby="t-eps">
+            <form className="tv-carte-side" onSubmit={(e) => { e.preventDefault(); if (sujet.trim()) void ecrire(sujet.trim()); }}>
+              <div className="row" style={{ gap: 10 }}><Voa humeur={busy ? "parle" : "veille"} taille={48} /><strong style={{ fontFamily: "var(--font-mont)", fontSize: 16 }}>Nouvel épisode</strong></div>
+              <label className="field" style={{ fontSize: 13 }}>Une menace à raconter<input value={sujet} onChange={(e) => setSujet(e.target.value)} placeholder="Ex. faux recrutement, QR code piégé" /></label>
+              <button className="tv-btn-nuit" style={{ justifyContent: "center" }} disabled={!!busy || !sujet.trim()}>{busy === "script" ? "VOA ÉCRIT…" : "ÉCRIRE L'ÉPISODE"}</button>
+            </form>
+            <h2 id="t-eps" className="tv-kicker" style={{ color: "#5B6B86", margin: "6px 0 0" }}>MES ÉPISODES</h2>
+            <div className="tv-minute-liste">
+              {episodes.length === 0 ? <p className="tv-gris" style={{ padding: 10, fontSize: 13 }}>Aucun épisode pour l&apos;instant.</p> : null}
+              {vEps.visibles.map((e) => (
+                <button key={e.id} type="button" onClick={() => choisir(e)} aria-current={e.id === ep?.id ? "true" : undefined}>
+                  <span className="vignette">{e.numero ?? "?"}</span>
+                  <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2, textAlign: "left" }}>
+                    <strong style={{ fontSize: 14 }}>{e.titre}</strong>
+                    <span style={{ fontSize: 12, color: "#5B6B86" }}>{e.menace} · {Math.round(dureeEpisode(e))} s</span>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: e.statut === "envoye" ? "#16A34A" : e.statut === "monte" ? "#2563EB" : e.audio ? "#0E9F8E" : "#E94A06" }}>{e.statut === "envoye" ? "Envoyé au calendrier" : e.statut === "monte" ? "Monté" : e.audio ? "Voix prête" : "Voix à faire"}</span>
+                  </span>
                 </button>
               ))}
+              {vEps.bouton}
             </div>
           </aside>
 
-          {/* Épisode */}
-          {ep ? (
-            <section className="stack" style={{ flex: "1 1 600px", minWidth: 0, gap: 16 }}>
-              <div className="card" style={{ gap: 12 }}>
-                <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
-                  <label className="field" style={{ flex: "2 1 260px" }}>Titre de l&apos;épisode<input value={ep.titre} onChange={(e) => maj({ titre: e.target.value })} /></label>
-                  <label className="field" style={{ flex: "1 1 160px" }}>Menace<input value={ep.menace} onChange={(e) => maj({ menace: e.target.value })} /></label>
-                  <label className="field" style={{ flex: "0 0 90px" }}>Épisode n°<input type="number" value={ep.numero ?? 1} onChange={(e) => maj({ numero: Math.max(1, Number(e.target.value)) })} /></label>
-                </div>
-                {/* Frise des scènes */}
-                <div>
-                  <div style={{ display: "flex", height: 26, borderRadius: 8, overflow: "hidden", outline: trop ? "2px solid #C2410C" : undefined }}>
-                    {ep.scenes.map((s, i) => <div key={i} title={`${TYPES_SCENE[s.type]} · ${s.duree} s`} style={{ flex: s.duree, background: COULEUR[s.type], borderRight: "2px solid #fff" }} />)}
-                    {!trop ? <div style={{ flex: DUREE_MAX - total, background: "#F1F5F9" }} /> : null}
+          {ep && sc ? (
+            <div className="tv-minute-centre">
+              {/* La minute */}
+              <section className="tv-carte" aria-labelledby="t-minute">
+                <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+                  <h2 id="t-minute" className="tv-h2" style={{ flex: 1 }}>La minute, scène par scène</h2>
+                  <div className="tv-segments">
+                    <button type="button" aria-pressed={vue === "script"} onClick={() => setVue("script")}>Scènes</button>
+                    <button type="button" aria-pressed={vue === "storyboard"} onClick={() => setVue("storyboard")}>Storyboard</button>
                   </div>
-                  <p style={{ margin: "6px 0 0", fontSize: 14, fontWeight: 700, color: trop ? "#C2410C" : "#334155" }}>
-                    {Math.round(total)} s / 60 s · {ep.scenes.length} scènes{ep.audio ? " · durées calées sur la voix off" : " · durées estimées d'après le texte lu"}{trop ? " — trop long, raccourcis la voix" : ""}
-                  </p>
+                  <span className="row" style={{ gap: 6, alignItems: "baseline" }}><strong style={{ fontFamily: "var(--font-mont)", fontSize: 26 }}>{fmt(total)}</strong><span style={{ fontSize: 13, fontWeight: 700, color: trop ? "#B42318" : "#05603A" }}>{trop ? `${fmt(total - DUREE_MAX)} de trop` : `il reste ${fmt(DUREE_MAX - total)}`}</span></span>
                 </div>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <button type="button" className={`btn small ${vue === "script" ? "primary" : "ghost"}`} onClick={() => setVue("script")}>Script</button>
-                  <button type="button" className={`btn small ${vue === "storyboard" ? "primary" : "ghost"}`} onClick={() => setVue("storyboard")}>Storyboard</button>
-                  <span style={{ flex: 1 }} />
-                  <button type="button" className="btn small danger" onClick={supprimer}>Supprimer</button>
+                <div className="tv-regle-60" aria-hidden="true">{[0, 10, 20, 30, 40, 50, 60].map((v) => <span key={v} style={{ left: `${(v / Math.max(DUREE_MAX, total)) * 100}%` }}>{v} s</span>)}</div>
+                <div style={{ position: "relative" }}>
+                  <div className="tv-scenes" style={{ width: `${(total / Math.max(DUREE_MAX, total)) * 100}%` }}>
+                    {ep.scenes.map((x, i) => (
+                      <button key={i} type="button" aria-pressed={i === iSel} aria-label={`Scène ${i + 1}, ${TYPES_SCENE[x.type]}, ${fmt(x.duree)}`} onClick={() => setSel(i)}
+                        style={{ flex: `${x.duree} 1 0`, background: COULEUR[x.type], ["--c" as string]: COULEUR[x.type] }}>
+                        <span className="k">{i + 1} · {TYPES_SCENE[x.type].toUpperCase()}</span>
+                        <span className="t">{x.ecran || x.voix.slice(0, 40)}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <span className="tv-limite" style={{ left: `${(DUREE_MAX / Math.max(DUREE_MAX, total)) * 100}%` }} />
                 </div>
-              </div>
+                <span className="tv-gris" style={{ fontSize: 12 }}>{ep.audio ? "Durées calées sur la voix off." : "Durées estimées d'après le texte lu à voix haute."} Cliquez une scène pour l&apos;ouvrir.</span>
+              </section>
 
-              {vue === "script" ? (
-                <div className="stack" style={{ gap: 10 }}>
-                  {ep.scenes.map((s, i) => (
-                    <div key={i} className="card" style={{ borderLeft: `6px solid ${COULEUR[s.type]}`, gap: 8 }}>
-                      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                        <strong style={{ fontSize: 15 }}>Scène {i + 1}</strong>
-                        <select value={s.type} onChange={(e) => majScene(i, { type: e.target.value as TypeScene })} style={{ height: 38, borderRadius: 8 }}>
-                          {Object.entries(TYPES_SCENE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                        </select>
-                        <label className="row" style={{ gap: 4, fontSize: 14 }}>Durée<input type="number" step={0.1} value={s.duree} onChange={(e) => majScene(i, { duree: Math.max(1, Number(e.target.value)) })} style={{ width: 70, height: 38, borderRadius: 8, padding: "0 6px" }} />s</label>
-                        <span style={{ flex: 1 }} />
-                        <button type="button" className="btn small ghost" onClick={() => deplacer(i, -1)}>↑</button>
-                        <button type="button" className="btn small ghost" onClick={() => deplacer(i, 1)}>↓</button>
-                        <button type="button" className="btn small ghost" onClick={() => ajouter(i)} title="Ajouter une scène après">+</button>
-                        <button type="button" className="btn small ghost" onClick={() => retirer(i)}>✕</button>
+              {vue === "storyboard" ? <Storyboard ep={ep} doc={doc!} prete={prete} /> : (
+                <section className="tv-carte" aria-labelledby="t-scene">
+                  <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                    <span className="tv-pill" style={{ background: COULEUR[sc.type], color: "#fff" }}>SCÈNE {iSel + 1} · {TYPES_SCENE[sc.type].toUpperCase()}</span>
+                    <h2 id="t-scene" className="tv-h2" style={{ fontSize: 18, flex: 1, minWidth: 0 }}>{sc.ecran || "Sans texte à l'écran"}</h2>
+                    <button type="button" className="tv-rond" style={{ width: 40, height: 40 }} aria-label="Scène précédente" disabled={iSel === 0} onClick={() => setSel(iSel - 1)}><Trait d="M15 18l-6-6 6-6" size={16} stroke={2.2} /></button>
+                    <button type="button" className="tv-rond" style={{ width: 40, height: 40 }} aria-label="Scène suivante" disabled={iSel >= ep.scenes.length - 1} onClick={() => setSel(iSel + 1)}><Trait d="M9 18l6-6-6-6" size={16} stroke={2.2} /></button>
+                  </div>
+                  <div className="row" style={{ gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+                    <div style={{ flex: "1 1 320px", minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                        <label className="field" style={{ flex: "1 1 160px" }}>Rôle<select value={sc.type} onChange={(e) => majScene(iSel, { type: e.target.value as TypeScene })}>{Object.entries(TYPES_SCENE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+                        <label className="field" style={{ flex: "0 0 110px" }}>Durée (s)<input type="number" step={0.1} value={sc.duree} onChange={(e) => majScene(iSel, { duree: Math.max(1, Number(e.target.value)) })} /></label>
                       </div>
-                      <label className="field">Voix off<textarea rows={2} value={s.voix} onChange={(e) => majScene(i, { voix: e.target.value }, true)} /></label>
-                      <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
-                        <label className="field" style={{ flex: "1 1 240px" }}>Texte à l&apos;écran<input value={s.ecran} onChange={(e) => majScene(i, { ecran: e.target.value })} /></label>
-                        {s.type === "message" || s.type === "appel" ? (
-                          <label className="field" style={{ flex: "1 1 240px" }}>{s.type === "message" ? "Message reçu" : "Appelant affiché"}<input value={s.detail ?? ""} onChange={(e) => majScene(i, { detail: e.target.value })} /></label>
-                        ) : null}
-                      </div>
-                      {s.type === "reflexes" ? (
-                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      <label className="field">Voix off <span className="tv-gris" style={{ fontWeight: 400, fontSize: 12 }}>{fmt(dureeLue(sc))} à voix haute · {sc.voix.trim().split(/\s+/).filter(Boolean).length} mots</span>
+                        <textarea rows={4} value={sc.voix} onChange={(e) => majScene(iSel, { voix: e.target.value }, true)} />
+                      </label>
+                      <label className="field">Texte à l&apos;écran<input value={sc.ecran} onChange={(e) => majScene(iSel, { ecran: e.target.value })} /></label>
+                      {sc.type === "message" || sc.type === "appel" ? (
+                        <label className="field">{sc.type === "message" ? "Message reçu" : "Appelant affiché"}<input value={sc.detail ?? ""} onChange={(e) => majScene(iSel, { detail: e.target.value })} /></label>
+                      ) : null}
+                      {sc.type === "reflexes" ? (
+                        <div className="tv-grille2">
                           {[0, 1, 2].map((k) => (
-                            <label key={k} className="field" style={{ flex: "1 1 200px" }}>Réflexe {k + 1}<input value={(s.points ?? ep.reflexes)[k] ?? ""} onChange={(e) => { const p = [...(s.points ?? ep.reflexes)]; p[k] = e.target.value; majScene(i, { points: p }); }} /></label>
+                            <label key={k} className="field">Réflexe {k + 1}<input value={(sc.points ?? ep.reflexes)[k] ?? ""} onChange={(e) => { const pts = [...(sc.points ?? ep.reflexes)]; pts[k] = e.target.value; majScene(iSel, { points: pts }); }} /></label>
                           ))}
                         </div>
                       ) : null}
-                      <label className="field" style={{ color: "#64748B" }}>Plan (storyboard)<textarea rows={2} value={s.plan} onChange={(e) => majScene(i, { plan: e.target.value })} /></label>
+                      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                        <button type="button" className="btn small" onClick={() => { deplacer(iSel, -1); setSel(Math.max(0, iSel - 1)); }} disabled={iSel === 0}>← Avancer</button>
+                        <button type="button" className="btn small" onClick={() => { deplacer(iSel, 1); setSel(Math.min(ep.scenes.length - 1, iSel + 1)); }} disabled={iSel >= ep.scenes.length - 1}>Reculer →</button>
+                        <button type="button" className="btn small" onClick={() => { ajouter(iSel); setSel(iSel + 1); }}>+ Scène après</button>
+                        <button type="button" className="btn small danger" onClick={() => { retirer(iSel); setSel(Math.max(0, iSel - 1)); }} disabled={ep.scenes.length <= 2}>Retirer</button>
+                      </div>
                     </div>
-                  ))}
-                  <div className="card" style={{ gap: 8 }}>
-                    <strong>La technique révélée</strong>
-                    <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                      <label className="field" style={{ flex: "1 1 200px" }}>Nom<input value={ep.technique.nom} onChange={(e) => maj({ technique: { ...ep.technique, nom: e.target.value } })} /></label>
-                      <label className="field" style={{ flex: "3 1 360px" }}>Explication<input value={ep.technique.explication} onChange={(e) => maj({ technique: { ...ep.technique, explication: e.target.value } })} /></label>
+                    <div style={{ flex: "0 1 230px", minWidth: 200, display: "flex", flexDirection: "column", gap: 8 }}>
+                      {doc?.pages[iSel] ? <Rendu page={doc.pages[iSel]} doc={doc} largeur={200} prete={prete} /> : null}
+                      <label className="field" style={{ fontSize: 13 }}>Plan<textarea rows={3} value={sc.plan} onChange={(e) => majScene(iSel, { plan: e.target.value })} /></label>
                     </div>
-                    <label className="field">Texte du post Facebook<textarea rows={5} value={ep.legende} onChange={(e) => maj({ legende: e.target.value })} /></label>
                   </div>
-                </div>
-              ) : (
-                <Storyboard ep={ep} doc={doc!} prete={prete} />
+                </section>
               )}
 
-              {/* Voix off */}
-              <div className="card" style={{ gap: 12 }}>
-                <strong style={{ fontSize: 18 }}>Voix off</strong>
-                {ep.audio ? (
-                  <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
-                    <audio src={ep.audio} controls style={{ flex: "1 1 300px" }} />
-                    <button type="button" className="btn small ghost" onClick={retirerVoix}>Retirer la voix</button>
-                  </div>
-                ) : <p className="muted" style={{ margin: 0 }}>Sans voix off, la vidéo reste lisible : les textes à l&apos;écran racontent l&apos;histoire.</p>}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 10 }}>
-                  <div className="card" style={{ gap: 8, background: "#F8FAFC" }}>
-                    <strong>La voix de VOA</strong>
-                    <select value={voixNom} onChange={(e) => setVoixNom(e.target.value)} style={{ height: 40, borderRadius: 8 }}>{VOIX.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-                    <button type="button" className="btn small primary" disabled={!!busy} onClick={voixVoa}>{busy === "voix" ? "VOA enregistre…" : "Générer la voix"}</button>
-                  </div>
-                  <div className="card" style={{ gap: 8, background: "#F8FAFC" }}>
-                    <strong>Ta voix au micro</strong>
-                    <span className="muted" style={{ fontSize: 13 }}>Le texte défile en prompteur pendant que tu lis.</span>
-                    {micro === "enregistre"
-                      ? <button type="button" className="btn small danger" onClick={arreterMicro}>■ Arrêter l&apos;enregistrement</button>
-                      : <button type="button" className="btn small dark" disabled={!!busy} onClick={() => setMicro("pret")}>{busy === "micro" ? "Envoi…" : "Enregistrer ma voix"}</button>}
-                  </div>
-                  <div className="card" style={{ gap: 8, background: "#F8FAFC" }}>
-                    <strong>Un fichier audio</strong>
-                    <span className="muted" style={{ fontSize: 13 }}>MP3, M4A, WAV… (enregistré au téléphone par exemple).</span>
-                    <label className="btn small ghost" style={{ cursor: "pointer" }}>{busy === "import" ? "Envoi…" : "Importer"}<input type="file" accept="audio/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void importer(f); e.target.value = ""; }} /></label>
-                  </div>
+              <section className="tv-carte" aria-labelledby="t-tech">
+                <h2 id="t-tech" className="tv-h2" style={{ fontSize: 18 }}>La technique révélée et le post</h2>
+                <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                  <label className="field" style={{ flex: "1 1 200px" }}>Nom de la technique<input value={ep.technique.nom} onChange={(e) => maj({ technique: { ...ep.technique, nom: e.target.value } })} /></label>
+                  <label className="field" style={{ flex: "1 1 160px" }}>Menace<input value={ep.menace} onChange={(e) => maj({ menace: e.target.value })} /></label>
+                  <label className="field" style={{ flex: "0 0 100px" }}>Épisode n°<input type="number" value={ep.numero ?? 1} onChange={(e) => maj({ numero: Math.max(1, Number(e.target.value)) })} /></label>
                 </div>
-              </div>
+                <label className="field">Explication<input value={ep.technique.explication} onChange={(e) => maj({ technique: { ...ep.technique, explication: e.target.value } })} /></label>
+                <label className="field">Texte du post Facebook <span className="tv-gris" style={{ fontWeight: 400, fontSize: 12 }}>{ep.legende.length} car. · idéal ≤ 477</span><textarea rows={5} value={ep.legende} onChange={(e) => maj({ legende: e.target.value })} /></label>
+                <Jauge n={ep.legende.length} ideal={[40, 477]} pli={125} max={800} />
+              </section>
 
-              {/* Aperçu et montage */}
-              <div className="card" style={{ gap: 12 }}>
-                <strong style={{ fontSize: 18 }}>Aperçu de la vidéo</strong>
-                {doc ? <Apercu doc={doc} prete={prete} /> : null}
-                <button type="button" className="btn primary" disabled={!!busy || !doc} onClick={monter}>Monter la vidéo dans le Studio →</button>
-                <span className="muted" style={{ fontSize: 13 }}>Dans le Studio : retouche les scènes (photos, couleurs, animations), puis exporte la vidéo ou envoie-la au calendrier avec le texte du post.</span>
+              <div className="tv-veille">
+                <section className="tv-carte" aria-labelledby="t-voix" style={{ flex: "1 1 320px", minWidth: 0 }}>
+                  <h2 id="t-voix" className="tv-h2" style={{ fontSize: 18 }}>Voix off</h2>
+                  {ep.audio ? (
+                    <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                      <audio src={ep.audio} controls style={{ flex: "1 1 240px" }} />
+                      <button type="button" className="btn small" onClick={retirerVoix}>Retirer la voix</button>
+                    </div>
+                  ) : <p className="tv-gris" style={{ fontSize: 13 }}>Sans voix off, les textes à l&apos;écran racontent l&apos;histoire.</p>}
+                  <div className="tv-voix-choix">
+                    <div>
+                      <strong>La voix de VOA</strong>
+                      <select value={voixNom} onChange={(e) => setVoixNom(e.target.value)} aria-label="Voix">{VOIX.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                      <button type="button" className="tv-btn-nuit" style={{ height: 40, justifyContent: "center" }} disabled={!!busy} onClick={voixVoa}>{busy === "voix" ? "VOA ENREGISTRE…" : "GÉNÉRER LA VOIX"}</button>
+                    </div>
+                    <div>
+                      <strong>Ma voix au micro</strong>
+                      <span className="tv-gris" style={{ fontSize: 12 }}>Le texte défile en prompteur.</span>
+                      {micro === "enregistre"
+                        ? <button type="button" className="btn small danger" onClick={arreterMicro}>■ Arrêter</button>
+                        : <button type="button" className="btn small" disabled={!!busy} onClick={() => setMicro("pret")}>{busy === "micro" ? "Envoi…" : "Enregistrer ma voix"}</button>}
+                    </div>
+                    <div>
+                      <strong>Un fichier audio</strong>
+                      <span className="tv-gris" style={{ fontSize: 12 }}>MP3, M4A, WAV…</span>
+                      <label className="btn small" style={{ cursor: "pointer" }}>{busy === "import" ? "Envoi…" : "Importer"}<input type="file" accept="audio/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void importer(f); e.target.value = ""; }} /></label>
+                    </div>
+                  </div>
+                </section>
+                <section className="tv-carte" aria-labelledby="t-gardes" style={{ flex: "1 1 260px", minWidth: 0 }}>
+                  <h2 id="t-gardes" className="tv-h2" style={{ fontSize: 18 }}>Garde-fous de l&apos;épisode</h2>
+                  <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {gardes.map(([t, ok]) => (
+                      <li key={t} className="row" style={{ gap: 10, alignItems: "flex-start", fontSize: 13, lineHeight: 1.4 }}>
+                        <span style={{ width: 18, height: 18, borderRadius: 9, flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", background: ok ? "#16A34A" : "#E94A06" }}><Trait d={ok ? "M20 6L9 17l-5-5" : "M12 8v5M12 17h.01"} size={11} stroke={3.2} /></span>
+                        <span style={{ color: ok ? "#33425C" : "#9A3412", fontWeight: ok ? 400 : 600 }}>{t}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               </div>
-            </section>
+            </div>
           ) : (
-            <section className="card" style={{ flex: "1 1 600px", alignItems: "center", textAlign: "center", padding: 40 }}>
+            <section className="tv-carte" style={{ flex: "999 1 560px", alignItems: "center", textAlign: "center", padding: 40 }}>
               <Voa humeur="ecoute" taille={120} />
               <strong style={{ fontSize: 22 }}>Premier épisode ?</strong>
-              <p className="muted">Tape une menace en haut (par exemple « ingénierie sociale ») : VOA écrit l&apos;épisode.</p>
+              <p className="tv-gris">Tapez une menace à gauche (par exemple « ingénierie sociale ») : VOA écrit l&apos;épisode.</p>
             </section>
           )}
+
+          {ep && doc ? (
+            <aside className="tv-minute-side" aria-labelledby="t-apercu">
+              <section className="tv-voa" style={{ flex: "none", alignItems: "center" }}>
+                <h2 id="t-apercu" style={{ alignSelf: "flex-start", fontSize: 16, fontWeight: 800, color: "#fff" }}>Aperçu de l&apos;épisode</h2>
+                <Apercu doc={doc} prete={prete} />
+                <span style={{ fontSize: 12, color: "#9FB6E8", textAlign: "center" }}>Format 9:16 pour TikTok, les stories et les Reels.</span>
+              </section>
+              <section className="tv-carte-side">
+                <h2 className="tv-h2" style={{ fontSize: 16 }}>Quand l&apos;épisode est prêt</h2>
+                <span style={{ fontSize: 13, lineHeight: 1.45, color: "#33425C" }}>Le Studio reprend les scènes : retouchez photos et animations, puis exportez ou envoyez au calendrier avec le texte du post.</span>
+                <button type="button" className="tv-btn-nuit" style={{ justifyContent: "center" }} disabled={!!busy || !doc} onClick={monter}>MONTER LA VIDÉO DANS LE STUDIO</button>
+                <button type="button" className="btn small danger" style={{ alignSelf: "flex-start" }} onClick={supprimer}>Supprimer l&apos;épisode</button>
+              </section>
+            </aside>
+          ) : null}
         </div>
-      </main>
+      </div>
 
       {/* Prompteur */}
       {ep && micro ? (
@@ -390,9 +459,9 @@ function Apercu({ doc, prete }: { doc: Doc; prete: boolean }) {
     return () => { cancelAnimationFrame(raf); son.current?.pause(); son.current = null; };
   }, [joue, doc, dessiner, total]);
   return (
-    <div className="row" style={{ gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
-      <canvas ref={ref} width={540} height={960} style={{ width: 270, borderRadius: 14, background: "#000", boxShadow: "0 10px 40px rgba(0,0,0,.25)" }} />
-      <button type="button" className="btn small dark" onClick={() => setJoue(!joue)}>{joue ? "■ Arrêter" : `▶ Lire (${Math.round(total)} s)`}</button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+      <canvas ref={ref} width={540} height={960} style={{ width: 230, borderRadius: 20, background: "#000", border: "6px solid #000", boxShadow: "0 20px 50px rgba(0,0,0,.5)" }} />
+      <button type="button" className="btn small" onClick={() => setJoue(!joue)}>{joue ? "■ Arrêter" : `▶ Lire (${Math.round(total)} s)`}</button>
     </div>
   );
 }

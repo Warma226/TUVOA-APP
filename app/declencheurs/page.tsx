@@ -1,6 +1,7 @@
 "use client";
 // Déclencheurs : les règles qui transforment une info de la veille en publication, leurs chiffres,
 // un banc d'essai (simulation sur les 48 dernières heures, sans rien publier), les garde-fous réglables et le journal.
+import { SourceLogo } from "@/components/SourceLogo";
 import { useVoirPlus } from "@/components/VoirPlus";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -18,6 +19,13 @@ const ETAT: Record<string, [string, string]> = {
   brouillon: ["Préparé en brouillon", "#9AA8BE"], erreur: ["Erreur de publication", "#E11D2E"], annule: ["Annulé", "#9AA8BE"],
 };
 
+function ilYa(iso: string): string {
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `il y a ${h} h` : h < 48 ? "hier" : `il y a ${Math.round(h / 24)} jours`;
+}
+
 export default function Declencheurs() {
   const [s, setS] = useState<Settings | null>(null);
   const [demo, setDemo] = useState(false);
@@ -30,6 +38,7 @@ export default function Declencheurs() {
   const [srcEssai, setSrcEssai] = useState<string[]>([]);
   const [resultat, setResultat] = useState<{ items: VeilleItem[]; ecartes: VeilleItem[] } | null>(null);
   const [test, setTest] = useState(false);
+  const [vueRegles, setVueRegles] = useState<"toutes" | "actives" | "pause">("toutes");
 
   useEffect(() => {
     getInfo()
@@ -127,47 +136,77 @@ export default function Declencheurs() {
 
         <div className="tv-veille">
           <div className="tv-veille-main">
-            <div className="row" style={{ alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+            <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
               <h2 className="tv-h2" style={{ fontSize: 22 }}>Vos règles</h2>
-              <span className="tv-gris">{actifs.length} active{actifs.length > 1 ? "s" : ""} sur {triggers.length} · {totalSemaine} publication{totalSemaine > 1 ? "s" : ""} préparée{totalSemaine > 1 ? "s" : ""} en 7 jours</span>
+              <span className="tv-gris" style={{ flex: "1 1 260px" }}>Chaque règle se lit de gauche à droite, de la source à la publication.</span>
+              <div role="tablist" aria-label="Filtrer les règles" className="tv-segments">
+                {([["toutes", `Toutes · ${triggers.length}`], ["actives", `Actives · ${actifs.length}`], ["pause", `En pause · ${triggers.length - actifs.length}`]] as const).map(([k, l]) => (
+                  <button key={k} type="button" role="tab" aria-selected={vueRegles === k} aria-pressed={vueRegles === k} onClick={() => setVueRegles(k)}>{l}</button>
+                ))}
+              </div>
+            </div>
+            <div className="tv-kpis">
+              <div className="tv-kpi"><strong>{totalSemaine}</strong><span style={{ fontSize: 12, color: "#5B6B86" }}>préparées par les règles · 7 j</span></div>
+              <div className="tv-kpi"><strong style={{ color: "#16A34A" }}>{posts.filter((p) => p.trigger_id && p.status === "publie").length}</strong><span style={{ fontSize: 12, color: "#5B6B86" }}>publiées</span></div>
+              <div className="tv-kpi"><strong style={{ color: "#2563EB" }}>{posts.filter((p) => p.trigger_id && ["a_valider", "brouillon", "planifie"].includes(p.status)).length}</strong><span style={{ fontSize: 12, color: "#5B6B86" }}>en attente</span></div>
+              <div className="tv-kpi"><strong style={{ color: "#E94A06" }}>{posts.filter((p) => p.trigger_id && p.status === "erreur").length}</strong><span style={{ fontSize: 12, color: "#5B6B86" }}>en erreur</span></div>
             </div>
             {s && triggers.length === 0 ? <p className="tv-gris">Aucun déclencheur. Créez-en un avec « Nouveau déclencheur ».</p> : null}
-            <div className="tv-regles">
+            <div className="tv-regles2">
               {triggers.map((t, i) => {
                 const on = isOn(s?.triggersEnabled, t.id, t.enabledByDefault);
+                if ((vueRegles === "actives" && !on) || (vueRegles === "pause" && on)) return null;
                 const st = stats(t);
-                const max = Math.max(1, ...st.parJour);
                 const c = COULEURS[i % COULEURS.length];
                 const enAuto = auto && t.mode === "general";
+                const dernier = posts.filter((p) => p.trigger_id === t.id).sort((x, y) => y.created_at.localeCompare(x.created_at))[0];
+                const srcs = t.sources.map((id) => sources.find((x) => x.id === id)).filter((x): x is NonNullable<typeof x> => Boolean(x));
+                const mx = Math.max(1, st.prepares);
                 return (
-                  <article key={t.id} className="tv-regle" data-off={!on}>
-                    <div className="row" style={{ gap: 12, alignItems: "flex-start" }}>
-                      <span className="ico" style={{ background: `linear-gradient(145deg, ${c}, #0A2A66)` }}><Trait d={NAV_ICONS.eclair} size={20} stroke={2} /></span>
-                      <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-                        <strong style={{ fontFamily: "var(--font-mont)", fontSize: 16 }}>{t.name}</strong>
-                        <span style={{ fontSize: 12, color: "#5B6B86" }}>{t.keywords.length ? `« ${t.keywords.slice(0, 4).join(" », « ")} »${t.keywords.length > 4 ? "…" : ""}` : "Aucun mot-clé"}</span>
-                        <span style={{ fontSize: 12, color: "#5B6B86" }}>Sources : {t.sources.map((id) => sources.find((x) => x.id === id)?.name).filter(Boolean).join(", ") || "aucune"}</span>
+                  <article key={t.id} className="tv-regle2" data-off={!on}>
+                    <div className="tv-regle2-haut">
+                      <span className="barre" style={{ background: c }} />
+                      <span style={{ flex: "1 1 240px", minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+                        <strong style={{ fontFamily: "var(--font-mont)", fontSize: 17 }}>{t.name}</strong>
+                        <span style={{ fontSize: 12, color: "#5B6B86" }}>{!on ? "En pause" : dernier ? `Dernier déclenchement ${ilYa(dernier.created_at)} · « ${(dernier.title || dernier.idea || "").slice(0, 70)} »` : "Rien déclenché ces 7 derniers jours"}</span>
                       </span>
+                      <a href="#banc" onClick={() => preRemplir(t.id)} style={{ fontSize: 13, fontWeight: 700, textDecoration: "none" }}>Tester</a>
+                      <Link href={`/declencheurs/modifier?id=${encodeURIComponent(t.id)}`} style={{ fontSize: 13, fontWeight: 700, textDecoration: "none" }}>Modifier</Link>
                       <button type="button" role="switch" aria-checked={on} aria-label={`Activer ${t.name}`} className={`switch${on ? " on" : ""}`} onClick={() => save({ triggersEnabled: { [t.id]: !on } })}><span /></button>
                     </div>
-                    <div className="tv-regle-chiffres">
-                      <span><strong>{st.prepares}</strong><small>préparées · 7 j</small></span>
-                      <span><strong style={{ color: "#16A34A" }}>{st.publies}</strong><small>publiées</small></span>
-                      <span><strong style={{ color: "#2563EB" }}>{st.attente}</strong><small>en attente</small></span>
-                      <span style={{ flex: 1 }} />
-                      <span aria-hidden="true" className="spark">{st.parJour.map((v, k) => <i key={k} style={{ height: Math.max(3, Math.round((v / max) * 28)), background: c }} />)}</span>
-                    </div>
-                    <div className="row" style={{ gap: 8, flexWrap: "wrap", fontSize: 12 }}>
-                      <span className="tv-pill" style={enAuto ? { background: "#D9F7E6", color: "#05603A" } : { background: "#FFE8DC", color: "#9A3412" }}>{t.mode === "manuel" ? "Toujours manuel" : enAuto ? "Automatique" : "Manuel (pilote coupé)"}</span>
-                      <span className="tv-pill bleu">{t.platforms.length === 4 ? "Tous les canaux" : t.platforms.map((p) => PLATFORM_LABEL[p]).join(" · ")}</span>
-                      <span className="tv-pill">{FORMAT_LABEL[t.format]} · pertinence ≥ {t.minScore}</span>
-                      <span style={{ flex: 1 }} />
-                      <Link href={`/declencheurs/modifier?id=${encodeURIComponent(t.id)}`} style={{ fontWeight: 700, textDecoration: "none" }}>Modifier</Link>
-                      <a href="#banc" onClick={() => preRemplir(t.id)} style={{ fontWeight: 700, textDecoration: "none" }}>Tester</a>
+                    <div className="tv-regle2-flux">
+                      <div className="etape"><span className="k">SURVEILLE</span>
+                        <span className="row" style={{ paddingLeft: 6 }}>{srcs.length ? srcs.slice(0, 4).map((x) => <span key={x.id} style={{ marginLeft: -6, borderRadius: 10, border: "2px solid #fff", display: "inline-flex" }}><SourceLogo name={x.name} domain={x.domain} size={30} radius={9} label /></span>) : <span className="tv-gris" style={{ fontSize: 12 }}>aucune</span>}{srcs.length > 4 ? <span style={{ fontSize: 11, color: "#5B6B86", marginLeft: 4 }}>+{srcs.length - 4}</span> : null}</span>
+                      </div>
+                      <span className="fleche" aria-hidden="true" />
+                      <div className="etape" style={{ flex: "1 1 180px" }}><span className="k">CHERCHE</span>
+                        <span className="row" style={{ gap: 4, flexWrap: "wrap" }}>{t.keywords.slice(0, 3).map((m) => <span key={m} className="mot">{m}</span>)}{t.keywords.length > 3 ? <span style={{ fontSize: 11, color: "#5B6B86" }}>+{t.keywords.length - 3}</span> : null}{!t.keywords.length ? <span className="tv-gris" style={{ fontSize: 12 }}>aucun mot-clé</span> : null}</span>
+                      </div>
+                      <span className="fleche" aria-hidden="true" />
+                      <div className="etape" style={{ flex: "0 0 110px" }}><span className="k">PERTINENCE</span>
+                        <span style={{ fontSize: 12, fontWeight: 700 }}>≥ {t.minScore} / 100</span>
+                        <span className="seuil" style={{ background: `linear-gradient(90deg, #EDF1F7 ${t.minScore}%, #CDEFD9 ${t.minScore}%)` }}><i style={{ left: `${t.minScore}%` }} /></span>
+                      </div>
+                      <span className="fleche" aria-hidden="true" />
+                      <div className="etape"><span className="k">PUIS</span>
+                        <span className="decision" data-auto={enAuto}><Trait d={enAuto ? NAV_ICONS.eclair : "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"} size={13} stroke={2.2} />{enAuto ? "Publie seul" : "Te montre d'abord"}</span>
+                        <span style={{ fontSize: 11, color: "#5B6B86" }}>{FORMAT_LABEL[t.format]}{t.mode === "manuel" ? " · toujours manuel" : !auto ? " · pilote coupé" : ""}</span>
+                      </div>
+                      <span className="fleche" aria-hidden="true" />
+                      <div className="etape"><span className="k">SUR</span>
+                        <span className="row" style={{ gap: 4 }}>{t.platforms.map((p) => <span key={p} className="canal" title={PLATFORM_LABEL[p]} style={{ background: { facebook: "#1877F2", linkedin: "#0A66C2", wordpress: "#0A2A66", tiktok: "#0B1A33" }[p] }}>{{ facebook: "F", linkedin: "in", wordpress: "W", tiktok: "T" }[p]}</span>)}</span>
+                      </div>
+                      <div className="semaine">
+                        <span className="k">CETTE SEMAINE</span>
+                        {([["préparées", st.prepares, "#C7D6FB"], ["en attente", st.attente, "#60A5FA"], ["publiées", st.publies, c]] as const).map(([l, v, col]) => (
+                          <span key={l} className="row" style={{ gap: 8 }}><span style={{ width: 62, fontSize: 11, color: "#5B6B86" }}>{l}</span><span style={{ flex: 1, height: 10, borderRadius: 5, background: "#EDF1F7", display: "flex" }}><span style={{ width: `${Math.round((v / mx) * 100)}%`, borderRadius: 5, background: col }} /></span><strong style={{ width: 18, fontSize: 12, textAlign: "right" }}>{v}</strong></span>
+                        ))}
+                      </div>
                     </div>
                   </article>
                 );
               })}
+              <Link href="/declencheurs/modifier" className="tv-regle2-nouveau"><Trait d={NAV_ICONS.plus} size={18} stroke={2.2} />Nouvelle règle</Link>
             </div>
 
             {/* Banc d'essai */}
