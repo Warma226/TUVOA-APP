@@ -192,8 +192,8 @@ export default function VideosPage() {
 
                 {!extraits.length ? (
                   <div className="tv-carte" style={{ alignItems: "flex-start", gap: 10 }}>
-                    <strong style={{ fontSize: 16 }}>{v.info.genre === "actu" ? "VOA n'a pas encore regardé cette vidéo." : "Trouver les moments chocs de cette vidéo"}</strong>
-                    <span className="tv-gris" style={{ fontSize: 13 }}>{v.info.genre === "actu" ? "VOA repère 3 ou 4 passages de 20 à 45 s qui tiennent seuls, avec les sous-titres en français." : "VOA regarde toute la vidéo et sort les 4 moments les plus forts : révélations, aveux, chiffres qui frappent, phrases à partager."} Compter une à trois minutes.</span>
+                    <strong style={{ fontSize: 16 }}>{busy === "extraits" ? "VOA regarde la vidéo…" : v.info.genre === "actu" ? "Les meilleurs extraits, prêts à partager" : "Les moments chocs, prêts à partager"}</strong>
+                    <span className="tv-gris" style={{ fontSize: 13 }}>{busy === "extraits" ? "Il note les passages forts et traduit ce qui est dit. Cela prend une à trois minutes : vous pouvez rester sur cette page." : v.info.genre === "actu" ? "En un clic, VOA visionne la vidéo et sélectionne 3 ou 4 passages de 20 à 45 s qui tiennent seuls, sous-titrés en français." : "En un clic, VOA visionne toute la vidéo et sélectionne les 4 moments les plus forts : révélations, aveux, chiffres qui frappent, phrases à partager."}</span>
                     <div className="row" style={{ gap: 8 }}>
                       <button type="button" className="tv-btn-nuit" onClick={reperer} disabled={Boolean(busy)}>{busy === "extraits" ? "VOA REGARDE LA VIDÉO…" : v.info.genre === "actu" ? "REPÉRER LES EXTRAITS" : "TROUVER LES MOMENTS CHOCS"}</button>
                       <button type="button" className="btn" onClick={() => ecarter(v.id)}>Écarter cette vidéo</button>
