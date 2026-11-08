@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|api/cron|api/cm-cron|api/visuel|api/login|recap/|cyberbase/|citations/|wp/|api/wp-categories|api/media|cgu|confidentialite|tiktok).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|api/cron|api/cm-cron|api/visuel|api/login|api/vitrine|studio/|recap/|cyberbase/|citations/|wp/|api/wp-categories|api/media|cgu|confidentialite|tiktok).*)"],
 };
 
 export async function middleware(req: NextRequest) {
