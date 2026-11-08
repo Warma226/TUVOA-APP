@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { moi, nomDe } from "@/lib/equipe";
 import { listPosts, listPostsEntre, getPost, savePost, deletePost, emptyPost, isDemo, type Post } from "@/lib/store";
 import { imageFor } from "@/lib/visual-url";
 import { publishPost } from "@/lib/publish";
@@ -48,6 +49,10 @@ export async function POST(req: Request) {
     if (body.action === "save") {
       const existing = !demo && body.post?.id ? await getPost(body.post.id) : null;
       const merged = normalize({ ...(existing ?? {}), ...(body.post ?? {}) });
+      if (!demo && !merged.auteur_id) {
+        const m = await moi();
+        merged.auteur_id = m.uid; merged.auteur_nom = await nomDe(m.uid);
+      }
       const saved = demo ? merged : await savePost(merged);
       return NextResponse.json({ post: withVisuals(saved) });
     }

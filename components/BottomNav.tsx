@@ -6,6 +6,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Icon } from "./Icon";
+import { useMoi } from "./Moi";
+import { lienVisible } from "@/lib/roles";
 
 // Icônes au trait de la nouvelle interface (24 × 24)
 export const NAV_ICONS = {
@@ -71,14 +73,16 @@ type Etat = { autopilot: boolean; grin: number } | null;
 export function BottomNav() {
   const path = usePathname();
   const [etat, setEtat] = useState<Etat>(null);
+  const moi = useMoi();
+  const voit = (href: string) => !moi || lienVisible(moi.role, href);
   useEffect(() => {
-    if (path.startsWith("/acces")) return;
+    if (path.startsWith("/acces") || path.startsWith("/invitation")) return;
     fetch("/api/tableau?leger=1", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && !d.error && !d.demo && setEtat({ autopilot: Boolean(d.autopilot), grin: d.grin?.aTraiter ?? 0 }))
       .catch(() => {});
   }, [path]);
-  if (path.startsWith("/acces")) return null;
+  if (path.startsWith("/acces") || path.startsWith("/invitation")) return null;
   const actif = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   const secondaire = SECONDAIRES.some((p) => path.startsWith(p));
   const media = actif("/mediatheque");
@@ -91,7 +95,7 @@ export function BottomNav() {
           <span className="tv-side-studio">STUDIO</span>
         </Link>
         <div className="tv-side-items">
-          {MENU.map((it) => (
+          {MENU.filter((it) => voit(it.href)).map((it) => (
             <Link key={it.href} href={it.href} className="tv-side-item" aria-current={actif(it.href) ? "page" : undefined}>
               <span className="tv-side-ico"><Trait d={it.d} /></span>
               <span>{it.label}</span>
@@ -99,9 +103,18 @@ export function BottomNav() {
             </Link>
           ))}
         </div>
-        <Link href="/mediatheque" className="tv-side-item tv-side-media" aria-current={media ? "page" : undefined}>
-          <span className="tv-side-ico"><Trait d={NAV_ICONS.media} /></span>
-          <span>Médiathèque</span>
+        {voit("/mediatheque") ? (
+          <Link href="/mediatheque" className="tv-side-item tv-side-media" aria-current={media ? "page" : undefined}>
+            <span className="tv-side-ico"><Trait d={NAV_ICONS.media} /></span>
+            <span>Médiathèque</span>
+          </Link>
+        ) : null}
+        <Link href="/compte" className="tv-side-compte" aria-current={actif("/compte") ? "page" : undefined}>
+          <span className="av">{(moi?.nom || moi?.roleNom || "TU").split(/\s+/).map((x) => x[0]).join("").slice(0, 2).toUpperCase()}</span>
+          <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <strong>{moi?.nom || (moi?.role === "admin" ? "Mon compte" : "…")}</strong>
+            <small>{moi?.roleNom ?? "Mon compte"}</small>
+          </span>
         </Link>
         <div className="tv-side-pilote">
           <span className="tv-kicker" style={{ color: "#FFB48A" }}>PILOTE AUTOMATIQUE</span>
@@ -116,7 +129,7 @@ export function BottomNav() {
       </nav>
 
       <nav className={`tv-tabs${secondaire ? " sub" : ""}`} aria-label="Navigation principale">
-        {ONGLETS.map((t) => (
+        {ONGLETS.filter((t) => voit(t.href)).map((t) => (
           <Link key={t.href} href={t.href} aria-current={actif(t.href) ? "page" : undefined}>
             <Trait d={t.d} size={21} />
             <span>{t.label}</span>

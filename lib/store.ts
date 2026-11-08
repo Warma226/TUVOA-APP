@@ -36,6 +36,9 @@ export type Post = {
   status: PostStatus;
   scheduled_at: string | null;
   auto: boolean;
+  // membre de l'équipe qui a créé la publication ("admin" pour l'administrateur principal)
+  auteur_id?: string | null;
+  auteur_nom?: string | null;
   results: Partial<Record<Platform, PublishResult>>;
 };
 

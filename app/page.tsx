@@ -8,6 +8,7 @@ import Voa from "@/components/Voa";
 import { LogoTuile, NAV_ICONS, Trait } from "@/components/BottomNav";
 import { Courbe, Disque, Dossiers, Repartition, type Jour, type Stockage } from "@/components/Tableau";
 import { getInfo, saveSettings, type Info } from "@/lib/client";
+import { useMoi } from "@/components/Moi";
 
 type Compte = Partial<Record<"publie" | "planifie" | "a_valider" | "brouillon" | "erreur" | "annule" | "recap", number>>;
 type Donnees = {
@@ -67,8 +68,11 @@ export default function Dashboard() {
   }, []);
 
   const auto = info?.settings.autopilot ?? d?.autopilot ?? false;
+  const moi = useMoi();
+  const admin = !moi || moi.role === "admin";
   async function basculer() {
     if (!info) return;
+    if (!admin) return setError("Seul l'administrateur principal peut activer ou couper le pilote automatique.");
     const autopilot = !auto;
     setInfo({ ...info, settings: { ...info.settings, autopilot } });
     await saveSettings({ autopilot }).catch((e: Error) => setError(e.message));
@@ -141,6 +145,7 @@ export default function Dashboard() {
           <LogoTuile taille={52} />
           <span style={{ fontFamily: "var(--font-mont)", fontWeight: 700, fontSize: 12, letterSpacing: 2, color: "#9FB6E8" }}>STUDIO</span>
           <span style={{ flex: 1 }} />
+          <Link href="/compte" className="tv-rond" aria-label="Mon compte"><Trait d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" size={18} stroke={2} /></Link>
           <Link href="/calendrier" className="tv-rond" aria-label="Rechercher une publication"><Trait d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-3.5-3.5" size={18} stroke={2} /></Link>
           <Link href="/calendrier?filtre=a_valider" className="tv-rond" aria-label={aValider ? `${pl(aValider, "post")} à valider` : "Posts à valider"}>
             <Trait d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" size={18} />
@@ -151,7 +156,7 @@ export default function Dashboard() {
           <span style={{ fontSize: 13, color: "#BFD0FF" }}>{horodatage(now)}</span>
           <h1 className="tv-titre" style={{ color: "#fff", marginTop: 4 }}>Tableau de bord</h1>
         </div>
-        <button type="button" role="switch" aria-checked={auto} className="tv-pilote-mobile" onClick={basculer} disabled={!info}>
+        <button type="button" role="switch" aria-checked={auto} className="tv-pilote-mobile" onClick={basculer} disabled={!info || !admin}>
           <span className={`tv-led${auto ? "" : " off"}`} style={{ width: 12, height: 12 }} />
           <span style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
             <strong style={{ fontSize: 14 }}>Pilote automatique {auto ? "actif" : "en pause"}</strong>
@@ -169,7 +174,7 @@ export default function Dashboard() {
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher une publication, une source, une citation…" aria-label="Rechercher une publication" />
           </form>
           <span style={{ flex: 1 }} />
-          <button type="button" role="switch" aria-checked={auto} onClick={basculer} disabled={!info} className="tv-rond" style={{ width: "auto", padding: "0 16px 0 12px", gap: 10, fontSize: 13, fontWeight: 700 }}>
+          <button type="button" role="switch" aria-checked={auto} onClick={basculer} disabled={!info || !admin} className="tv-rond" style={{ width: "auto", padding: "0 16px 0 12px", gap: 10, fontSize: 13, fontWeight: 700 }}>
             <span className={`switch${auto ? " on" : ""}`} aria-hidden="true" style={{ pointerEvents: "none", width: 40, height: 24 }}><span style={{ width: 18, height: 18 }} /></span>
             Pilote auto {auto ? "activé" : "en pause"}
           </button>
