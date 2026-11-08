@@ -2,6 +2,7 @@
 // Le Grin : la boîte de réception de la communauté, préparée par VOA (community manager de la Page Facebook TUVOA).
 // Autonomie réglable (pause, VOA propose et je valide, VOA répond seule), réponses à valider avec choix du ton,
 // réponses enregistrées, humeur du grin, questions qui reviennent, radar à arnaques, grin du jeudi, piliers, brief du soir.
+import { useVoirPlus } from "@/components/VoirPlus";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { CmFil, CmLigne, CmRapport, CmReglages } from "@/lib/cm";
@@ -118,6 +119,8 @@ export default function Grin() {
   const reponsesTypes = e?.reglages.reponsesTypes?.length ? e.reglages.reponsesTypes : REPONSES_DEFAUT;
   const autonomie = !e ? null : !e.reglages.actif ? "pause" : e.reglages.autonomie === "propose" ? "propose" : "auto";
   const r = e?.rapport?.contenu;
+  const vListe = useVoirPlus(liste, 10, filtre);
+  const vQ = useVoirPlus(r?.questions ?? []);
 
   const humeur: Humeur = (() => {
     if (!e) return "veille";
@@ -223,7 +226,7 @@ export default function Grin() {
 
           <section className="tv-grin-liste" aria-label="Échanges">
             {!e ? <p className="tv-gris" style={{ padding: 12 }}>Chargement du grin…</p> : liste.length === 0 ? <p className="tv-gris" style={{ padding: 12 }}>{filtre === "valider" ? "Rien à valider. VOA s'occupe de tout." : "Aucun échange ici."}</p> : null}
-            {liste.slice(0, 60).map((l) => {
+            {vListe.visibles.map((l) => {
               const et = ETAT[l.action] ?? [l.action, "#5B6B86"];
               return (
                 <button key={l.id} type="button" className="tv-grin-item" aria-current={ouvert?.id === l.id ? "true" : undefined} onClick={() => setChoix(l.id)}>
@@ -237,6 +240,7 @@ export default function Grin() {
                 </button>
               );
             })}
+            {vListe.bouton}
           </section>
 
           <section className="tv-grin-conv" aria-label="Échange ouvert">
@@ -306,12 +310,13 @@ export default function Grin() {
 
           <section className="tv-carte-side" aria-labelledby="t-q">
             <h2 id="t-q" className="tv-h2" style={{ fontSize: 18 }}>Les questions qui reviennent</h2>
-            {r?.questions.length ? r.questions.slice(0, 4).map((q) => (
+            {r?.questions.length ? vQ.visibles.map((q) => (
               <div key={q} className="row" style={{ gap: 10, padding: "8px 0", borderTop: "1px solid #EDF1F7" }}>
                 <span style={{ flex: 1, fontSize: 13, fontWeight: 600, lineHeight: 1.35 }}>{q}</span>
                 <Link href={`/creer/actu?idee=${encodeURIComponent(q)}`} style={{ fontSize: 12, fontWeight: 800, textDecoration: "none", whiteSpace: "nowrap" }}>En faire un post</Link>
               </div>
             )) : <span className="tv-gris" style={{ fontSize: 13 }}>Elles apparaîtront après le premier brief du soir.</span>}
+            {vQ.bouton}
           </section>
 
           <section className="tv-voa" aria-labelledby="t-radar" style={{ flex: "none" }}>

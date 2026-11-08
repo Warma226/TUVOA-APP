@@ -614,3 +614,25 @@ details summary { list-style-position: inside; }
 /* Studio */
 .tv-studio-haut { width: 100%; max-width: 1400px; margin: 0 auto; box-sizing: border-box; padding: 20px 16px 8px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
 @media (min-width: 1024px) { .tv-studio-haut { padding: 26px 32px 8px; } }
+
+/* Voir plus */
+.tv-voirplus { display: flex; justify-content: center; padding-top: 4px; }
+.tv-voirplus button { height: 40px; padding: 0 16px; border-radius: 12px; border: 1px solid #c9d3e3; background: #fff; font: inherit; font-size: 13px; font-weight: 700; color: var(--nuit); cursor: pointer; }
+.tv-voirplus button span { font-weight: 500; color: var(--gris-t); }
+.tv-voirplus button:hover { background: #eef3ff; }
+.tv-sombre .tv-voirplus button { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: #fff; }
+.tv-sombre .tv-voirplus button span { color: #c9d6f2; }
+.tv-fichier { position: relative; }
+.tv-fichier[data-choisi="true"] { outline: 3px solid var(--bleu); outline-offset: -1px; }
+.tv-fichier-choix { position: absolute; top: 8px; left: 8px; z-index: 2; width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.92); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(10,42,102,0.2); cursor: pointer; }
+.tv-fichier-choix input { width: 18px; height: 18px; margin: 0; accent-color: var(--bleu); }
+.tv-fichier-menu { position: absolute; top: 8px; right: 8px; z-index: 3; }
+.tv-fichier-menu summary { list-style: none; width: 34px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.92); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--nuit); box-shadow: 0 2px 6px rgba(10,42,102,0.2); }
+.tv-fichier-menu summary::-webkit-details-marker { display: none; }
+.tv-fichier-menu [role="menu"] { position: absolute; right: 0; top: 36px; min-width: 210px; padding: 6px; border-radius: 14px; background: #fff; border: 1px solid #e3e9f3; box-shadow: 0 16px 40px rgba(10,42,102,0.2); display: flex; flex-direction: column; }
+.tv-fichier-menu [role="menuitem"] { display: block; text-align: left; padding: 9px 10px; border-radius: 9px; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--encre); text-decoration: none; cursor: pointer; }
+.tv-fichier-menu [role="menuitem"]:hover:not(:disabled) { background: #eef3ff; color: var(--encre); }
+.tv-fichier-menu [role="menuitem"]:disabled { color: #9aa8be; cursor: not-allowed; }
+.tv-fichier-menu [role="menuitem"].danger { color: #b42318; }
+.tv-usage { align-self: flex-start; margin-top: 2px; padding: 2px 7px; border-radius: 7px; font-size: 11px; font-weight: 700; background: #dbe7ff; color: #1d4ed8; text-decoration: none; }
+.tv-usage.libre { background: #eef2f8; color: #5b6b86; }

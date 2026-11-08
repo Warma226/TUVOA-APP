@@ -1,6 +1,7 @@
 "use client";
 // Déclencheurs : les règles qui transforment une info de la veille en publication, leurs chiffres,
 // un banc d'essai (simulation sur les 48 dernières heures, sans rien publier), les garde-fous réglables et le journal.
+import { useVoirPlus } from "@/components/VoirPlus";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { NAV_ICONS, Trait } from "@/components/BottomNav";
@@ -67,7 +68,9 @@ export default function Declencheurs() {
   const journal = posts
     .filter((p) => p.origin === "veille" && Date.now() - new Date(p.created_at).getTime() < 48 * 3.6e6)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, 12);
+    .slice(0, 60);
+
+  const vJournal = useVoirPlus(journal);
 
   function preRemplir(id: string) {
     setEssaiBase(id);
@@ -238,7 +241,7 @@ export default function Declencheurs() {
               <h2 id="t-journal" className="tv-h2" style={{ fontSize: 18 }}>Préparé par la veille · 48 h</h2>
               {journal.length === 0 ? <span className="tv-gris" style={{ fontSize: 13 }}>Rien préparé ces 48 dernières heures.</span> : null}
               <ol className="tv-fil">
-                {journal.map((p) => {
+                {vJournal.visibles.map((p) => {
                   const t = triggers.find((x) => x.id === p.trigger_id);
                   const e = ETAT[p.status] ?? [p.status, "#9AA8BE"];
                   return (
@@ -253,6 +256,7 @@ export default function Declencheurs() {
                   );
                 })}
               </ol>
+              {vJournal.bouton}
             </section>
           </aside>
         </div>

@@ -1,5 +1,6 @@
 "use client";
 // Calendrier : planning de la semaine rubrique par rubrique, le jour choisi heure par heure, et les créneaux à combler.
+import { useVoirPlus } from "@/components/VoirPlus";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -120,6 +121,7 @@ function Calendrier() {
   const duJour = filtres
     .filter((p) => { const d = quand(p); return d && cle(d) === jour && (!ligne || ligneDe(p) === ligne); })
     .sort((a, b) => (quand(a)?.getTime() ?? 0) - (quand(b)?.getTime() ?? 0));
+  const vJour = useVoirPlus(duJour, 5, `${jour}|${ligne}|${filtre}`);
   const jourDate = jours.find((d) => cle(d) === jour) ?? new Date(`${jour}T12:00:00`);
   const titreJour = (() => {
     const t = jourDate.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -293,7 +295,7 @@ function Calendrier() {
                   {posts === null ? "Chargement…" : duJour.length ? `${pl(duJour.filter((p) => p.status === "publie").length, "publiée")} · ${duJour.filter((p) => p.status === "erreur").length} à corriger · ${pl(duJour.filter((p) => ["planifie", "a_valider"].includes(p.status)).length, "prévue")}` : "Rien ce jour-là."}
                 </span>
                 <ol className="tv-fil">
-                  {duJour.slice(0, 40).map((p) => {
+                  {vJour.visibles.map((p) => {
                     const d = quand(p) as Date;
                     const e = ETAT[p.status] ?? ETAT.brouillon;
                     const photo = sansPhoto(p) && p.status !== "publie";
@@ -318,6 +320,7 @@ function Calendrier() {
                     );
                   })}
                 </ol>
+                {vJour.bouton}
               </section>
 
               {videsCit.length || videsCyber.length ? (

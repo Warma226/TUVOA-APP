@@ -1,5 +1,6 @@
 "use client";
 // Créer : choix de la rubrique. Chaque rubrique a son propre atelier (/creer/actu, /creer/citation…).
+import { useVoirPlus } from "@/components/VoirPlus";
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -43,6 +44,8 @@ function Choix() {
   useEffect(() => {
     listPosts().then(setPosts).catch(() => setPosts([]));
   }, []);
+  const brouillons = (posts ?? []).filter((p) => p.status === "brouillon").slice(0, 40);
+  const vBr = useVoirPlus(brouillons);
   if (redirection) return null;
 
   const etat = (r: RubriqueId): [string, string] => {
@@ -64,7 +67,6 @@ function Choix() {
     const n = posts.filter((p) => p.rubrique === "actu" && p.status === "brouillon").length;
     return n ? [`${n} brouillon${n > 1 ? "s" : ""} en attente`, "#1D4ED8"] : ["Partez d'une actu de la veille", "#5B6B86"];
   };
-  const brouillons = (posts ?? []).filter((p) => p.status === "brouillon").slice(0, 5);
 
   return (
     <div className="tv-page">
@@ -113,13 +115,14 @@ function Choix() {
             <h2 id="t-br" className="tv-h2" style={{ fontSize: 18 }}>Reprendre un brouillon</h2>
             {posts === null ? <span className="tv-gris">…</span> : brouillons.length === 0 ? <span className="tv-gris" style={{ fontSize: 14 }}>Aucun brouillon en attente.</span> : null}
             <div style={{ display: "flex", flexDirection: "column" }}>
-              {brouillons.map((p) => (
+              {vBr.visibles.map((p) => (
                 <Link key={p.id} href={`/editeur?id=${p.id}`} className="row" style={{ gap: 12, padding: "12px 0", borderTop: "1px solid #EDF1F7", textDecoration: "none", color: "#0B1A33" }}>
                   <span className="tv-pill" style={{ background: RUB[p.rubrique].pastille[0], color: RUB[p.rubrique].pastille[1], flexShrink: 0 }}>{RUB[p.rubrique].nom.toUpperCase()}</span>
                   <strong style={{ flex: 1, fontSize: 14, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title || p.visual?.titre || p.idea || "Sans titre"}</strong>
                 </Link>
               ))}
             </div>
+            {vBr.bouton}
           </section>
         </div>
       </div>

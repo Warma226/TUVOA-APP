@@ -2,6 +2,7 @@
 // Connexions : l'état de santé de chaque compte et service (dernière publication réussie, autorisations,
 // expiration du jeton Facebook, quotas, incidents), avec la marche à suivre pour relier ce qui manque.
 // Les clés restent dans Vercel : cette page n'en affiche jamais le contenu.
+import { useVoirPlus } from "@/components/VoirPlus";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Trait } from "@/components/BottomNav";
@@ -171,6 +172,7 @@ export default function Connexions() {
   const okCount = etats.filter((e) => e === "ok").length + svcOk.filter(Boolean).length;
 
   const jetonJours = jours(sante?.jeton?.expire ?? null);
+  const vInc = useVoirPlus(sante?.incidents ?? []);
   const scopes = sante?.jeton?.autorisations ?? [];
   const manquantes = AUTORISATIONS.filter(([k]) => scopes.length && !scopes.includes(k));
   const alerte =
@@ -291,7 +293,7 @@ export default function Connexions() {
               {sante && sante.incidents.length === 0 ? <span className="tv-gris" style={{ fontSize: 13 }}>Aucun échec de publication ces 14 derniers jours.</span> : null}
               {!sante ? <span className="tv-gris">…</span> : null}
               <ol className="tv-fil">
-                {(sante?.incidents ?? []).map((i) => (
+                {vInc.visibles.map((i) => (
                   <li key={`${i.id}-${i.plateforme}`}>
                     <span className="trait" style={{ background: i.resolu ? "#9AA8BE" : "#E11D2E" }} />
                     <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -302,6 +304,7 @@ export default function Connexions() {
                   </li>
                 ))}
               </ol>
+              {vInc.bouton}
             </section>
             <p className="notice row" style={{ alignItems: "flex-start", gap: 10 }}>
               <Trait d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01" size={18} />
