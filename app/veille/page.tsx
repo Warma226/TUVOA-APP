@@ -159,6 +159,7 @@ export default function Veille() {
             <button type="button" className="tv-rond" style={{ width: "auto", padding: "0 18px", borderRadius: 16, gap: 8, fontSize: 14, fontWeight: 700 }} onClick={load} disabled={items === null}>
               <Trait d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5" size={18} stroke={2} />{items === null ? "Lecture…" : "Actualiser"}
             </button>
+            <Link href="/videos" className="tv-rond" style={{ width: "auto", padding: "0 18px", borderRadius: 16, gap: 8, fontSize: 14, fontWeight: 700, textDecoration: "none" }}><Trait d="M23 7l-7 5 7 5V7zM1 5h15v14H1z" size={18} stroke={2} />Vidéos à reprendre</Link>
             <Link href="/sources" className="tv-btn-nuit" style={{ height: 48, padding: "0 20px", letterSpacing: 0 }}>Gérer les sources</Link>
           </div>
         </div>
