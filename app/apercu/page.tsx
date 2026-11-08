@@ -4,7 +4,8 @@ import { SourceLogo } from "@/components/SourceLogo";
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { TopBar } from "@/components/BottomNav";
+import { TopBar, Trait } from "@/components/BottomNav";
+import { RUB, creneauLibre } from "@/components/Atelier";
 import { PLATFORMS, type Platform } from "@/lib/config";
 import { FORMATS, formatFor } from "@/lib/formats";
 import { STATUS_LABEL, STATUS_BADGE, PLATFORM_LABEL } from "@/lib/labels";
@@ -48,6 +49,7 @@ function Apercu() {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [demo, setDemo] = useState(false);
+  const [creneaux, setCreneaux] = useState<Date[]>([]);
 
   useEffect(() => {
     getInfo().then((i) => setDemo(i.demo)).catch(() => undefined);
@@ -56,6 +58,13 @@ function Apercu() {
       .then(async (p) => {
         setPost(p);
         let w = splitLocal(p.scheduled_at);
+        if (p.status !== "publie") {
+          const tous = await listPosts().catch(() => []);
+          const autres = tous.filter((x) => x.id !== p.id);
+          const out: Date[] = []; let from = new Date();
+          for (let i = 0; i < 4; i++) { const c = creneauLibre(autres, p.rubrique, from); if (!c) break; out.push(c); from = new Date(c.getTime() + 1); }
+          setCreneaux(out);
+        }
         // Rubrique à heure fixe (#CyberBase à 8 h) : on propose le prochain jour libre.
         if (!p.scheduled_at && heureFixe(p.rubrique) !== undefined) {
           const slot = prochainCreneau(await listPosts().catch(() => []), p.rubrique, p.id);
@@ -139,145 +148,185 @@ function Apercu() {
     }
   }
 
+  const statut = current.status;
+  const planifie = statut === "planifie" && current.scheduled_at ? new Date(current.scheduled_at) : null;
+  const dejaPub = statut === "publie";
+  const echecs = current.platforms.filter((p) => current.results[p] && !current.results[p]?.ok);
+  const rub = RUB[current.rubrique];
+  const fullText = tab === "wordpress" ? stripHtml(text) : text;
+  const pli = tab === "facebook" ? 125 : tab === "linkedin" ? 210 : 9999;
+  const court = fullText.length > pli ? fullText.slice(0, pli).replace(/\s+\S*$/, "") : fullText;
+  const dans = (d: Date) => {
+    const m = Math.round((d.getTime() - Date.now()) / 60000);
+    if (m <= 0) return "imminent";
+    return m < 60 ? `dans ${m} min` : m < 1440 ? `dans ${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}` : `dans ${Math.round(m / 1440)} j`;
+  };
+  const jourHeure = (d: Date) => {
+    const auj = new Date(); const dem = new Date(Date.now() + 864e5);
+    const j = d.toDateString() === auj.toDateString() ? "Aujourd'hui" : d.toDateString() === dem.toDateString() ? "Demain" : d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+    return { j: j.charAt(0).toUpperCase() + j.slice(1), h: d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", ":") };
+  };
+  const canaux = current.platforms.map((p) => PLATFORM_LABEL[p]).join(" et ").replace(/ et (?=.* et )/g, ", ");
+  const choisirCreneau = (d: Date) => { const s = split(d); setDate(s.date); setTime(s.time); };
+  const auHaut = planifie ?? (dejaPub && current.scheduled_at ? new Date(current.scheduled_at) : when);
+
   return (
-    <>
-      <TopBar
-        title="Aperçu"
-        back="/"
-        right={<span className={`badge ${STATUS_BADGE[current.status]}`} style={{ fontSize: 12, padding: "5px 9px" }}>{STATUS_LABEL[current.status]}{current.auto ? " · auto" : ""}</span>}
-      />
-      <main className="page sub" style={{ paddingTop: 8, gap: 0 }}>
-        <div className="grid4" role="tablist" aria-label="Plateforme" style={{ gridTemplateColumns: `repeat(${Math.max(1, current.platforms.length)}, minmax(0, 1fr))`, marginBottom: 16 }}>
-          {current.platforms.map((p) => (
-            <button key={p} type="button" role="tab" aria-selected={tab === p} className="seg" style={{ fontSize: 13 }} onClick={() => setTab(p)}>
-              {PLATFORM_LABEL[p]}
-            </button>
-          ))}
+    <div className="tv-page">
+      <div className="tv-corps tv-ap" style={{ paddingTop: 20 }}>
+        <div className="tv-entete" style={{ gap: 12 }}>
+          <div style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: 6 }}>
+            <Link href="/calendrier" className="tv-gris" style={{ textDecoration: "none", fontWeight: 600 }}>← Calendrier</Link>
+            <h1 className="tv-titre">Aperçu</h1>
+          </div>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            {rub ? <span className="tv-pill" style={{ background: rub.pastille[0], color: rub.pastille[1] }}>{rub.nom.toUpperCase()}</span> : null}
+            <span className={`badge ${STATUS_BADGE[statut]}`} style={{ fontSize: 12, padding: "6px 10px" }}>{STATUS_LABEL[statut].toUpperCase()}{planifie ? ` · ${jourHeure(planifie).j.toUpperCase()} ${jourHeure(planifie).h}` : ""}{current.auto ? " · AUTO" : ""}</span>
+            {!dejaPub ? <Link href={`/editeur?id=${current.id}`} className="btn"><Trait d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" size={16} />Modifier</Link> : null}
+          </div>
         </div>
 
-        {current.platforms.length === 0 ? <p className="notice ambre">Aucune plateforme choisie pour ce post.</p> : null}
-
-        <section className="preview-zone" aria-label={`Aperçu ${PLATFORM_LABEL[tab]}`}>
-          <article className="social-card">
-            <div className="head">
-              <span className="avatar" aria-hidden="true"><span /></span>
-              <span>
-                <span style={{ display: "block", fontWeight: 700, fontSize: 14 }}>TUVOA</span>
-                <span className="muted" style={{ display: "block", fontSize: 12 }}>
-                  {tab === "wordpress" ? "Article WordPress" : `Publication ${PLATFORM_LABEL[tab]}`}
-                  {heure ? ` · ${heure}` : ""}
-                </span>
-              </span>
-            </div>
-            {tab === "wordpress" ? (
-              <div className="body">
-                <strong style={{ display: "block", fontSize: 16, marginBottom: 6 }}>{current.texts.wp_title || "Sans titre"}</strong>
-                {stripHtml(text).slice(0, 400)}
-                {stripHtml(text).length > 400 ? "…" : ""}
-              </div>
-            ) : (
-              <div className="body">{text || <span className="muted">Pas encore de texte pour {PLATFORM_LABEL[tab]}.</span>}</div>
-            )}
-            {current.visuals[tab] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={current.visuals[tab]} alt={`Visuel ${PLATFORM_LABEL[tab]} : ${current.visual.titre}`} style={ownVisual ? undefined : { aspectRatio: `${fmt.w} / ${fmt.h}` }} />
-            ) : (
-              <Link href={`/editeur?id=${current.id}`} className="no-visual">Ajoute une image dans l'éditeur</Link>
-            )}
-            {tab === "facebook" && current.visual.slides && current.visual.slides.length > 1 ? (
-              <div className="hscroll" style={{ gap: 8, padding: "8px 0" }} aria-label="Slides du carrousel">
-                {current.visual.slides.map((u, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={u} src={u} alt={`Slide ${i + 1}`} style={{ width: 120, aspectRatio: "4 / 5", borderRadius: 8, flexShrink: 0, objectFit: "cover" }} />
-                ))}
-              </div>
-            ) : null}
-          </article>
-          <div className="row" style={{ justifyContent: "space-between", fontSize: 13 }}>
-            <span className="muted">{current.rubrique === "actu" ? "Image de l'article" : ownVisual ? "Ton visuel" : `Format ${fmt.label.charAt(0).toLowerCase() + fmt.label.slice(1)}`}</span>
-            <span style={{ fontWeight: 600, color: over ? "var(--rouge)" : "var(--vert)" }}>
-              {len.toLocaleString("fr-FR")} / {limit.toLocaleString("fr-FR")} caractères
-            </span>
-          </div>
-        </section>
-
-        <div className="stack" style={{ marginTop: 16 }}>
-          {current.source_url ? (
-            <p className="muted small row" style={{ gap: 8 }}>
-              <SourceLogo name={current.source_name ?? "Source"} url={current.source_url} size={24} radius={7} />
-              <span>Source : <a href={current.source_url} target="_blank" rel="noopener noreferrer">{current.source_name ?? current.source_url}</a></span>
-            </p>
-          ) : null}
-
-          {Object.keys(current.results).length ? (
-            <section className="card" aria-label="Résultats de publication">
-              <h3>Publication</h3>
+        <div className="tv-ap-grille">
+          <section className="tv-ap-scene" aria-label={`Aperçu ${PLATFORM_LABEL[tab]}`}>
+            <div className="tv-ap-onglets" role="tablist" aria-label="Plateforme">
               {current.platforms.map((p) => {
                 const r = current.results[p];
-                if (!r) return null;
                 return (
-                  <p key={p} className="small" style={{ color: r.ok ? "var(--vert)" : "var(--rouge)", lineHeight: 1.5 }}>
-                    <strong>{PLATFORM_LABEL[p]}</strong> : {r.detail}
-                    {r.url ? (
-                      <>
-                        {" · "}
-                        <a href={r.url} target="_blank" rel="noopener noreferrer">voir</a>
-                      </>
-                    ) : null}
-                  </p>
+                  <button key={p} type="button" role="tab" aria-selected={tab === p} onClick={() => setTab(p)}>
+                    <i data-p={p}>{p === "facebook" ? "f" : p === "linkedin" ? "in" : p === "tiktok" ? "♪" : "W"}</i>
+                    {p === "wordpress" ? "Site" : PLATFORM_LABEL[p]}
+                    {r ? <b data-ok={r.ok}>{r.ok ? "✓" : "!"}</b> : (current.texts[TEXT_KEY[p]] ?? "").length > limitOf(p) ? <b data-ok="false">!</b> : null}
+                  </button>
                 );
               })}
-            </section>
-          ) : null}
-
-          {error ? <p className="notice rouge" role="alert">{error}</p> : null}
-          {info ? <p className="notice" role="status">{info}</p> : null}
-
-          {!locked ? (
-            <div className="btn-row">
-              <button type="button" className="btn small ghost" onClick={publishNow} disabled={Boolean(busy)}>
-                {busy === "publish" ? "Publication…" : "Publier maintenant"}
-              </button>
-              {current.status === "planifie" ? (
-                <button type="button" className="btn small ghost" onClick={() => run("cancel", () => postAction("cancel", current))} disabled={Boolean(busy)}>
-                  Annuler la planification
-                </button>
-              ) : null}
             </div>
-          ) : (
-            <Link href="/creer" className="btn primary">Créer un autre post</Link>
-          )}
-          <button type="button" className="btn link small" style={{ color: "var(--rouge)", alignSelf: "center", height: 44 }} onClick={remove} disabled={Boolean(busy)}>
-            Supprimer ce post
-          </button>
+            {current.platforms.length === 0 ? <p className="notice ambre">Aucune plateforme choisie pour ce post.</p> : null}
+            <div className="tv-ap-contenu">
+              <div className="tv-ap-tel">
+                <div className="ecran">
+                  <div className="barre"><span>{heure ?? "—"}</span><i /><span>5G</span></div>
+                  <article className="post">
+                    <div className="tete">
+                      <span className="av">T</span>
+                      <span><strong>TUVOA</strong><small>{tab === "wordpress" ? "Article du site" : `${auHaut ? jourHeure(auHaut).j : "Brouillon"}${heure ? ` à ${heure}` : ""} · 🌐`}</small></span>
+                    </div>
+                    {tab === "wordpress" ? <strong className="wp-titre">{current.texts.wp_title || "Sans titre"}</strong> : null}
+                    {fullText ? <p>{court}{fullText.length > court.length ? <>… <span className="plus">Voir plus</span></> : null}</p> : <p className="tv-gris">Pas encore de texte pour {PLATFORM_LABEL[tab]}.</p>}
+                    {current.visuals[tab] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={current.visuals[tab]} alt={`Visuel ${PLATFORM_LABEL[tab]} : ${current.visual.titre}`} style={ownVisual ? undefined : { aspectRatio: `${fmt.w} / ${fmt.h}`, objectFit: "cover" }} />
+                    ) : <Link href={`/editeur?id=${current.id}`} className="no-visual">Ajoutez une image dans l&apos;éditeur</Link>}
+                    {tab === "facebook" && current.visual.slides && current.visual.slides.length > 1 ? (
+                      <div className="hscroll" style={{ gap: 8, padding: 8 }} aria-label="Slides du carrousel">
+                        {current.visual.slides.map((u, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img key={u} src={u} alt={`Slide ${i + 1}`} style={{ width: 110, aspectRatio: "4 / 5", borderRadius: 8, flexShrink: 0, objectFit: "cover" }} />
+                        ))}
+                      </div>
+                    ) : null}
+                    {tab !== "wordpress" ? <div className="actions"><span>J&apos;aime</span><span>Commenter</span><span>Partager</span></div> : null}
+                  </article>
+                </div>
+              </div>
+              <div className="tv-ap-cote">
+                <div className="bloc">
+                  <span className="tv-kicker">LE TEXTE COMPLET</span>
+                  {tab === "wordpress" ? <strong style={{ fontSize: 15 }}>{current.texts.wp_title}</strong> : null}
+                  <div className="texte">{fullText || "—"}</div>
+                  <span className="row" style={{ gap: 8, fontSize: 12, fontWeight: 700, color: over ? "#B42318" : "#05603A" }}>
+                    <Trait d={over ? "M12 8v5M12 17h.01" : "M20 6L9 17l-5-5"} size={14} stroke={2.6} />
+                    {len.toLocaleString("fr-FR")} / {limit.toLocaleString("fr-FR")} caractères{over ? " · trop long" : ""}
+                  </span>
+                </div>
+                {current.visuals[tab] ? (
+                  <div className="bloc row" style={{ gap: 12, flexDirection: "row", alignItems: "center" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={current.visuals[tab]} alt="" style={{ width: 54, height: 66, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
+                    <span style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                      <strong style={{ fontSize: 14 }}>Le visuel</strong>
+                      <span className="tv-gris" style={{ fontSize: 12 }}>{current.rubrique === "actu" ? "Image de l'article" : ownVisual ? "Visuel fourni" : fmt.label}</span>
+                      <span className="row" style={{ gap: 12 }}>
+                        <a href={current.visuals[tab]} download target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 800 }}>Télécharger</a>
+                        {!dejaPub ? <Link href={`/editeur?id=${current.id}`} style={{ fontSize: 12, fontWeight: 800 }}>Changer</Link> : null}
+                      </span>
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <aside className="tv-ap-side">
+            <section className={`tv-ap-quand${dejaPub ? " pub" : echecs.length ? " err" : ""}`} aria-label="Programmation">
+              <span className="tv-kicker">{dejaPub ? "PUBLIÉ" : echecs.length ? "PUBLICATION INCOMPLÈTE" : planifie ? "PROGRAMMÉ" : "PAS ENCORE PROGRAMMÉ"}</span>
+              {auHaut && !Number.isNaN(auHaut.getTime()) ? <strong className="grand">{jourHeure(auHaut).j}<br />à {jourHeure(auHaut).h}</strong> : <strong className="grand">Choisissez l&apos;heure</strong>}
+              <span className="ligne"><i />{dejaPub ? `Sur ${canaux}` : planifie ? `Part ${dans(planifie)} sur ${canaux}` : `Sur ${canaux || "aucun canal"}`}</span>
+              {Object.keys(current.results).length ? (
+                <ul>
+                  {current.platforms.map((p) => {
+                    const r = current.results[p]; if (!r) return null;
+                    return <li key={p} data-ok={r.ok}><b>{p === "wordpress" ? "Site" : PLATFORM_LABEL[p]}</b><span>{r.ok ? "publié" : r.detail}</span>{r.url ? <a href={r.url} target="_blank" rel="noopener noreferrer">Voir ↗</a> : null}</li>;
+                  })}
+                </ul>
+              ) : null}
+              {echecs.length && !dejaPub ? <button type="button" className="btn small" onClick={publishNow} disabled={Boolean(busy)}>{busy === "publish" ? "Nouvel essai…" : `Réessayer sur ${echecs.map((p) => PLATFORM_LABEL[p]).join(", ")}`}</button> : null}
+            </section>
+
+            {error ? <p className="notice rouge" role="alert">{error}</p> : null}
+            {info ? <p className="notice" role="status">{info}</p> : null}
+
+            {!locked ? (
+              <section className="tv-carte-side" id="heure" aria-labelledby="t-heure">
+                <h2 id="t-heure" className="tv-h2" style={{ fontSize: 17 }}>{planifie ? "Changer l'heure" : "Programmer"}</h2>
+                {creneaux.length ? (
+                  <>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                      {creneaux.map((c) => {
+                        const s = split(c), on = s.date === date && s.time === time;
+                        const jh = jourHeure(c);
+                        return <button key={c.toISOString()} type="button" className="tv-ap-creneau" aria-pressed={on} onClick={() => choisirCreneau(c)}>{jh.j === "Aujourd'hui" ? jh.h : `${jh.j.split(" ")[0]} ${jh.h}`}</button>;
+                      })}
+                    </div>
+                    <span className="tv-gris" style={{ fontSize: 12 }}>Créneaux libres pour {rub?.nom.toLowerCase() ?? "cette rubrique"}{current.rubrique === "citation" ? " (une toutes les 2 h)" : current.rubrique === "cyberbase" ? ` (chaque jour à ${heureFixe(current.rubrique)} h)` : ""}.</span>
+                  </>
+                ) : null}
+                <div className="row" style={{ gap: 10 }}>
+                  <label className="field" style={{ flex: "1 1 0", minWidth: 0 }}>Date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+                  <label className="field" style={{ flex: "0 0 110px", minWidth: 0 }}>Heure<input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label>
+                </div>
+                <button type="button" className="tv-btn-nuit" style={{ justifyContent: "center" }} onClick={schedule} disabled={Boolean(busy)}>
+                  <Trait d="M3 5h18v16H3zM16 3v4M8 3v4M3 10h18" size={16} stroke={2} />{busy === "schedule" ? "UN INSTANT…" : planifie ? "REPLANIFIER" : "VALIDER ET PROGRAMMER"}
+                </button>
+                <button type="button" className="btn" style={{ justifyContent: "center" }} onClick={publishNow} disabled={Boolean(busy)}><Trait d="M22 2L11 13M22 2l-7 20-4-9-9-4z" size={16} />{busy === "publish" ? "Publication…" : "Publier maintenant"}</button>
+              </section>
+            ) : (
+              <Link href="/creer" className="tv-btn-nuit" style={{ justifyContent: "center" }}>CRÉER UNE AUTRE PUBLICATION</Link>
+            )}
+
+            <section className="tv-carte-side" style={{ gap: 10 }}>
+              {current.source_url ? (
+                <div className="row" style={{ gap: 10 }}>
+                  <SourceLogo name={current.source_name ?? "Source"} url={current.source_url} size={36} radius={10} />
+                  <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}><span className="tv-kicker">SOURCE</span><a href={current.source_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current.source_name ?? current.source_url} ↗</a></span>
+                </div>
+              ) : null}
+              <div className="row" style={{ gap: 8, borderTop: current.source_url ? "1px solid #EDF1F7" : 0, paddingTop: current.source_url ? 10 : 0 }}>
+                {planifie ? <button type="button" className="btn small" style={{ flex: 1 }} onClick={() => run("cancel", () => postAction("cancel", current))} disabled={Boolean(busy)}>Annuler la programmation</button> : null}
+                <button type="button" className="btn small danger" style={{ flex: 1 }} onClick={remove} disabled={Boolean(busy)}>Supprimer</button>
+              </div>
+            </section>
+          </aside>
         </div>
-      </main>
+      </div>
 
       {!locked ? (
-        <div className="actionbar">
-          <div className="grid2" style={{ gap: 10 }}>
-            <label className="field" style={{ fontSize: 12, fontWeight: 500, color: "var(--texte-2)", gap: 4 }}>
-              Date
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </label>
-            <label className="field" style={{ fontSize: 12, fontWeight: 500, color: "var(--texte-2)", gap: 4 }}>
-              Heure
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-            </label>
-          </div>
-          {heureFixe(current.rubrique) !== undefined ? (
-            <p className="muted small" style={{ marginTop: -4 }}>
-              #CyberBase : une notion chaque jour à {heureFixe(current.rubrique)} h. Le prochain jour libre est proposé.
-            </p>
-          ) : null}
-          <div className="btn-row">
-            <Link href={`/editeur?id=${current.id}`} className="btn">Modifier</Link>
-            <button type="button" className="btn primary" style={{ flex: 2 }} onClick={schedule} disabled={Boolean(busy)}>
-              {busy === "schedule" ? "…" : current.status === "planifie" ? "Replanifier" : "Valider et planifier"}
-            </button>
+        <div className="tv-ap-barre">
+          <span className="row" style={{ gap: 8, fontSize: 13, fontWeight: 700 }}><i style={{ width: 8, height: 8, borderRadius: 4, background: planifie ? "#16A34A" : "#F59E0B" }} />{planifie ? `Programmé ${jourHeure(planifie).j.toLowerCase()} à ${jourHeure(planifie).h} · ${dans(planifie)}` : "Pas encore programmé"}</span>
+          <div className="row" style={{ gap: 10 }}>
+            <Link href={`/editeur?id=${current.id}`} className="btn" style={{ flex: 1, justifyContent: "center" }}>Modifier</Link>
+            <a href="#heure" className="tv-btn-nuit" style={{ flex: 1.4, justifyContent: "center" }}>{planifie ? "Changer l'heure" : "Programmer"}</a>
           </div>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
