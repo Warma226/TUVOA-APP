@@ -420,25 +420,15 @@ export default function Studio() {
 
   return (
     <div className={montserrat.className} style={{ display: "contents" }}>
-      {etape !== "editeur" ? <header className="tv-studio-haut">
-        <div style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-          <Link href="/creer" className="tv-gris" style={{ textDecoration: "none", fontWeight: 600 }}>← Créer</Link>
-          <h1 className="tv-titre" style={{ fontFamily: "var(--font-mont), sans-serif" }}>Studio</h1>
-          <span style={{ fontSize: 14, color: "#33425C" }}>{etape === "editeur" ? `${GENRES.find((g) => g.id === (doc.genre ?? "visuel"))?.nom ?? "Création"} · ${doc.pages.length} page${doc.pages.length > 1 ? "s" : ""} · ${FORMATS[doc.format].nom} · enregistré sur cet appareil` : "Visuels, carrousels et vidéos aux couleurs de TUVOA"}</span>
-        </div>
-        {etape === "editeur" ? (
-          <>
-            <div role="radiogroup" aria-label="Format" className="tv-segments">
-              {(Object.keys(FORMATS) as Format[]).map((f) => (
-                <button key={f} type="button" role="radio" aria-checked={doc.format === f} aria-pressed={doc.format === f} onClick={() => { changer((d) => decliner(d, f)); setSel(null); }}>
-                  {f === "portrait" ? "4:5 Post" : f === "carre" ? "1:1 Carré" : "9:16 Story"}
-                </button>
-              ))}
-            </div>
-            <a href="#exporter" className="tv-btn-nuit"><Trait d="M3 5h18v16H3zM16 3v4M8 3v4M3 10h18" size={16} stroke={2} />EXPORTER ET PLANIFIER</a>
-          </>
-        ) : null}
-      </header> : null}
+      {etape !== "editeur" ? (
+        <header className="tv-studio-haut">
+          <div style={{ flex: "1 1 300px", display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+            <Link href="/creer" className="tv-gris" style={{ textDecoration: "none", fontWeight: 600 }}>← Créer</Link>
+            <h1 className="tv-titre" style={{ fontFamily: "var(--font-mont), sans-serif" }}>Studio</h1>
+            <span style={{ fontSize: 14, color: "#33425C" }}>Visuels, carrousels et vidéos aux couleurs de TUVOA</span>
+          </div>
+        </header>
+      ) : null}
       {etape === "accueil" ? (
         <main className="page sub wide" style={{ paddingTop: 8, maxWidth: 1100 }}>
           <div className="row" style={{ gap: 18, alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
