@@ -750,3 +750,15 @@ details summary { list-style-position: inside; }
 .tv-fichier-actions .utiliser { grid-column: 1 / -1; }
 .tv-fichier-actions select { width: 100%; height: 40px; border-radius: 10px; font-size: 13px; font-weight: 700; color: var(--nuit); }
 .tv-liberer { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; background: #fff; border: 1px solid #e3e9f3; color: var(--encre); }
+
+/* Déclencheurs : règles en cartes */
+.tv-regles-cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; }
+.tv-regle-carte { border-radius: 24px; padding: 18px; background: rgba(255,255,255,0.82); border: 1px solid var(--verre-bord); box-shadow: 0 10px 30px rgba(10,42,102,0.06); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.tv-regle-carte[data-off="true"] { opacity: 0.6; }
+.tv-regle-carte .ico { width: 44px; height: 44px; border-radius: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #fff; }
+.tv-regle-carte .chiffres { display: flex; gap: 18px; align-items: flex-end; padding: 12px 14px; border-radius: 16px; background: #f4f7fc; }
+.tv-regle-carte .chiffres > span { display: flex; flex-direction: column; }
+.tv-regle-carte .chiffres strong { font-family: var(--font-mont); font-size: 20px; line-height: 1.1; }
+.tv-regle-carte .chiffres small { font-size: 11px; color: var(--gris-t); }
+.tv-regle-carte .spark { display: flex !important; flex-direction: row !important; gap: 3px; align-items: flex-end; height: 28px; }
+.tv-regle-carte .spark i { display: block; width: 6px; border-radius: 3px; }
