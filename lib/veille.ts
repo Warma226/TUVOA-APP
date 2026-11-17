@@ -20,7 +20,18 @@ export type VeilleItem = {
   post?: { id: string; status: string; at: string | null }; // déjà repris dans une publication TUVOA
 };
 
-const parser = new Parser({ timeout: 12000, headers: { "User-Agent": "TUVOA-Veille/0.1 (+https://www.tuvoa.media)" } });
+const parser = new Parser({ timeout: 12000, headers: { "User-Agent": "TUVOA-Veille/0.1 (+https://www.tuvoa.media)" }, customFields: { item: ["News:Source", "News:Image"] } });
+
+// Flux d'actualités de moteurs (Bing News) : le lien passe par un redirecteur. On garde l'adresse réelle de l'article
+// et le nom du média d'origine, pour que la source citée dans les posts soit la bonne.
+function lienReel(lien: string): string {
+  try {
+    const u = new URL(lien);
+    if (/(^|\.)bing\.com$/.test(u.hostname) && u.searchParams.get("url")) return u.searchParams.get("url") as string;
+  } catch { /* lien invalide */ }
+  return lien;
+}
+const mediaDe = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; } };
 
 function clean(text: string | undefined): string {
   return (text ?? "")
@@ -75,8 +86,10 @@ export async function fetchVeille(sources: Source[], triggers: Trigger[]): Promi
     }
     const { s, feed } = r.value;
     for (const entry of (feed.items ?? []).slice(0, 25)) {
-      const url = entry.link ?? "";
+      const agregateur = /bing\.com/.test(entry.link ?? "");
+      const url = lienReel(entry.link ?? "");
       if (!url) continue;
+      const media = agregateur ? clean((entry as Record<string, unknown>)["News:Source"] as string | undefined) || mediaDe(url) : "";
       const title = clean(entry.title);
       const summary = clean(entry.contentSnippet ?? entry.content ?? entry.summary).slice(0, 400);
       const text = ` ${title} ${summary} `.toLowerCase();
@@ -95,14 +108,14 @@ export async function fetchVeille(sources: Source[], triggers: Trigger[]): Promi
         title,
         summary,
         sourceId: s.id,
-        sourceName: s.name,
+        sourceName: media || s.name,
         lang: s.lang,
         publishedAt: entry.isoDate ?? null,
         topics,
         score,
         triggers: matched,
         blocked,
-        image: entry.enclosure?.url && /^https:/.test(entry.enclosure.url) && (!entry.enclosure.type || entry.enclosure.type.startsWith("image")) ? entry.enclosure.url : "",
+        image: agregateur && /^https?:/.test(String((entry as Record<string, unknown>)["News:Image"] ?? "")) ? "" : entry.enclosure?.url && /^https:/.test(entry.enclosure.url) && (!entry.enclosure.type || entry.enclosure.type.startsWith("image")) ? entry.enclosure.url : "",
       });
     }
   });
