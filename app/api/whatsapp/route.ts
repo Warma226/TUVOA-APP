@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
-import { whatsapp, whatsappConfigure } from "@/lib/whatsapp";
+import { canalAlertes, relierTelegram, whatsapp } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
 
-// GET → les alertes WhatsApp sont-elles configurées ? POST → envoie un message de test (administration).
+// GET → canal d'alertes (Telegram ou WhatsApp) et état. POST { action: "relier" } → relie Telegram ; sinon message de test.
 export async function GET() {
-  return NextResponse.json({ configure: whatsappConfigure() });
+  return NextResponse.json(await canalAlertes());
 }
 
-export async function POST() {
-  const r = await whatsapp("✅ TUVOA · Les alertes WhatsApp sont actives. Vous recevrez ici le brief du soir et les problèmes de la plateforme.");
+export async function POST(req: Request) {
+  const b = (await req.json().catch(() => ({}))) as { action?: string };
+  const r = b.action === "relier"
+    ? await relierTelegram()
+    : await whatsapp("✅ TUVOA · Les alertes sont actives. Vous recevrez ici le brief du soir et les problèmes de la plateforme.");
   return NextResponse.json(r, { status: r.ok ? 200 : 400 });
 }
