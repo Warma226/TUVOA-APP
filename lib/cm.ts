@@ -87,7 +87,7 @@ type FbConv = { id: string; updated_time: string; link?: string; messages?: { da
 
 type Candidat = {
   cle: string; canal: "commentaire" | "message" | "mention"; external_id: string; fil: string; lien?: string;
-  auteur: string; auteurId: string; texte: string; contexte: string;
+  auteur: string; auteurId?: string; texte: string; contexte: string;
 };
 
 // Prénom + initiale du nom (« Awa Kaboré » → « Awa K. »), pour citer un membre en public.
@@ -136,6 +136,10 @@ async function dejaTraites(ids: string[]): Promise<Set<string>> {
   return new Set((data ?? []).map((r: { external_id: string }) => r.external_id));
 }
 
+// Auteurs transmis par le webhook Facebook (id du commentaire → auteur). En accès standard, Facebook masque souvent
+// l'auteur des commentaires dans l'API : le webhook, lui, le donne. Valable le temps du passage déclenché par ce webhook.
+export const auteursWebhook = new Map<string, { id?: string; name?: string }>();
+
 async function collecter(log: string[]): Promise<Candidat[]> {
   const page = PAGE();
   const out: Candidat[] = [];
@@ -150,14 +154,16 @@ async function collecter(log: string[]): Promise<Candidat[]> {
     for (const [n, p] of posts.data.entries()) {
       const tous = lots[n].data;
       for (const cm of tous) {
-        if (!cm.message?.trim() || !cm.from || cm.from.id === page) continue;
+        // Facebook peut masquer l'auteur (accès standard de l'app) : le commentaire est quand même traité.
+        const de = cm.from ?? auteursWebhook.get(cm.id);
+        if (!cm.message?.trim() || de?.id === page) continue;
         if (new Date(cm.created_time).getTime() < depuis) continue;
         if (cm.comments?.data.some((r) => r.from?.id === page)) continue; // la Page a déjà répondu
         if (cm.parent && tous.some((r) => r.parent?.id === cm.parent?.id && r.from?.id === page && r.created_time > cm.created_time)) continue;
         const parent = cm.parent ? tous.find((r) => r.id === cm.parent?.id) : undefined;
         out.push({
           cle: `c${out.length}`, canal: "commentaire", external_id: cm.id, fil: p.id, lien: cm.permalink_url || p.permalink_url,
-          auteur: cm.from.name ?? "Abonné", auteurId: cm.from.id, texte: cm.message.trim(),
+          auteur: de?.name ?? "Abonné", auteurId: de?.id, texte: cm.message.trim(),
           contexte: `Publication de TUVOA : « ${(p.message ?? "").slice(0, 900)} »${parent?.message ? `\nCommentaire auquel il répond (${parent.from?.id === page ? "TUVOA" : parent.from?.name ?? "abonné"}) : « ${parent.message.slice(0, 300)} »` : ""}`,
         });
       }
@@ -530,7 +536,7 @@ async function passage(r: CmReglages, opts: { force?: boolean }): Promise<string
   const t0 = Date.now();
   const crise = Boolean(r.crise?.active);
   const cands = await collecter(log);
-  console.log(`cm: ${cands.length} élément(s) à traiter, collecte ${Date.now() - t0} ms`);
+  console.log(`cm: ${cands.length} élément(s) à traiter, collecte ${Date.now() - t0} ms${log.length ? ` · ${log.join(" · ")}` : ""}`);
   if (cands.length) {
     let decisions: Map<string, Decision>;
     try {
