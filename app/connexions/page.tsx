@@ -113,15 +113,17 @@ export default function Connexions() {
   const [sending, setSending] = useState(false);
   const [makeMsg, setMakeMsg] = useState("");
   const [wa, setWa] = useState<boolean | null>(null);
+  const [canal, setCanal] = useState<"telegram" | "whatsapp">("whatsapp");
   const [waMsg, setWaMsg] = useState("");
   const [waEnvoi, setWaEnvoi] = useState(false);
-  useEffect(() => { fetch("/api/whatsapp").then((r) => r.json()).then((d: { configure?: boolean }) => setWa(Boolean(d.configure))).catch(() => setWa(false)); }, []);
-  async function testWhatsapp() {
+  useEffect(() => { fetch("/api/whatsapp").then((r) => r.json()).then((d: { canal?: "telegram" | "whatsapp"; relie?: boolean }) => { setCanal(d.canal ?? "whatsapp"); setWa(Boolean(d.relie)); }).catch(() => setWa(false)); }, []);
+  async function testWhatsapp(action?: "relier") {
     setWaEnvoi(true); setWaMsg("");
     try {
-      const r = await fetch("/api/whatsapp", { method: "POST" });
+      const r = await fetch("/api/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+      if (action && r.ok) setWa(true);
       const d = (await r.json().catch(() => ({}))) as { detail?: string };
-      setWaMsg(r.ok ? "Message de test envoyé : regardez WhatsApp." : `Échec : ${d.detail ?? r.status}`);
+      setWaMsg(r.ok ? (d.detail ?? "Message envoyé.") : `Échec : ${d.detail ?? r.status}`);
     } catch (e) { setWaMsg(`Échec : ${(e as Error).message}`); } finally { setWaEnvoi(false); }
   }
 
@@ -275,12 +277,13 @@ export default function Connexions() {
         <div className="row" style={{ alignItems: "baseline", gap: 10 }}><h2 className="tv-h2" style={{ fontSize: 22 }}>Services</h2><span className="tv-gris">ce qui fait tourner l'app</span></div>
         <div className="tv-veille">
           <div className="tv-cnx-grille" style={{ flex: "999 1 600px", minWidth: 0 }}>
-            <Carte ini="WA" couleur="linear-gradient(145deg, #4ADE80, #128C7E)" nom="Alertes WhatsApp" role="Brief du soir et problèmes de la plateforme" etat={wa === null ? "off" : wa ? "ok" : "off"}
-              actions={wa ? <button type="button" className="btn small" disabled={waEnvoi} onClick={testWhatsapp}>{waEnvoi ? "Envoi…" : "Envoyer un message test"}</button> : btnAide("whatsapp", false)}>
-              <Puce ok={wa}>{wa ? "Le brief du soir et les alertes arrivent sur votre WhatsApp" : "Pas encore relié"}</Puce>
+            <Carte ini={canal === "telegram" ? "TG" : "WA"} couleur={canal === "telegram" ? "linear-gradient(145deg, #7DD3FC, #229ED9)" : "linear-gradient(145deg, #4ADE80, #128C7E)"} nom={canal === "telegram" ? "Alertes Telegram" : "Alertes WhatsApp"} role="Brief du soir et problèmes de la plateforme" etat={wa === null ? "off" : wa ? "ok" : canal === "telegram" ? "warn" : "off"}
+              actions={canal === "telegram" && !wa ? <button type="button" className="btn small" disabled={waEnvoi} onClick={() => testWhatsapp("relier")}>{waEnvoi ? "Recherche…" : "Relier mon Telegram"}</button>
+                : wa ? <button type="button" className="btn small" disabled={waEnvoi} onClick={() => testWhatsapp()}>{waEnvoi ? "Envoi…" : "Envoyer un message test"}</button> : btnAide("alertes", false)}>
+              <Puce ok={wa}>{wa ? `Le brief du soir et les alertes arrivent sur ${canal === "telegram" ? "Telegram" : "WhatsApp"}` : canal === "telegram" ? "Bot prêt : écrivez /start à votre bot dans Telegram, puis « Relier mon Telegram »" : "Pas encore relié"}</Puce>
               <Puce ok={null}>Un même problème n'est signalé qu'une fois toutes les 6 heures</Puce>
               {waMsg ? <Puce ok={!waMsg.startsWith("Échec")}>{waMsg}</Puce> : null}
-              {aide("whatsapp", ["Créez un compte gratuit sur green-api.com, puis une instance « Developer ». Scannez le QR code avec le WhatsApp du numéro qui enverra les alertes (Appareils connectés).", "Dans Vercel, ajoutez GREENAPI_URL (apiUrl), GREENAPI_ID (idInstance), GREENAPI_TOKEN (apiTokenInstance) et WHATSAPP_PHONE (votre numéro qui reçoit, ex. +22670000000), puis redéployez."])}
+              {aide("alertes", ["Dans Telegram, ouvrez @BotFather, envoyez /newbot, choisissez un nom (ex. TUVOA Alertes) et un identifiant finissant par « bot ». BotFather vous donne un jeton.", "Dans Vercel, ajoutez TELEGRAM_BOT_TOKEN avec ce jeton, puis redéployez. Ouvrez ensuite votre bot, appuyez sur « Démarrer », et cliquez ici sur « Relier mon Telegram »."])}
             </Carte>
             <Carte ini="IA" couleur="linear-gradient(145deg, #C4B5FD, #7C3AED)" nom="Rédaction par l'IA" role={info?.aiProvider === "claude" ? "Claude" : "Google Gemini · gratuit"} etat={!info ? "off" : info.ai ? "ok" : "off"}
               actions={!info?.ai ? btnAide("ia", false) : undefined}>
