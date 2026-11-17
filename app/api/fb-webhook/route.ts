@@ -19,6 +19,9 @@ export async function POST(req: Request) {
   if (!signatureValide(corps, req.headers.get("x-hub-signature-256"))) return NextResponse.json({ error: "Signature invalide" }, { status: 401 });
   let payload: Parameters<typeof concerneVoa>[0] = {};
   try { payload = JSON.parse(corps); } catch { /* corps illisible */ }
+  const resume = ((payload as { entry?: { changes?: { field?: string; value?: { item?: string; verb?: string; message?: string; from?: unknown } }[] }[] }).entry ?? [])
+    .flatMap((e) => (e.changes ?? []).map((c) => `${c.field}/${c.value?.item ?? "-"}/${c.value?.verb ?? "-"}${c.value?.message ? " +texte" : ""}${c.value?.from ? " +auteur" : ""}`));
+  console.log(`fb-webhook: ${resume.join(", ") || "vide"}`);
   if (concerneVoa(payload)) after(async () => { try { await reagir(); } catch (e) { console.error("fb temps réel", e); } });
   return NextResponse.json({ ok: true });
 }
