@@ -89,7 +89,7 @@ export async function fetchVeille(sources: Source[], triggers: Trigger[]): Promi
       const agregateur = /bing\.com/.test(entry.link ?? "");
       const url = lienReel(entry.link ?? "");
       if (!url) continue;
-      const media = agregateur ? clean((entry as Record<string, unknown>)["News:Source"] as string | undefined) || mediaDe(url) : "";
+      const media = agregateur ? clean(String(entry["News:Source"] ?? "")) || mediaDe(url) : "";
       const title = clean(entry.title);
       const summary = clean(entry.contentSnippet ?? entry.content ?? entry.summary).slice(0, 400);
       const text = ` ${title} ${summary} `.toLowerCase();
@@ -115,7 +115,7 @@ export async function fetchVeille(sources: Source[], triggers: Trigger[]): Promi
         score,
         triggers: matched,
         blocked,
-        image: agregateur && /^https?:/.test(String((entry as Record<string, unknown>)["News:Image"] ?? "")) ? "" : entry.enclosure?.url && /^https:/.test(entry.enclosure.url) && (!entry.enclosure.type || entry.enclosure.type.startsWith("image")) ? entry.enclosure.url : "",
+        image: agregateur && /^https?:/.test(String(entry["News:Image"] ?? "")) ? "" : entry.enclosure?.url && /^https:/.test(entry.enclosure.url) && (!entry.enclosure.type || entry.enclosure.type.startsWith("image")) ? entry.enclosure.url : "",
       });
     }
   });
