@@ -244,7 +244,7 @@ Pour chaque élément, indique aussi :
 Ta personnalité : VOA « Glitch », la mascotte de TUVOA, une boule bleue à lunettes noires. Taquine, vive, un peu insolente, jamais méchante ni moqueuse envers la personne. Tu as de la répartie, tu glisses une pointe d'humour tech ou un clin d'œil (ex. « Ton mot de passe, c'est 1234 ? Il faut qu'on parle. »), puis tu donnes une vraie réponse utile. L'humour ne remplace jamais le fond.
 Quand l'humour est interdit : réclamation, demande de correction, personne victime d'une arnaque ou en difficulté, deuil, santé, sujet sensible, colère, presse, partenariat. Là, ton chaleureux, sérieux et rassurant, sans blague.
 Règles des réponses, comme une community manager professionnelle :
-- Français (ou la langue de la personne si elle écrit dans une autre langue), 1 à 3 phrases courtes. Vouvoiement par défaut ; tutoiement seulement si la personne tutoie TUVOA. Appelle la personne par son prénom quand c'est naturel. Au plus un émoji, et seulement s'il ajoute au clin d'œil ; jamais d'émoji quand l'humour est interdit. Pas de point d'exclamation multiple.
+- Français (ou la langue de la personne si elle écrit dans une autre langue), 1 à 3 phrases courtes. Vouvoiement par défaut ; tutoiement seulement si la personne tutoie TUVOA. N'écris pas le nom de la personne en début de réponse : l'app l'identifie automatiquement (@Prénom) juste avant ton texte, qui doit donc se lire naturellement à la suite. Au plus un émoji, et seulement s'il ajoute au clin d'œil ; jamais d'émoji quand l'humour est interdit. Pas de point d'exclamation multiple.
 - L'humour vise la situation ou la tech, jamais la personne, son orthographe, son niveau, son pays, sa religion ou son physique. Pas d'ironie qui pourrait se lire comme du mépris.
 - Apporte toujours une valeur : une précision, une explication simple, la source, ou une question qui prolonge l'échange. Jamais de réponse creuse (« Merci pour votre commentaire »).
 - Ne rien inventer : appuie-toi uniquement sur la publication et la conversation fournies. Si tu ne sais pas, dis que l'équipe vérifie, ou renvoie vers la source citée.
@@ -288,11 +288,30 @@ async function agir(c: Candidat, d: Decision, crise: boolean, propose = false): 
   let replyId: string | null = null;
   if ((action === "repondre" || action === "signaler") && reponse) {
     if (c.canal === "message") await graph(`${PAGE()}/messages`, {}, { recipient: { id: c.auteurId }, messaging_type: "RESPONSE", message: { text: reponse } });
-    else replyId = (await graph<{ id?: string }>(`${c.external_id}/comments`, {}, { message: reponse })).id ?? null;
+    else replyId = await repondreEnIdentifiant(c, reponse);
   } else if (action === "repondre") action = "ignorer";
   if (action === "aimer") await graph(`${c.external_id}/likes`, {}, {});
   if (action === "masquer") await graph(c.external_id, {}, { is_hidden: true });
   return { action, reponse: action === "repondre" || action === "signaler" ? reponse || null : null, raison, replyId };
+}
+
+// Réponse publique qui identifie la personne (@Prénom cliquable). Si Facebook n'accepte pas l'identification,
+// la réponse commence simplement par son prénom.
+async function repondreEnIdentifiant(c: Candidat, reponse: string): Promise<string | null> {
+  const prenom = c.auteur && !/^(Abonné|Compte Facebook)$/.test(c.auteur) ? c.auteur.trim().split(/\s+/)[0] : "";
+  const simple = prenom ? `${prenom}, ${reponse.charAt(0).toLowerCase()}${reponse.slice(1)}` : reponse;
+  if (c.auteurId) {
+    try {
+      const id = (await graph<{ id?: string }>(`${c.external_id}/comments`, {}, { message: `@[${c.auteurId}] ${reponse}` })).id ?? null;
+      if (id) {
+        // Vérifie que l'identification a bien été reconnue ; sinon on remplace par la version avec le prénom.
+        const lu = await graph<{ message?: string; message_tags?: unknown[] }>(id, { fields: "message,message_tags" }).catch(() => null);
+        if (lu && !lu.message_tags?.length && (lu.message ?? "").includes("@[")) await graph(id, {}, { message: simple }).catch(() => undefined);
+        return id;
+      }
+    } catch { /* identification refusée : réponse avec le prénom */ }
+  }
+  return (await graph<{ id?: string }>(`${c.external_id}/comments`, {}, { message: simple })).id ?? null;
 }
 
 type Note = Partial<Omit<CmLigne, "id" | "created_at">> & Pick<CmLigne, "canal" | "external_id" | "action">;
