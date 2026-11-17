@@ -1,14 +1,35 @@
-// Alertes WhatsApp pour l'administration (brief du soir, problèmes de la plateforme), via CallMeBot :
-// service gratuit qui envoie des messages texte sur le WhatsApp de la personne qui l'a activé.
-// Variables Vercel : WHATSAPP_PHONE (numéro au format international, ex. +22670000000) et CALLMEBOT_KEY.
+// Alertes WhatsApp pour l'administration (brief du soir, problèmes de la plateforme).
+// Deux services possibles (le premier configuré est utilisé) :
+// - Green-API (gratuit, offre Developer) : un numéro WhatsApp relié par QR code envoie les messages.
+//   Variables : GREENAPI_URL (ex. https://7103.api.greenapi.com), GREENAPI_ID, GREENAPI_TOKEN.
+// - CallMeBot (gratuit) : variable CALLMEBOT_KEY.
+// Dans les deux cas : WHATSAPP_PHONE = numéro qui reçoit les alertes, au format international (ex. +22670000000).
 import { db } from "./store";
 
+const greenApi = () => Boolean(process.env.GREENAPI_URL && process.env.GREENAPI_ID && process.env.GREENAPI_TOKEN);
+
 export function whatsappConfigure() {
-  return Boolean(process.env.WHATSAPP_PHONE && process.env.CALLMEBOT_KEY);
+  return Boolean(process.env.WHATSAPP_PHONE && (greenApi() || process.env.CALLMEBOT_KEY));
 }
 
 export async function whatsapp(texte: string): Promise<{ ok: boolean; detail: string }> {
-  if (!whatsappConfigure()) return { ok: false, detail: "Ajoutez WHATSAPP_PHONE et CALLMEBOT_KEY dans Vercel." };
+  if (!whatsappConfigure()) return { ok: false, detail: "Ajoutez WHATSAPP_PHONE et les clés Green-API (ou CALLMEBOT_KEY) dans Vercel." };
+  if (greenApi()) {
+    const base = (process.env.GREENAPI_URL ?? "").replace(/\/+$/, "");
+    const chatId = `${(process.env.WHATSAPP_PHONE ?? "").replace(/\D/g, "")}@c.us`;
+    try {
+      const r = await fetch(`${base}/waInstance${process.env.GREENAPI_ID}/sendMessage/${process.env.GREENAPI_TOKEN}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, message: texte.slice(0, 4000) }),
+        cache: "no-store", signal: AbortSignal.timeout(20000),
+      });
+      const d = (await r.json().catch(() => ({}))) as { idMessage?: string; message?: string };
+      if (r.ok && d.idMessage) return { ok: true, detail: "Message envoyé." };
+      return { ok: false, detail: `Green-API : ${d.message ?? r.status}${r.status === 466 ? " (limite de l'offre gratuite : 3 discussions)" : r.status === 401 ? " (identifiants incorrects)" : ""}` };
+    } catch (e) {
+      return { ok: false, detail: `Green-API injoignable : ${(e as Error).message}` };
+    }
+  }
   const u = new URL("https://api.callmebot.com/whatsapp.php");
   u.searchParams.set("phone", (process.env.WHATSAPP_PHONE ?? "").replace(/[^\d+]/g, ""));
   u.searchParams.set("text", texte.slice(0, 1500));
