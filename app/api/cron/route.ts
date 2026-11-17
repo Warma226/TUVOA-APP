@@ -5,6 +5,7 @@ import { fetchVeille, fetchArticle, similar } from "@/lib/veille";
 import { generatePost, generateRecap, aiConfigured, sameStoryAs } from "@/lib/claude";
 import { publishPost, connectionStatus } from "@/lib/publish";
 import { alerte, expliquer } from "@/lib/whatsapp";
+import { rapportLundi, verifierGrin, verifierViral } from "@/lib/telegram-bot";
 import { coverUrl, itemUrl, endUrl } from "@/lib/recap-url";
 import { GUARDRAILS, gardeFous, TOPICS, categorieWp, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
 import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts, postedUrls, publishedSince, recapExists } from "@/lib/store";
@@ -190,6 +191,11 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
 
   // ─── 1 bis. Récap tech du vendredi ───────────────────────────────
   if (aiConfigured() && settings.autopilot) await weeklyRecap(log, { force: false, dry: false });
+
+  // ─── 3. Alertes : post viral, commentaires négatifs, bilan du lundi ─
+  for (const [nom, f] of [["viral", () => verifierViral(log)], ["grin", verifierGrin], ["lundi", rapportLundi]] as const) {
+    try { await f(); } catch (e) { log.push(`Alerte ${nom} : ${(e as Error).message}`); }
+  }
 
 
   return NextResponse.json({ ok: true, log, at: new Date().toISOString() });

@@ -9,13 +9,13 @@
 import { db } from "./store";
 
 const telegram = () => Boolean(process.env.TELEGRAM_BOT_TOKEN);
-const tg = (methode: string, corps?: unknown) =>
+export const tg = (methode: string, corps?: unknown) =>
   fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${methode}`, {
     method: corps ? "POST" : "GET", headers: corps ? { "Content-Type": "application/json" } : undefined,
     body: corps ? JSON.stringify(corps) : undefined, cache: "no-store", signal: AbortSignal.timeout(20000),
   }).then((r) => r.json() as Promise<{ ok: boolean; description?: string; result?: unknown }>);
 
-async function chatTelegram(): Promise<string | null> {
+export async function chatTelegram(): Promise<string | null> {
   if (process.env.TELEGRAM_CHAT_ID) return process.env.TELEGRAM_CHAT_ID;
   const { data } = await db().from("settings").select("data").eq("id", 9).maybeSingle();
   return ((data?.data as { telegramChat?: string } | null)?.telegramChat) ?? null;
@@ -88,8 +88,13 @@ export async function whatsapp(texte: string): Promise<{ ok: boolean; detail: st
   }
 }
 
-// Alerte « problème » : un même problème (même clé) n'est renvoyé qu'après `delaiH` heures, pour ne pas inonder WhatsApp.
+// Alerte « problème » : un même problème (même clé) n'est renvoyé qu'après `delaiH` heures, pour ne pas inonder la messagerie.
 export async function alerte(cle: string, texte: string, delaiH = 6) {
+  return envoiUnique(cle, `⚠️ TUVOA · ${texte}`, delaiH);
+}
+
+// Envoi « une seule fois » par clé et par période (rapport du lundi, post viral, commentaire négatif…).
+export async function envoiUnique(cle: string, texte: string, delaiH = 6) {
   if (!whatsappConfigure()) return;
   try {
     const { data } = await db().from("settings").select("data").eq("id", 9).maybeSingle();
@@ -97,7 +102,7 @@ export async function alerte(cle: string, texte: string, delaiH = 6) {
     const vues = (tout.alertes ?? {}) as Record<string, string>;
     const derniere = vues[cle] ? new Date(vues[cle]).getTime() : 0;
     if (Date.now() - derniere < delaiH * 3.6e6) return;
-    const r = await whatsapp(`⚠️ TUVOA · ${texte}`);
+    const r = await whatsapp(texte);
     if (!r.ok) { console.error("alerte whatsapp", r.detail); return; }
     // On ne garde que les clés des 3 derniers jours
     const garder = Object.fromEntries(Object.entries(vues).filter(([, v]) => Date.now() - new Date(v).getTime() < 72 * 3.6e6));
