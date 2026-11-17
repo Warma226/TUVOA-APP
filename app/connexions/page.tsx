@@ -65,6 +65,7 @@ const AUTORISATIONS: [string, string][] = [
   ["pages_manage_engagement", "Répondre et masquer les commentaires"],
   ["pages_messaging", "Répondre aux messages privés"],
   ["pages_read_user_content", "Voir les mentions de la Page"],
+  ["pages_manage_metadata", "Temps réel (alerte à chaque commentaire)"],
 ];
 
 function quand(iso?: string | null): string {
@@ -115,6 +116,16 @@ export default function Connexions() {
   const [wa, setWa] = useState<boolean | null>(null);
   const [canal, setCanal] = useState<"telegram" | "whatsapp">("whatsapp");
   const [cmdes, setCmdes] = useState(false);
+  const [tr, setTr] = useState<{ actif: boolean; url: string; jeton: string; signature: boolean } | null>(null);
+  const [trMsg, setTrMsg] = useState("");
+  useEffect(() => { fetch("/api/facebook/abonner").then((r) => r.json()).then(setTr).catch(() => undefined); }, []);
+  async function activerTempsReel() {
+    setTrMsg("");
+    const r = await fetch("/api/facebook/abonner", { method: "POST" });
+    const d = (await r.json().catch(() => ({}))) as { detail?: string };
+    setTrMsg(r.ok ? (d.detail ?? "Temps réel actif.") : `Échec : ${d.detail ?? r.status}`);
+    if (r.ok) setTr((t) => (t ? { ...t, actif: true } : t));
+  }
   const [waMsg, setWaMsg] = useState("");
   const [waEnvoi, setWaEnvoi] = useState(false);
   useEffect(() => { fetch("/api/whatsapp").then((r) => r.json()).then((d: { canal?: "telegram" | "whatsapp"; relie?: boolean; commandes?: boolean }) => { setCanal(d.canal ?? "whatsapp"); setWa(Boolean(d.relie)); setCmdes(Boolean(d.commandes)); }).catch(() => setWa(false)); }, []);
@@ -255,6 +266,7 @@ export default function Connexions() {
                     {btnAide(p.id, Boolean(c?.configured))}
                     {p.id === "linkedin" && c?.configured && c.detail.includes("Make") ? <button type="button" className="btn small" disabled={sending} onClick={sendMakeExample}>{sending ? "Envoi…" : "Envoyer un exemple à Make"}</button> : null}
                     {p.id === "tiktok" && c?.configured ? <a className="btn small" href="/api/tiktok/login">Autoriser le compte</a> : null}
+                    {p.id === "facebook" && c?.configured && tr && !tr.actif ? <button type="button" className="btn small" onClick={activerTempsReel}>Activer le temps réel</button> : null}
                   </>
                 }
               >
@@ -265,6 +277,9 @@ export default function Connexions() {
                     <Puce ok={Boolean(sante?.dernier[p.id])}>Dernière publication réussie : {sante ? quand(sante.dernier[p.id]) : "…"}</Puce>
                     {t ? <Puce ok={t.ok}>{t.detail}</Puce> : <Puce ok={null}>Relié · {c.detail}</Puce>}
                     {p.id === "facebook" && scopes.length ? AUTORISATIONS.map(([k, l]) => <Puce key={k} ok={scopes.includes(k)}>{l}{scopes.includes(k) ? "" : " : autorisation manquante"}</Puce>) : null}
+                    {p.id === "facebook" && tr ? <Puce ok={tr.actif}>{tr.actif ? "Temps réel : VOA réagit à chaque commentaire en quelques secondes" : "Temps réel pas encore actif (commentaires relevés toutes les 5 min)"}</Puce> : null}
+                    {p.id === "facebook" && tr && !tr.actif ? <Puce ok={null}>Webhook Meta (Page › feed) : URL {tr.url} · jeton de vérification {tr.jeton}</Puce> : null}
+                    {p.id === "facebook" && trMsg ? <Puce ok={!trMsg.startsWith("Échec")}>{trMsg}</Puce> : null}
                     {(sante?.incidents ?? []).filter((i) => i.plateforme === p.id && !i.resolu).slice(0, 1).map((i) => <Puce key={i.id} ok={false}>Échec non résolu : {i.detail}</Puce>)}
                   </>
                 )}
