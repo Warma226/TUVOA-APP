@@ -286,7 +286,7 @@ export default function Connexions() {
                 </> : btnAide("alertes", false)}>
               <Puce ok={wa}>{wa ? `Le brief du soir et les alertes arrivent sur ${canal === "telegram" ? "Telegram" : "WhatsApp"}` : canal === "telegram" ? "Bot prêt : écrivez /start à votre bot dans Telegram, puis « Relier mon Telegram »" : "Pas encore relié"}</Puce>
               {canal === "telegram" && wa ? <Puce ok={cmdes}>{cmdes ? "Commandes actives : /brief, /prochains, /stats, /pause, /reprendre" : "Commandes pas encore activées"}</Puce> : null}
-              <Puce ok={null}>Alertes : publication en échec, post viral, commentaire négatif, mode crise, bilan du lundi</Puce>
+              <Puce ok={null}>Alertes : chaque commentaire Facebook, publication en échec, post viral, mode crise, bilan du lundi</Puce>
               <Puce ok={null}>Un même problème n'est signalé qu'une fois toutes les 6 heures</Puce>
               {waMsg ? <Puce ok={!waMsg.startsWith("Échec")}>{waMsg}</Puce> : null}
               {aide("alertes", ["Dans Telegram, ouvrez @BotFather, envoyez /newbot, choisissez un nom (ex. TUVOA Alertes) et un identifiant finissant par « bot ». BotFather vous donne un jeton.", "Dans Vercel, ajoutez TELEGRAM_BOT_TOKEN avec ce jeton, puis redéployez. Ouvrez ensuite votre bot, appuyez sur « Démarrer », et cliquez ici sur « Relier mon Telegram »."])}
