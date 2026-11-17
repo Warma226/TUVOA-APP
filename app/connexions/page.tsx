@@ -280,7 +280,7 @@ export default function Connexions() {
               <Puce ok={wa}>{wa ? "Le brief du soir et les alertes arrivent sur votre WhatsApp" : "Pas encore relié"}</Puce>
               <Puce ok={null}>Un même problème n'est signalé qu'une fois toutes les 6 heures</Puce>
               {waMsg ? <Puce ok={!waMsg.startsWith("Échec")}>{waMsg}</Puce> : null}
-              {aide("whatsapp", ["Enregistrez le numéro du robot CallMeBot dans vos contacts (numéro indiqué sur callmebot.com), puis envoyez-lui sur WhatsApp : I allow callmebot to send me messages", "Il vous répond avec votre clé (apikey). Dans Vercel, ajoutez WHATSAPP_PHONE (votre numéro, ex. +22670000000) et CALLMEBOT_KEY, puis redéployez."])}
+              {aide("whatsapp", ["Créez un compte gratuit sur green-api.com, puis une instance « Developer ». Scannez le QR code avec le WhatsApp du numéro qui enverra les alertes (Appareils connectés).", "Dans Vercel, ajoutez GREENAPI_URL (apiUrl), GREENAPI_ID (idInstance), GREENAPI_TOKEN (apiTokenInstance) et WHATSAPP_PHONE (votre numéro qui reçoit, ex. +22670000000), puis redéployez."])}
             </Carte>
             <Carte ini="IA" couleur="linear-gradient(145deg, #C4B5FD, #7C3AED)" nom="Rédaction par l'IA" role={info?.aiProvider === "claude" ? "Claude" : "Google Gemini · gratuit"} etat={!info ? "off" : info.ai ? "ok" : "off"}
               actions={!info?.ai ? btnAide("ia", false) : undefined}>
