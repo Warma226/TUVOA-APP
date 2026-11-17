@@ -40,7 +40,11 @@ function clean(text: string | undefined): string {
     .replace(/&amp;/g, "&")
     .replace(/&#8217;|&rsquo;/g, "’")
     .replace(/&#8230;/g, "…")
-    .replace(/&#\d+;/g, " ")
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
+    .replace(/&quot;/g, '"')
+    // Lettres « stylisées » des publications Facebook (𝐋𝐚 𝐂𝐨̂𝐭𝐞…) ramenées à des lettres normales
+    .normalize("NFKC")
     .replace(/\s+/g, " ")
     .trim();
 }
