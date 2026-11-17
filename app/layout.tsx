@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Archivo, Montserrat } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const mont = Montserrat({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-mont", display: "swap" });
-const archivo = Archivo({ subsets: ["latin"], weight: ["300", "800"], variable: "--font-archivo", display: "swap" });
+// Polices intégrées à l'app (sous-ensemble latin des polices variables Google Fonts, licence OFL : app/fonts/LICENCE-OFL.txt).
+// Plus de téléchargement depuis Google pendant la compilation : c'était la cause des échecs de mise en ligne.
+const inter = localFont({ src: "./fonts/inter.woff", weight: "100 900", variable: "--font-inter", display: "swap" });
+const mont = localFont({ src: "./fonts/montserrat.woff", weight: "100 900", variable: "--font-mont", display: "swap" });
+const archivo = localFont({ src: "./fonts/archivo.woff", weight: "100 900", variable: "--font-archivo", display: "swap" });
 
 export const metadata: Metadata = {
   title: "TUVOA Studio",
