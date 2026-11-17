@@ -175,17 +175,22 @@ export async function verifierViral(log: string[]) {
   }
 }
 
-// Commentaires ou messages négatifs relevés par VOA dans le Grin et pas encore traités.
+// Chaque nouveau commentaire, message ou mention de la Page, avec ce que VOA en a fait (lecture seule).
+// Les commentaires négatifs non traités sont mis en avant.
+const ACTION: Record<string, string> = { repondre: "VOA a répondu", repondu: "VOA a répondu", aimer: "VOA a aimé", aime: "VOA a aimé", masquer: "VOA l'a masqué", masque: "VOA l'a masqué", signaler: "VOA l'a signalé", signale: "VOA l'a signalé", ignorer: "VOA l'a laissé passer", ignore: "VOA l'a laissé passer", erreur: "VOA n'a pas pu agir" };
 export async function verifierGrin() {
-  const { data } = await db().from("cm_journal").select("id,canal,auteur,texte,lien").eq("ton", "negatif").eq("traite", false)
-    .in("canal", ["commentaire", "message", "mention"]).gte("created_at", new Date(Date.now() - 45 * 60000).toISOString()).order("created_at", { ascending: false }).limit(5);
-  for (const l of (data ?? []) as { id: string; canal: string; auteur: string | null; texte: string | null; lien: string | null }[]) {
-    await envoiUnique(`negatif:${l.id}`, [
-      `😠 TUVOA · ${l.canal === "message" ? "Message" : "Commentaire"} négatif à regarder`,
+  const { data } = await db().from("cm_journal").select("id,canal,auteur,texte,lien,action,reponse,ton,traite")
+    .in("canal", ["commentaire", "message", "mention"]).gte("created_at", new Date(Date.now() - 45 * 60000).toISOString()).order("created_at", { ascending: true }).limit(15);
+  for (const l of (data ?? []) as { id: string; canal: string; auteur: string | null; texte: string | null; lien: string | null; action: string; reponse: string | null; ton: string | null; traite: boolean }[]) {
+    const negatif = l.ton === "negatif" && !l.traite;
+    const quoi = l.canal === "message" ? "Message privé" : l.canal === "mention" ? "Mention de TUVOA" : "Nouveau commentaire";
+    await envoiUnique(`com:${l.id}`, [
+      `${negatif ? "😠" : "💬"} ${quoi}${negatif ? " (négatif, à regarder)" : ""}`,
       "",
-      `${l.auteur ?? "Quelqu'un"} : « ${(l.texte ?? "").slice(0, 220)} »`,
+      `${l.auteur ?? "Quelqu'un"} : « ${(l.texte ?? "").slice(0, 300)} »`,
       "",
-      `Répondre ou masquer : ${l.lien ?? `${APP()}/communaute`}`,
+      !l.traite ? `⏳ En attente de votre décision dans le Grin${l.reponse ? `\n💡 Réponse proposée par VOA : « ${l.reponse.slice(0, 200)} »` : ""}` : `✅ ${ACTION[l.action] ?? l.action}${l.reponse ? ` : « ${l.reponse.slice(0, 200)} »` : ""}`,
+      l.lien ?? `${APP()}/communaute`,
     ].join("\n"), 24 * 7);
   }
 }
