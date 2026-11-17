@@ -1,7 +1,7 @@
 // Temps réel Facebook : la Page prévient l'app à chaque commentaire ou mention (webhook « feed »).
 // L'app lance aussitôt un passage de VOA (décision et réponse), puis transmet le commentaire sur Telegram.
 import { createHash, createHmac, timingSafeEqual } from "crypto";
-import { graph, PAGE, cmPassage, auteursWebhook } from "./cm";
+import { graph, PAGE, cmPassage, auteursWebhook, commentairesWebhook } from "./cm";
 import { verifierGrin } from "./telegram-bot";
 
 // Jeton de vérification à saisir dans Meta (Webhooks › Page) : dérivé de l'identifiant de la Page, sans secret à créer.
@@ -18,11 +18,14 @@ export function signatureValide(corps: string, entete: string | null): boolean {
   return attendu.length === recu.length && timingSafeEqual(attendu, recu);
 }
 
-type Change = { field?: string; value?: { item?: string; verb?: string; comment_id?: string; from?: { id?: string; name?: string } } };
+type Change = { field?: string; value?: { item?: string; verb?: string; comment_id?: string; post_id?: string; parent_id?: string; message?: string; created_time?: number; from?: { id?: string; name?: string } } };
 export function concerneVoa(payload: { object?: string; entry?: { changes?: Change[] }[] }): boolean {
   if (payload.object !== "page") return false;
   for (const e of payload.entry ?? []) for (const c of e.changes ?? []) {
-    if (c.value?.comment_id && c.value.from) auteursWebhook.set(c.value.comment_id, c.value.from);
+    const v = c.value;
+    if (v?.comment_id && v.from) auteursWebhook.set(v.comment_id, v.from);
+    if (c.field === "feed" && v?.item === "comment" && v.verb === "add" && v.comment_id && v.from?.id !== PAGE())
+      commentairesWebhook.set(v.comment_id, { post_id: v.post_id, parent_id: v.parent_id, message: v.message, created_time: v.created_time, from: v.from });
   }
   return (payload.entry ?? []).some((e) => (e.changes ?? []).some((c) =>
     (c.field === "feed" && c.value?.item === "comment" && c.value?.verb === "add" && c.value?.from?.id !== PAGE()) || c.field === "mention"));

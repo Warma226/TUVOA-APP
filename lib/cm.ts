@@ -139,6 +139,8 @@ async function dejaTraites(ids: string[]): Promise<Set<string>> {
 // Auteurs transmis par le webhook Facebook (id du commentaire → auteur). En accès standard, Facebook masque souvent
 // l'auteur des commentaires dans l'API : le webhook, lui, le donne. Valable le temps du passage déclenché par ce webhook.
 export const auteursWebhook = new Map<string, { id?: string; name?: string }>();
+// Commentaires reçus par le webhook : traités directement, même si l'API ne les renvoie pas dans la liste des commentaires.
+export const commentairesWebhook = new Map<string, { post_id?: string; parent_id?: string; message?: string; created_time?: number; from?: { id?: string; name?: string } }>();
 
 async function collecter(log: string[]): Promise<Candidat[]> {
   const page = PAGE();
@@ -170,6 +172,24 @@ async function collecter(log: string[]): Promise<Candidat[]> {
     }
   } catch (e) {
     log.push(`Publications illisibles : ${(e as Error).message}`);
+  }
+  // 1 bis. Commentaires annoncés par le webhook et absents de la lecture ci-dessus
+  for (const [id, w] of commentairesWebhook) {
+    commentairesWebhook.delete(id);
+    if (!w.message?.trim() || w.from?.id === page || out.some((c) => c.external_id === id)) continue;
+    let contexte = "Publication de TUVOA";
+    let lien: string | undefined;
+    if (w.post_id) {
+      try {
+        const p = await graph<FbPost>(w.post_id, { fields: "message,permalink_url" });
+        contexte = `Publication de TUVOA : « ${(p.message ?? "").slice(0, 900)} »`;
+        lien = p.permalink_url;
+      } catch (e) { log.push(`Publication du commentaire illisible : ${(e as Error).message}`); }
+    }
+    out.push({
+      cle: `w${out.length}`, canal: "commentaire", external_id: id, fil: w.post_id ?? id, lien,
+      auteur: w.from?.name ?? "Abonné", auteurId: w.from?.id, texte: w.message.trim(), contexte,
+    });
   }
   // 2. Messages privés : dernier message de l'abonné, de moins de 23 h, sans réponse de la Page
   try {
