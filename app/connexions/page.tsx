@@ -112,6 +112,18 @@ export default function Connexions() {
   const [testing, setTesting] = useState(false);
   const [sending, setSending] = useState(false);
   const [makeMsg, setMakeMsg] = useState("");
+  const [wa, setWa] = useState<boolean | null>(null);
+  const [waMsg, setWaMsg] = useState("");
+  const [waEnvoi, setWaEnvoi] = useState(false);
+  useEffect(() => { fetch("/api/whatsapp").then((r) => r.json()).then((d: { configure?: boolean }) => setWa(Boolean(d.configure))).catch(() => setWa(false)); }, []);
+  async function testWhatsapp() {
+    setWaEnvoi(true); setWaMsg("");
+    try {
+      const r = await fetch("/api/whatsapp", { method: "POST" });
+      const d = (await r.json().catch(() => ({}))) as { detail?: string };
+      setWaMsg(r.ok ? "Message de test envoyé : regardez WhatsApp." : `Échec : ${d.detail ?? r.status}`);
+    } catch (e) { setWaMsg(`Échec : ${(e as Error).message}`); } finally { setWaEnvoi(false); }
+  }
 
   async function sendMakeExample() {
     setSending(true);
@@ -263,6 +275,13 @@ export default function Connexions() {
         <div className="row" style={{ alignItems: "baseline", gap: 10 }}><h2 className="tv-h2" style={{ fontSize: 22 }}>Services</h2><span className="tv-gris">ce qui fait tourner l'app</span></div>
         <div className="tv-veille">
           <div className="tv-cnx-grille" style={{ flex: "999 1 600px", minWidth: 0 }}>
+            <Carte ini="WA" couleur="linear-gradient(145deg, #4ADE80, #128C7E)" nom="Alertes WhatsApp" role="Brief du soir et problèmes de la plateforme" etat={wa === null ? "off" : wa ? "ok" : "off"}
+              actions={wa ? <button type="button" className="btn small" disabled={waEnvoi} onClick={testWhatsapp}>{waEnvoi ? "Envoi…" : "Envoyer un message test"}</button> : btnAide("whatsapp", false)}>
+              <Puce ok={wa}>{wa ? "Le brief du soir et les alertes arrivent sur votre WhatsApp" : "Pas encore relié"}</Puce>
+              <Puce ok={null}>Un même problème n'est signalé qu'une fois toutes les 6 heures</Puce>
+              {waMsg ? <Puce ok={!waMsg.startsWith("Échec")}>{waMsg}</Puce> : null}
+              {aide("whatsapp", ["Enregistrez le numéro du robot CallMeBot dans vos contacts (numéro indiqué sur callmebot.com), puis envoyez-lui sur WhatsApp : I allow callmebot to send me messages", "Il vous répond avec votre clé (apikey). Dans Vercel, ajoutez WHATSAPP_PHONE (votre numéro, ex. +22670000000) et CALLMEBOT_KEY, puis redéployez."])}
+            </Carte>
             <Carte ini="IA" couleur="linear-gradient(145deg, #C4B5FD, #7C3AED)" nom="Rédaction par l'IA" role={info?.aiProvider === "claude" ? "Claude" : "Google Gemini · gratuit"} etat={!info ? "off" : info.ai ? "ok" : "off"}
               actions={!info?.ai ? btnAide("ia", false) : undefined}>
               <Puce ok={info ? info.ai : null}>{info?.ai ? "Rédige les posts, les accroches et les réponses de VOA" : "Non configurée : les textes sont préparés sans IA"}</Puce>

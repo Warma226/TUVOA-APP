@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { fetchVeille, fetchArticle, similar } from "@/lib/veille";
 import { generatePost, generateRecap, aiConfigured, sameStoryAs } from "@/lib/claude";
 import { publishPost, connectionStatus } from "@/lib/publish";
+import { alerte, expliquer } from "@/lib/whatsapp";
 import { coverUrl, itemUrl, endUrl } from "@/lib/recap-url";
 import { GUARDRAILS, gardeFous, TOPICS, categorieWp, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
 import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts, postedUrls, publishedSince, recapExists } from "@/lib/store";
@@ -28,6 +29,7 @@ export async function GET(req: Request) {
     return await run(log, { force: q.get("force") === "1", now: q.get("now") === "1" });
   } catch (e) {
     console.error("cron", e);
+    await alerte(`cron:${(e as Error).message.slice(0, 40)}`, `La tâche automatique (veille et publication) a planté : ${(e as Error).message.slice(0, 200)}`);
     return NextResponse.json({ ok: false, error: (e as Error).message, stack: (e as Error).stack?.split("\n").slice(0, 4), log }, { status: 500 });
   }
 }
@@ -45,12 +47,20 @@ async function run(log: string[], opts: { force: boolean; now: boolean } = { for
       if (retard > 2 * 3.6e6) {
         await savePost({ ...post, status: "erreur" });
         log.push(`Citation non publiée (photo manquante) : ${post.title || post.visual.titre}`);
+        await alerte(`citation-photo:${post.id}`, `Citation non publiée, la photo manque : ${(post.title || post.visual.titre || "").slice(0, 120)}. Ajoutez la photo dans l'éditeur puis replanifiez-la.`, 72);
       } else log.push(`Citation en attente de photo : ${post.title || post.visual.titre}`);
       continue;
     }
     const done = await publishPost(post);
     await savePost(done);
     log.push(`${done.status === "publie" ? "Publié" : "Erreur de publication"} : ${post.title || post.visual.titre}`);
+    if (done.status === "erreur") {
+      for (const [plateforme, r] of Object.entries(done.results ?? {})) {
+        if (!r || r.ok) continue;
+        const { cle, texte } = expliquer(plateforme, r.detail ?? "");
+        await alerte(cle, texte);
+      }
+    }
   }
 
   // ─── 2. Veille : l'autopilote choisit et publie seul ─────────────

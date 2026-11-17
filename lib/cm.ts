@@ -3,6 +3,7 @@
 // décide avec l'IA (répondre, aimer, masquer, transmettre à l'équipe, ignorer), agit et note tout dans le journal.
 // En plus : radar à arnaques, mode crise, lien de l'article en commentaire, grin du jeudi (débat + synthèse),
 // piliers du grin (merci aux membres actifs), rapport du soir, annulation d'une action pendant 10 min.
+import { whatsapp, whatsappConfigure } from "./whatsapp";
 import { db, emptyPost, getSettings, saveSettings, savePost } from "./store";
 import { aiJson, aiConfigured } from "./claude";
 import type { Post } from "./store";
@@ -567,7 +568,7 @@ async function passage(r: CmReglages, opts: { force?: boolean }): Promise<string
   const jour = jourIso();
   if (new Date().getUTCHours() >= r.heureRapport) {
     const { data } = await db().from("cm_rapports").select("jour").eq("jour", jour).maybeSingle();
-    if (!data) await etape("Rapport", async () => { await cmRapport(); log.push("Rapport du jour créé."); });
+    if (!data) await etape("Rapport", async () => { const rap = await cmRapport(); log.push("Rapport du jour créé."); await envoyerBrief(rap); });
   }
   return log;
 }
@@ -624,6 +625,33 @@ export async function cmRapport(): Promise<CmRapport> {
   const rapport: CmRapport = { jour, contenu: { abonnes, abonnesVeille, activite, humeur, posts: top, meilleuresHeures, ...ia } };
   await db().from("cm_rapports").upsert({ jour, contenu: rapport.contenu });
   return rapport;
+}
+
+// ─── Brief du soir sur WhatsApp ──────────────────────────────────────
+async function envoyerBrief(rap: CmRapport) {
+  if (!whatsappConfigure()) return;
+  const c = rap.contenu;
+  const debut = new Date(); debut.setUTCHours(0, 0, 0, 0);
+  const [pub, err, grin] = await Promise.all([
+    db().from("posts").select("id", { count: "exact", head: true }).eq("status", "publie").gte("scheduled_at", debut.toISOString()),
+    db().from("posts").select("id", { count: "exact", head: true }).eq("status", "erreur").gte("scheduled_at", debut.toISOString()),
+    db().from("cm_journal").select("id", { count: "exact", head: true }).eq("traite", false),
+  ]);
+  const diff = c.abonnes != null && c.abonnesVeille != null ? c.abonnes - c.abonnesVeille : null;
+  const lignes = [
+    `🌙 *Brief du soir · TUVOA* (${new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" })})`,
+    "",
+    c.resume || "",
+    "",
+    `📣 Publications du jour : ${pub.count ?? 0}${err.count ? ` · ⚠️ ${err.count} en erreur` : ""}`,
+    c.abonnes != null ? `👥 Abonnés : ${c.abonnes.toLocaleString("fr-FR")}${diff != null ? ` (${diff >= 0 ? "+" : ""}${diff})` : ""}` : "",
+    grin.count ? `💬 À traiter dans le Grin : ${grin.count}` : "",
+    c.posts?.[0] ? `🔥 Post du jour : « ${c.posts[0].texte.slice(0, 90)} » (${c.posts[0].reactions} réactions, ${c.posts[0].commentaires} commentaires)` : "",
+    c.idees?.length ? `💡 Idée : ${c.idees[0]}` : "",
+    "",
+    "Détails : tuvoa-app.vercel.app/communaute",
+  ];
+  await whatsapp(lignes.filter((l, i, t) => l !== "" || (t[i - 1] ?? "") !== "").join("\n").trim());
 }
 
 // ─── Lecture pour l'écran Communauté ─────────────────────────────────
