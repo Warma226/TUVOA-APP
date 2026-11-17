@@ -6,7 +6,7 @@ import { SESSION_COOKIE, readSession } from "@/lib/session";
 import { apiAutorisee, pageAutorisee } from "@/lib/roles";
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|api/cron|api/cm-cron|api/visuel|api/login|api/vitrine|api/invitation|invitation|studio/|recap/|cyberbase/|citations/|wp/|api/wp-categories|api/media|cgu|confidentialite|tiktok).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|api/cron|api/cm-cron|api/telegram|api/visuel|api/login|api/vitrine|api/invitation|invitation|studio/|recap/|cyberbase/|citations/|wp/|api/wp-categories|api/media|cgu|confidentialite|tiktok).*)"],
 };
 
 // Sessions encore ouvertes (déconnexion d'un appareil, membre suspendu ou retiré) : vérifié en base, gardé 60 s.

@@ -114,14 +114,15 @@ export default function Connexions() {
   const [makeMsg, setMakeMsg] = useState("");
   const [wa, setWa] = useState<boolean | null>(null);
   const [canal, setCanal] = useState<"telegram" | "whatsapp">("whatsapp");
+  const [cmdes, setCmdes] = useState(false);
   const [waMsg, setWaMsg] = useState("");
   const [waEnvoi, setWaEnvoi] = useState(false);
-  useEffect(() => { fetch("/api/whatsapp").then((r) => r.json()).then((d: { canal?: "telegram" | "whatsapp"; relie?: boolean }) => { setCanal(d.canal ?? "whatsapp"); setWa(Boolean(d.relie)); }).catch(() => setWa(false)); }, []);
-  async function testWhatsapp(action?: "relier") {
+  useEffect(() => { fetch("/api/whatsapp").then((r) => r.json()).then((d: { canal?: "telegram" | "whatsapp"; relie?: boolean; commandes?: boolean }) => { setCanal(d.canal ?? "whatsapp"); setWa(Boolean(d.relie)); setCmdes(Boolean(d.commandes)); }).catch(() => setWa(false)); }, []);
+  async function testWhatsapp(action?: "relier" | "commandes") {
     setWaEnvoi(true); setWaMsg("");
     try {
       const r = await fetch("/api/whatsapp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
-      if (action && r.ok) setWa(true);
+      if (action && r.ok) { setWa(true); setCmdes(true); }
       const d = (await r.json().catch(() => ({}))) as { detail?: string };
       setWaMsg(r.ok ? (d.detail ?? "Message envoyé.") : `Échec : ${d.detail ?? r.status}`);
     } catch (e) { setWaMsg(`Échec : ${(e as Error).message}`); } finally { setWaEnvoi(false); }
@@ -279,8 +280,13 @@ export default function Connexions() {
           <div className="tv-cnx-grille" style={{ flex: "999 1 600px", minWidth: 0 }}>
             <Carte ini={canal === "telegram" ? "TG" : "WA"} couleur={canal === "telegram" ? "linear-gradient(145deg, #7DD3FC, #229ED9)" : "linear-gradient(145deg, #4ADE80, #128C7E)"} nom={canal === "telegram" ? "Alertes Telegram" : "Alertes WhatsApp"} role="Brief du soir et problèmes de la plateforme" etat={wa === null ? "off" : wa ? "ok" : canal === "telegram" ? "warn" : "off"}
               actions={canal === "telegram" && !wa ? <button type="button" className="btn small" disabled={waEnvoi} onClick={() => testWhatsapp("relier")}>{waEnvoi ? "Recherche…" : "Relier mon Telegram"}</button>
-                : wa ? <button type="button" className="btn small" disabled={waEnvoi} onClick={() => testWhatsapp()}>{waEnvoi ? "Envoi…" : "Envoyer un message test"}</button> : btnAide("alertes", false)}>
+                : wa ? <>
+                  {canal === "telegram" && !cmdes ? <button type="button" className="btn small primary" disabled={waEnvoi} onClick={() => testWhatsapp("commandes")}>Activer les commandes</button> : null}
+                  <button type="button" className="btn small" disabled={waEnvoi} onClick={() => testWhatsapp()}>{waEnvoi ? "Envoi…" : "Envoyer un message test"}</button>
+                </> : btnAide("alertes", false)}>
               <Puce ok={wa}>{wa ? `Le brief du soir et les alertes arrivent sur ${canal === "telegram" ? "Telegram" : "WhatsApp"}` : canal === "telegram" ? "Bot prêt : écrivez /start à votre bot dans Telegram, puis « Relier mon Telegram »" : "Pas encore relié"}</Puce>
+              {canal === "telegram" && wa ? <Puce ok={cmdes}>{cmdes ? "Commandes actives : /brief, /prochains, /stats, /pause, /reprendre" : "Commandes pas encore activées"}</Puce> : null}
+              <Puce ok={null}>Alertes : publication en échec, post viral, commentaire négatif, mode crise, bilan du lundi</Puce>
               <Puce ok={null}>Un même problème n'est signalé qu'une fois toutes les 6 heures</Puce>
               {waMsg ? <Puce ok={!waMsg.startsWith("Échec")}>{waMsg}</Puce> : null}
               {aide("alertes", ["Dans Telegram, ouvrez @BotFather, envoyez /newbot, choisissez un nom (ex. TUVOA Alertes) et un identifiant finissant par « bot ». BotFather vous donne un jeton.", "Dans Vercel, ajoutez TELEGRAM_BOT_TOKEN avec ce jeton, puis redéployez. Ouvrez ensuite votre bot, appuyez sur « Démarrer », et cliquez ici sur « Relier mon Telegram »."])}

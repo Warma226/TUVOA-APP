@@ -3,7 +3,7 @@
 // décide avec l'IA (répondre, aimer, masquer, transmettre à l'équipe, ignorer), agit et note tout dans le journal.
 // En plus : radar à arnaques, mode crise, lien de l'article en commentaire, grin du jeudi (débat + synthèse),
 // piliers du grin (merci aux membres actifs), rapport du soir, annulation d'une action pendant 10 min.
-import { whatsapp, whatsappConfigure } from "./whatsapp";
+import { alerte, whatsapp, whatsappConfigure } from "./whatsapp";
 import { db, emptyPost, getSettings, saveSettings, savePost } from "./store";
 import { aiJson, aiConfigured } from "./claude";
 import type { Post } from "./store";
@@ -53,10 +53,10 @@ export async function cmSauverReglages(patch: Partial<CmReglages>): Promise<CmRe
 
 // ─── Graph API Facebook ──────────────────────────────────────────────
 const V = () => process.env.FB_GRAPH_VERSION || "v21.0";
-const PAGE = () => process.env.FB_PAGE_ID ?? "";
+export const PAGE = () => process.env.FB_PAGE_ID ?? "";
 export const fbConfigure = () => Boolean(process.env.FB_PAGE_ID && process.env.FB_PAGE_TOKEN);
 
-async function graph<T>(path: string, params: Record<string, string> = {}, body?: Record<string, unknown>, method?: "DELETE"): Promise<T> {
+export async function graph<T>(path: string, params: Record<string, string> = {}, body?: Record<string, unknown>, method?: "DELETE"): Promise<T> {
   const u = new URL(`https://graph.facebook.com/${V()}/${path}`);
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   u.searchParams.set("access_token", process.env.FB_PAGE_TOKEN ?? "");
@@ -429,6 +429,7 @@ async function surveillerCrise(r: CmReglages, log: string[]) {
   if (s.autopilot) await saveSettings({ ...s, autopilot: false });
   await noter({ canal: "crise", external_id: `crise-${Date.now()}`, auteur: "VOA", texte: motif, action: "signale", raison: "Mode crise activé : publications automatiques suspendues, VOA ne répond plus seule." });
   log.push(`Mode crise activé (${motif}).`);
+  await alerte(`crise:${jourIso()}`, `🚨 Mode crise activé sur la Page : ${motif}. Les publications automatiques sont suspendues et VOA ne répond plus seule. Regardez le Grin, puis envoyez /reprendre quand tout est calme.`, 12);
 }
 export async function cmFinCrise(): Promise<CmReglages> {
   const r = await cmReglages();
