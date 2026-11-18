@@ -189,7 +189,7 @@ function extractJson<T>(text: string): T {
 }
 
 // Mise en forme lisible des posts réseaux : paragraphes courts séparés par une ligne vide,
-// puis une ligne vide, la source, une ligne vide, les hashtags.
+// puis une ligne vide et les hashtags (plus de mention de la source dans les posts réseaux).
 export function formatSocial(text: string): string {
   let t = text.replace(/\r/g, "").trim();
   // Hashtags en fin de texte
@@ -218,7 +218,8 @@ export function formatSocial(text: string): string {
       paras.push(sentences[sentences.length - 1]);
     }
   }
-  return [paras.join("\n\n"), source, tags].filter(Boolean).join("\n\n");
+  void source;
+  return [paras.join("\n\n"), tags].filter(Boolean).join("\n\n");
 }
 
 // Vérifie avec l'IA si une actu raconte le même fait qu'un post déjà publié (titres différents, autre langue…).
@@ -300,9 +301,9 @@ Montants : écris-les sous la forme [[MONTANT:valeur numérique complète:code I
 export async function generatePost(input: GenerateInput): Promise<Generated> {
   const rub = RUBRIQUES.find((r) => r.id === input.rubrique) ?? RUBRIQUES[0];
   const consignesRubrique: Record<RubriqueId, string> = {
-    actu: "Rubrique #ActuTech : résume l'information de façon factuelle (faits, chiffres, contexte, portée), cite la source. visuel_titre = la catégorie en 1 ou 2 mots (Cybersécurité, IA, Smartphones, Startups, Télécoms, Numérique…), visuel_texte = l'info en 1 ou 2 phrases (35 mots maximum).",
+    actu: "Rubrique #ActuTech : résume l'information de façon factuelle (faits, chiffres, contexte, portée). Si l'actu concerne le Burkina Faso, mets-le en avant dès la première phrase ; sinon, quand l'article le permet, dis en une phrase ce que ça change pour le Burkina, sans rien inventer. visuel_titre = la catégorie en 1 ou 2 mots (Cybersécurité, IA, Smartphones, Startups, Télécoms, Numérique…), visuel_texte = l'info en 1 ou 2 phrases (35 mots maximum).",
     cyberbase:
-      "Rubrique #CyberBase (comprendre les notions basiques de la tech) : définis la notion en 2 courts paragraphes, simples et concrets, avec un exemple du quotidien. visuel_titre = le nom de la notion (2 à 4 mots), visuel_texte = la définition (2 paragraphes, 60 mots maximum au total).",
+      "Rubrique #CyberBase (comprendre les notions basiques de la tech) : définis la notion en 2 courts paragraphes, simples et concrets, avec un exemple du quotidien au Burkina Faso (Orange Money, Moov Money, WhatsApp, cybercafé, Ouaga…). visuel_titre = le nom de la notion (2 à 4 mots), visuel_texte = la définition (2 paragraphes, 60 mots maximum au total).",
     portrait:
       "Rubrique #Portrait (experts tech) : présente la personne uniquement à partir des infos fournies, sans rien inventer. visuel_titre = son nom, visuel_texte = sa spécialité en une ligne.",
     citation:
@@ -332,13 +333,13 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
     "Montants : écris CHAQUE montant en devise (dollars, euros, etc.) uniquement sous la forme [[MONTANT:valeur numérique complète:code ISO]], par exemple [[MONTANT:6430000000:USD]] pour 6,43 milliards de dollars ou [[MONTANT:1500000:EUR]] pour 1,5 million d'euros. L'application l'écrira en toutes lettres avec sa conversion en FCFA : n'écris jamais toi-même la conversion."
   );
   parts.push(
-    "Mise en forme des posts Facebook et LinkedIn (\\n dans le JSON) : paragraphes courts de 1 ou 2 phrases séparés par une ligne vide ; la chute dans son propre paragraphe ; puis une ligne vide et « Source : nom du média » seule sur sa ligne ; puis une ligne vide et les hashtags sur la dernière ligne. Jamais tout le texte en un seul bloc."
+    "Mise en forme des posts Facebook et LinkedIn (\\n dans le JSON) : paragraphes courts de 1 ou 2 phrases séparés par une ligne vide ; la chute dans son propre paragraphe ; puis une ligne vide et les hashtags sur la dernière ligne. Ne mentionne jamais la source ni le média dans les posts Facebook, LinkedIn et TikTok (pas de « Source : »). Jamais tout le texte en un seul bloc."
   );
   parts.push(`Réponds uniquement avec un objet JSON valide, sans texte autour, de la forme :
 {
   "variantes": ["accroche directe", "accroche pédagogique", "accroche sous forme de question"],
-  "facebook": "post Facebook complet (résumé factuel, 3 à 5 phrases, chute sobre, 2 à 4 hashtags dont ${rub.hashtag}, source citée)",
-  "linkedin": "post LinkedIn complet (ton professionnel, 4 à 6 phrases, chute sobre, 3 hashtags, source citée)",
+  "facebook": "post Facebook complet (résumé factuel, 3 à 5 phrases, chute sobre, 2 à 4 hashtags dont ${rub.hashtag}, sans mention de la source)",
+  "linkedin": "post LinkedIn complet (ton professionnel, 4 à 6 phrases, chute sobre, 3 hashtags, sans mention de la source)",
   "tiktok": "légende TikTok de 150 caractères maximum",
   "wp_title": "titre d'article WordPress",
   "wp_body": "article WordPress en HTML simple (<p>, <h2>, <ul>, <li>, <strong>), 300 à 600 mots, terminé par un paragraphe 'Source :' avec le lien",
@@ -391,8 +392,6 @@ export async function rewrite(action: RewriteAction, text: string, platform: str
 // construite uniquement à partir du titre, de l'idée et de la source. Rien n'est recopié de l'article.
 export function draftWithoutAI(input: GenerateInput): Generated {
   const rub = RUBRIQUES.find((r) => r.id === input.rubrique) ?? RUBRIQUES[0];
-  const source = input.sourceName ? `Source : ${input.sourceName}` : "";
-  const lien = input.sourceUrl ? `\n${input.sourceUrl}` : "";
   if (input.rubrique === "portrait" && input.portrait) {
     const { nom, specialite, infos } = input.portrait;
     const base = `${nom}, ${specialite}.${infos ? `\n\n${infos}` : ""}`;
@@ -410,7 +409,7 @@ export function draftWithoutAI(input: GenerateInput): Generated {
   if (input.rubrique === "citation" && input.citation) {
     const { auteur, fonction, contexte } = input.citation;
     const texte = input.citation.texte.replace(/\*\*/g, "").trim();
-    const corps = `« ${texte} »\n— ${auteur}, ${fonction}${contexte ? `\n\n${contexte}` : ""}${source ? `\n\n${source}${lien}` : ""}`;
+    const corps = `« ${texte} »\n— ${auteur}, ${fonction}${contexte ? `\n\n${contexte}` : ""}`;
     return {
       variantes: [`« ${texte} »`, `${auteur} : « ${texte} »`, `Que pensez-vous de cette déclaration de ${auteur} ?`],
       facebook: `${corps}\n\n#Citation #Tech #TUVOA`,
@@ -441,8 +440,8 @@ export function draftWithoutAI(input: GenerateInput): Generated {
   const a_completer = "[Résumé de l’information en 2 ou 3 phrases.]";
   return {
     variantes: [titre, `Ce qu'il faut retenir : ${titre}`, `${titre} : les enjeux`],
-    facebook: `${titre}${angle}\n\n${a_completer}\n\n${source}${lien}\n\n${rub.hashtag} #Tech #TUVOA`.trim(),
-    linkedin: `${titre}${angle}\n\n${a_completer}\n\n${source}${lien}\n\n${rub.hashtag} #Tech #Innovation`.trim(),
+    facebook: `${titre}${angle}\n\n${a_completer}\n\n${rub.hashtag} #Tech #TUVOA`.trim(),
+    linkedin: `${titre}${angle}\n\n${a_completer}\n\n${rub.hashtag} #Tech #Innovation`.trim(),
     tiktok: `${titre} ${rub.hashtag}`.slice(0, 150),
     wp_title: titre,
     wp_body: `<p>${a_completer}</p>`,

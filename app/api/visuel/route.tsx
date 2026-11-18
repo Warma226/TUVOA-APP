@@ -88,7 +88,7 @@ export async function GET(req: Request) {
   // Citation : photo chargée ici (formats non pris en charge → visuel sans photo), police Montserrat.
   if (data.rubrique === "citation") data.photo = await safeImage(data.photo ?? null);
   const { w, h } = FORMATS[format];
-  const fonts = data.rubrique === "citation" ? [...(await montserratFonts()), ...(await archivoFonts())] : await archivoFonts();
+  const fonts = data.rubrique === "citation" || data.rubrique === "cyberbase" ? [...(await montserratFonts()), ...(await archivoFonts())] : await archivoFonts();
   return new ImageResponse(renderVisual(data, format), {
     width: w,
     height: h,

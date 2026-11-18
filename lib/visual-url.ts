@@ -20,13 +20,13 @@ export function visualUrl(post: Pick<Post, "rubrique" | "visual" | "source_name"
 export { formatFor } from "./formats";
 import { formatFor } from "./formats";
 
-// L'Actualité publie l'image de l'article, #CyberBase et #Portrait le visuel que tu fournis.
+// L'Actualité publie l'image de l'article, #Portrait le visuel que tu fournis ; #CyberBase sans visuel fourni : gabarit généré.
 // #Citation : visuel généré à partir de la citation, de l'auteur et de sa photo (sauf si tu ajoutes ton propre visuel).
 export function generatedRubrique(rubrique: string): boolean {
   return rubrique === "citation";
 }
 
 export function imageFor(post: Pick<Post, "rubrique" | "visual" | "source_name">, platform: string, absolute = false): string {
-  if (post.rubrique === "citation" && !post.visual.image) return visualUrl(post, formatFor(platform, post.rubrique), absolute);
+  if ((post.rubrique === "citation" || post.rubrique === "cyberbase") && !post.visual.image) return visualUrl(post, formatFor(platform, post.rubrique), absolute);
   return post.visual.image ?? "";
 }
