@@ -65,10 +65,46 @@ function at(st: Stage, x: number, y: number, extra: Record<string, unknown> = {}
   return { position: "absolute" as const, left: st.ox + x * st.s, top: st.oy + y * st.s, display: "flex", ...extra };
 }
 
-// L'Actualité et la Citation ont un gabarit : #CyberBase et #Portrait utilisent tes propres visuels.
+// L'Actualité, la Citation et #CyberBase ont un gabarit : #Portrait utilise tes propres visuels.
 export function renderVisual(d: VisualData, format: VisualFormat) {
   const { w, h } = FORMATS[format];
-  return d.rubrique === "citation" ? citation(d, w, h) : actu(d, w, h);
+  return d.rubrique === "citation" ? citation(d, w, h) : d.rubrique === "cyberbase" ? cyberbase(d, w, h) : actu(d, w, h);
+}
+
+// ─── #CyberBase : fond clair, en-tête « #CyberBase | Comprendre les notions basiques de la tech »,
+// grande carte bleue arrondie (liseré orange), notion en titre fin, définition en blanc, logo et site en pied ───
+function cyberbase(d: VisualData, w: number, h: number) {
+  const st = stage(w, h);
+  const s = st.s;
+  const def = fit((d.texte || "La définition de la notion.").replace(/\*\*/g, ""), 420);
+  const paras = def.split(/\n\s*\n|\n/).map((p) => p.trim()).filter(Boolean).slice(0, 3);
+  const size = autoSize(def, [[140, 50], [220, 44], [300, 39], [999, 34]]);
+  const titre = fit(d.titre || "Notion", 30);
+  return (
+    <div style={{ width: w, height: h, display: "flex", position: "relative", background: "#F4F1EA", fontFamily: "Montserrat" }}>
+      <div style={at(st, 50, 70, { alignItems: "center" })}>
+        <div style={{ display: "flex", fontSize: 44 * s, fontWeight: 800, color: "#111111" }}>#CyberBase</div>
+        <div style={{ display: "flex", width: 4 * s, height: 50 * s, background: "#111111", margin: `0 ${16 * s}px` }} />
+        <div style={{ display: "flex", flexDirection: "column", fontSize: 24 * s, fontWeight: 400, color: "#111111", lineHeight: 1.1 }}>
+          <span>Comprendre les notions</span>
+          <span>basiques de la tech</span>
+        </div>
+      </div>
+      <div style={at(st, 66, 166, { width: 884 * s, height: 900 * s, background: "#E2481B", borderRadius: `${150 * s}px ${110 * s}px ${110 * s}px ${110 * s}px` })} />
+      <div style={at(st, 76, 174, { width: 880 * s, height: 896 * s, flexDirection: "column", alignItems: "center", backgroundImage: "linear-gradient(170deg, #3F63D6 0%, #3A6FE0 55%, #2C55CC 100%)", borderRadius: `${150 * s}px ${110 * s}px ${110 * s}px ${110 * s}px`, padding: `${80 * s}px ${70 * s}px ${60 * s}px ${90 * s}px` })}>
+        <div style={{ display: "flex", fontSize: (titre.length > 18 ? 64 : 84) * s, fontWeight: 300, color: "#FFFFFF", marginBottom: 46 * s, textAlign: "center" }}>{titre}</div>
+        <div style={{ display: "flex", flexDirection: "column", width: 720 * s }}>
+          {paras.map((p, i) => (
+            <div key={i} style={{ display: "flex", fontSize: size * s, fontWeight: 800, color: "#FFFFFF", lineHeight: 1.32, marginTop: i ? 34 * s : 0 }}>{p}</div>
+          ))}
+        </div>
+      </div>
+      <div style={at(st, 34, 1000, { width: 250 * s, height: 250 * s, alignItems: "center", justifyContent: "center", background: BLEU, borderRadius: `${120 * s}px ${30 * s}px ${110 * s}px ${30 * s}px` })}>
+        <LogoMark size={44 * s} color="#FFFFFF" dot="#FFFFFF" />
+      </div>
+      <div style={at(st, 560, 1230, { width: 460 * s, justifyContent: "flex-end", fontSize: 50 * s, fontWeight: 800, color: BLEU })}>www.tuvoa.media</div>
+    </div>
+  );
 }
 
 // Guillemets TUVOA : deux blocs géométriques à queue oblique (ouvrant = retourné).

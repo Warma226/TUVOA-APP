@@ -51,6 +51,12 @@ async function imageBytes(post: Post, platform: Platform): Promise<{ bytes: Arra
   return { bytes: await res.arrayBuffer(), type, ext };
 }
 
+// Les posts réseaux ne mentionnent plus la source en bas (consigne éditoriale) : la ligne « Source : … » est retirée,
+// y compris des posts déjà rédigés. L'article du site garde, lui, le lien vers la source.
+export function sansSource(t: string): string {
+  return (t ?? "").split("\n").filter((l) => !/^\s*\(?\s*(sources?\s*:|info relayée par)/i.test(l)).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function escapeHtml(t: string) {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -224,7 +230,7 @@ async function facebookCarousel(post: Post, slides: string[]) {
     if (!res.ok || json.error || !json.id) throw new Error(`Facebook (image ${ids.length + 1}) : ${json.error?.message ?? res.status}`);
     ids.push(json.id);
   }
-  const body = new URLSearchParams({ message: post.texts.facebook, access_token: token });
+  const body = new URLSearchParams({ message: sansSource(post.texts.facebook), access_token: token });
   ids.forEach((id, i) => body.set(`attached_media[${i}]`, JSON.stringify({ media_fbid: id })));
   const res = await fetch(`https://graph.facebook.com/${version}/${process.env.FB_PAGE_ID}/feed`, { method: "POST", body });
   const json = (await res.json()) as { id?: string; error?: { message: string } };
@@ -235,7 +241,7 @@ async function facebookCarousel(post: Post, slides: string[]) {
 // Vidéo (créée dans le Studio) : Facebook la récupère à partir de son lien.
 async function facebookVideo(post: Post, url: string) {
   const version = process.env.FB_GRAPH_VERSION || "v21.0";
-  const body = new URLSearchParams({ file_url: url, description: post.texts.facebook, access_token: process.env.FB_PAGE_TOKEN ?? "" });
+  const body = new URLSearchParams({ file_url: url, description: sansSource(post.texts.facebook), access_token: process.env.FB_PAGE_TOKEN ?? "" });
   const res = await fetch(`https://graph-video.facebook.com/${version}/${process.env.FB_PAGE_ID}/videos`, { method: "POST", body });
   const json = (await res.json()) as { id?: string; error?: { message: string } };
   if (!res.ok || json.error) throw new Error(`Facebook (vidéo) : ${json.error?.message ?? res.status}`);
@@ -248,7 +254,7 @@ const facebook: Publisher = async (post) => {
   const version = process.env.FB_GRAPH_VERSION || "v21.0";
   const body = new URLSearchParams({
     url: imageUrl(post, "facebook"),
-    caption: post.texts.facebook,
+    caption: sansSource(post.texts.facebook),
     access_token: process.env.FB_PAGE_TOKEN ?? "",
   });
   const res = await fetch(`https://graph.facebook.com/${version}/${process.env.FB_PAGE_ID}/photos`, { method: "POST", body });
@@ -262,7 +268,7 @@ export function linkedinPayload(post: Post, test = false) {
   return {
     test,
     post_id: post.id,
-    text: post.texts.linkedin,
+    text: sansSource(post.texts.linkedin),
     image_url: imageFor(post, "linkedin", true),
     title: post.title || post.visual.titre,
     source_url: post.source_url ?? "",
@@ -309,7 +315,7 @@ const linkedin: Publisher = async (post) => {
     headers,
     body: JSON.stringify({
       author,
-      commentary: post.texts.linkedin,
+      commentary: sansSource(post.texts.linkedin),
       visibility: "PUBLIC",
       distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
       content: { media: { id: value.image, title: post.title || post.visual.titre } },
@@ -323,7 +329,7 @@ const linkedin: Publisher = async (post) => {
 
 const tiktok: Publisher = async (post) => {
   const images = post.visual.slides && post.visual.slides.length > 1 ? post.visual.slides : [imageUrl(post, "tiktok")];
-  const legende = post.texts.tiktok || post.texts.facebook || post.title;
+  const legende = sansSource(post.texts.tiktok || post.texts.facebook || post.title);
   const { publish_id, privacy } = await publishPhotos(images, post.visual.titre || post.title, legende);
   return { ok: true, detail: privacy === "PUBLIC_TO_EVERYONE" ? `Photo publiée sur TikTok (${publish_id})` : `Photo envoyée sur TikTok en privé (${privacy}) : l'app n'est pas encore validée par TikTok` };
 };
