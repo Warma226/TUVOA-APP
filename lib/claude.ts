@@ -307,7 +307,7 @@ export async function generatePost(input: GenerateInput): Promise<Generated> {
     portrait:
       "Rubrique #Portrait (experts tech) : présente la personne uniquement à partir des infos fournies, sans rien inventer. visuel_titre = son nom, visuel_texte = sa spécialité en une ligne.",
     citation:
-      "Rubrique #Citation : reprends la citation mot pour mot, entre guillemets « », sans la modifier ni la raccourcir (retire seulement les ** de mise en forme), suivie de « — Auteur, fonction ». Ajoute ensuite 1 ou 2 phrases de contexte, uniquement à partir du contexte fourni et de l'article source : n'invente ni date, ni lieu, ni circonstance, et ne prends pas position. visuel_titre = le nom de l'auteur, visuel_texte = la citation exacte.",
+      "Rubrique #Citation : reprends la citation mot pour mot, entre guillemets « », sans la modifier ni la raccourcir (retire seulement les ** de mise en forme), suivie de « — Auteur, fonction ». Ajoute ensuite 1 ou 2 phrases de contexte, uniquement à partir du contexte fourni et de l'article source : n'invente ni date, ni lieu, ni circonstance, et ne prends pas position. Si le contexte met une citation ancienne en regard d'une actualité, c'est l'angle du post : dis quand et où elle a été prononcée, puis nomme précisément l'actualité (quoi, qui, où) et ce qu'elle confirme, nuance ou contredit dans la citation, en restant factuel. visuel_titre = le nom de l'auteur, visuel_texte = la citation exacte.",
   };
   const format =
     input.format === "explication"

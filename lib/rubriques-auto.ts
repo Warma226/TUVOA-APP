@@ -93,6 +93,14 @@ async function photoLibre(nom: string): Promise<string | null> {
   return null;
 }
 
+// Garantit que le post commence par la citation exacte (l'IA l'oublie parfois et ne garde que le contexte).
+function avecCitation<T extends { facebook: string; linkedin: string; tiktok?: string }>(g: T, texte: string, auteur: string, fonction: string): T {
+  const tete = `« ${texte} » — ${auteur}${fonction && fonction !== "—" ? `, ${fonction}` : ""}`;
+  const debut = norm(texte).slice(0, 40);
+  const fixe = (t: string) => (t && norm(t).includes(debut) ? t : `${tete}\n\n${t ?? ""}`.trim());
+  return { ...g, facebook: fixe(g.facebook), linkedin: fixe(g.linkedin), tiktok: g.tiktok ? fixe(g.tiktok) : g.tiktok };
+}
+
 async function citationsDuJour(log: string[], max = 1) {
   // Une citation « à valider » (sans photo) que personne n'a validée 90 min avant son créneau est annulée :
   // le créneau est alors rempli par une citation d'archive, pour ne jamais rester vide.
@@ -143,7 +151,7 @@ async function citationsDuJour(log: string[], max = 1) {
     if (auteursRecents.includes(norm(auteur))) continue;
     const photo = await photoLibre(auteur);
     if (!photo && (enAttente >= 1 || libres[0].getTime() - Date.now() < 6 * 3.6e6)) continue; // sans photo : une seule en attente, et pas sur un créneau trop proche
-    const g = await generatePost({ rubrique: "citation", idea: "", sourceName: it.sourceName, sourceUrl: it.url, articleTitle: it.title, citation: { texte, auteur, fonction, contexte: (c.contexte ?? "").trim() } });
+    const g = avecCitation(await generatePost({ rubrique: "citation", idea: "", sourceName: it.sourceName, sourceUrl: it.url, articleTitle: it.title, citation: { texte, auteur, fonction, contexte: (c.contexte ?? "").trim() } }), texte, auteur, fonction);
     const quand = libres[0];
     libres = libres.slice(1);
     const post = await savePost(emptyPost({
@@ -234,7 +242,7 @@ async function citationArchive(
       (p.lien_actu ?? "").trim(),
     ].filter(Boolean).join(" ");
     const fonction = (p.fonction ?? "").trim() || "—";
-    const g = await generatePost({ rubrique: "citation", idea: "", sourceName: "Wikiquote", sourceUrl: page, articleTitle: actu.title, citation: { texte, auteur, fonction, contexte } });
+    const g = avecCitation(await generatePost({ rubrique: "citation", idea: "", sourceName: "Wikiquote", sourceUrl: page, articleTitle: actu.title, citation: { texte, auteur, fonction, contexte } }), texte, auteur, fonction);
     await savePost(emptyPost({
       rubrique: "citation", title: `${auteur} : « ${texte.slice(0, 80)} »`, origin: "veille", source_name: "Wikiquote", source_url: page, platforms,
       texts: { facebook: g.facebook, linkedin: g.linkedin, tiktok: g.tiktok, wp_title: g.wp_title, wp_body: g.wp_body, wp_excerpt: g.wp_excerpt },
