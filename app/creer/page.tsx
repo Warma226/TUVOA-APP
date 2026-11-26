@@ -80,7 +80,7 @@ function Choix() {
         </div>
 
         <div className="tv-hub">
-          {(Object.keys(RUB) as RubriqueId[]).map((r) => {
+          {(Object.keys(RUB) as RubriqueId[]).filter((r) => r !== "portrait").map((r) => {
             const [txt, c] = etat(r);
             return (
               <Link key={r} href={`/creer/${r}`} className="tv-hub-carte">

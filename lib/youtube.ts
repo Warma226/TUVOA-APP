@@ -164,7 +164,8 @@ export async function rafraichir(): Promise<number> {
       return [{ id: info.id, info, pertinence, publie_at: s.publishedAt }];
     });
     if (!lignes.length) continue;
-    const garder = await trier(lignes.map((l) => l.info));
+    // Tri par l'IA retiré (26/11/2026) : il consommait le quota Gemini. Seuls les filtres ci-dessus s'appliquent.
+    const garder = new Set(lignes.map((l) => l.id));
     const tri = lignes.map((l) => ({ ...l, statut: garder.has(l.id) ? "nouveau" : "hors_sujet" }));
     // une vidéo déjà analysée ou écartée garde ses extraits et son statut
     const { data: anciens } = await db().from("videos_yt").select("id,statut,extraits").in("id", tri.map((l) => l.id));
@@ -177,7 +178,8 @@ export async function rafraichir(): Promise<number> {
 }
 
 // Tri final par l'IA, strict : actualité tech en français uniquement. Sans IA disponible, seuls les filtres ci-dessus s'appliquent.
-async function trier(videos: VideoYT[]): Promise<Set<string>> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function trierParIA(videos: VideoYT[]): Promise<Set<string>> {
   const garder = new Set<string>();
   for (let i = 0; i < videos.length; i += 40) {
     const lot = videos.slice(i, i + 40);

@@ -191,6 +191,9 @@ async function collecter(log: string[]): Promise<Candidat[]> {
       auteur: w.from?.name ?? "Abonné", auteurId: w.from?.id, texte: w.message.trim(), contexte,
     });
   }
+  // 2 et 3. Messages privés et mentions ailleurs sur Facebook : désactivés tant que Meta n'a pas validé
+  // pages_messaging et Page Public Content Access (chaque essai échouait toutes les 2 min).
+  if (process.env.VOA_MESSENGER === "1") {
   // 2. Messages privés : dernier message de l'abonné, de moins de 23 h, sans réponse de la Page
   try {
     const conv = await graph<{ data: FbConv[] }>(`${page}/conversations`, { fields: "id,updated_time,link,messages.limit(6){id,message,from{id,name},created_time}", limit: "20" });
@@ -223,6 +226,7 @@ async function collecter(log: string[]): Promise<Candidat[]> {
     }
   } catch (e) {
     log.push(`Mentions illisibles : ${(e as Error).message}`);
+  }
   }
   const vus = await dejaTraites(out.map((c) => c.external_id));
   return out.filter((c) => !vus.has(c.external_id)).reverse().slice(0, MAX_PAR_PASSAGE);
