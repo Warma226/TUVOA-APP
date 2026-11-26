@@ -7,6 +7,7 @@ import { BottomNav } from "@/components/BottomNav";
 // Plus de téléchargement depuis Google pendant la compilation : c'était la cause des échecs de mise en ligne.
 const inter = localFont({ src: "./fonts/inter.woff", weight: "100 900", variable: "--font-inter", display: "swap" });
 const mont = localFont({ src: "./fonts/montserrat.woff", weight: "100 900", variable: "--font-mont", display: "swap" });
+const jakarta = localFont({ src: "./fonts/plus-jakarta-sans.woff2", weight: "200 800", variable: "--font-jakarta", display: "swap" });
 const archivo = localFont({ src: "./fonts/archivo.woff", weight: "100 900", variable: "--font-archivo", display: "swap" });
 
 export const metadata: Metadata = {
@@ -18,12 +19,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0a2a66",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={`${inter.variable} ${archivo.variable} ${mont.variable}`}>
+    <html lang="fr" className={`${inter.variable} ${archivo.variable} ${mont.variable} ${jakarta.variable}`}>
       <body>
         <div className="app">
           {children}
