@@ -1122,3 +1122,34 @@ input[type="text"], input[type="password"], input[type="url"], input[type="datet
   .v3-hero { height: 260px; }
   .v3-hero > div { padding: 24px; }
 }
+
+/* ═══ Thème v3 — police de la maquette et harmonisation de toutes les pages ═══ */
+body, button, input, textarea, select { font-family: var(--font-jakarta), var(--font-inter), system-ui, sans-serif; }
+h1, h2, h3, .section-title, .topbar .title, .tv-h2, .tv-titre, .tv-studio-h2, .tv-side-studio { font-family: var(--font-jakarta), var(--font-inter), sans-serif; }
+.tv-titre { font-size: 30px !important; font-weight: 800; letter-spacing: -0.02em; }
+.tv-h2 { font-weight: 700; color: #111827; }
+.tv-gris { color: #4b5563; }
+/* Cartes */
+.tv-carte, .tv-carte-side { background: #fff; border: 1px solid #f0f1f3; border-radius: 20px; box-shadow: 0 2px 10px rgba(17,24,39,0.06); backdrop-filter: none; }
+.tv-carte.orange { background: #fff4ed; border: 1.5px solid #f9c7ad; }
+.tv-source { border-color: #f0f1f3; border-radius: 18px; }
+/* Boutons */
+.tv-btn-nuit { height: 48px; border-radius: 12px; background: var(--bleu); letter-spacing: 0; box-shadow: 0 4px 12px rgba(37,99,235,0.25); font-weight: 600; }
+.tv-btn-nuit:hover { background: #1d4ed8; }
+.tv-mini { background: var(--bleu); border-radius: 10px; }
+.tv-rond { background: #fff; border: 1px solid #e5e7eb; color: #111827; box-shadow: 0 2px 6px rgba(17,24,39,0.06); }
+.tv-recherche { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; }
+/* Filtres et onglets : actif en bleu */
+.tv-chip { background: #fff; border: 1px solid #e5e7eb; border-radius: 20px; height: 40px; padding: 0 16px; font-size: 14px; color: #374151; }
+.tv-chip[aria-selected="true"], .tv-segments button[aria-pressed="true"], .tv-etapes a[aria-current="step"], .tv-etapes .tv-etape-fixe[aria-current="step"],
+.tv-jours-tel button[aria-pressed="true"], .tv-grin-filtres button[aria-current="true"], .tv-jour[data-auj="true"] { background: var(--bleu); border-color: var(--bleu); color: #fff; }
+.tv-segments { background: #f5f6f7; border: 0; }
+.tv-pill { border-radius: 8px; font-weight: 600; }
+.tv-puce { border-radius: 12px; }
+/* Blocs sombres : bleu de la maquette */
+.tv-voa, .tv-sujet, .tv-hero-mobile, .tv-sa-voix { background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); box-shadow: 0 10px 30px rgba(37,99,235,0.2); border-radius: 22px; }
+.tv-grin-conv .bulle.voa { background: var(--bleu); }
+.tv-ap-scene { background: #f5f6f7; border: 0; border-radius: 22px; }
+.tv-ap-onglets i, .tv-ap-tel .tete .av { background: var(--bleu); }
+.tv-minute-liste .vignette { background: linear-gradient(170deg, #1e3a8a, #2563eb); }
+.tv-side-pilote .tv-led { box-shadow: 0 0 0 4px rgba(34,197,94,0.18); }
