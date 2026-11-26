@@ -319,7 +319,7 @@ async function citationArchive(
   const photo = await photoLibre(c.auteur);
   if (!photo) { log.push(`Citation d'archive : pas de photo libre pour ${c.auteur}, nouvel essai dans 20 min.`); return false; }
   const contexte = [
-    `Propos${choix.annee ? ` tenus en ${choix.annee}` : ""}${c.source ? ` (${c.source})` : ""}${c.lang === "en" ? ", traduits de l'anglais" : ""}.`,
+    `Propos${choix.annee ? ` tenus en ${choix.annee}` : ""}${c.source && c.lang === "fr" ? ` (${c.source})` : ""}${c.lang === "en" ? ", traduits de l'anglais" : ""}.`,
     actu ? `À relire au regard de l'actualité : ${actu.title}.` : "",
     choix.lien ?? "",
   ].filter(Boolean).join(" ");
