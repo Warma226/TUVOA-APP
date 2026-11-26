@@ -1,58 +1,69 @@
 "use client";
-// Tableau de bord : courbe des publications, rubriques, alertes de VOA et médiathèque.
-import { useVoirPlus } from "@/components/VoirPlus";
+// Accueil (design v3) : ce qui attend une action, le prochain post, la journée en frise, créer, la veille et VOA.
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import Voa from "@/components/Voa";
-import { LogoTuile, NAV_ICONS, Trait } from "@/components/BottomNav";
-import { Courbe, Disque, Dossiers, Repartition, type Jour, type Stockage } from "@/components/Tableau";
-import { getInfo, saveSettings, type Info } from "@/lib/client";
+import { useEffect, useMemo, useState } from "react";
+import { NAV_ICONS, Trait } from "@/components/BottomNav";
+import { getInfo, listPostsEntre, saveSettings, type Info } from "@/lib/client";
 import { useMoi } from "@/components/Moi";
+import type { Post } from "@/lib/store";
 
-type Compte = Partial<Record<"publie" | "planifie" | "a_valider" | "brouillon" | "erreur" | "annule" | "recap", number>>;
+type Compte = Partial<Record<"publie" | "planifie" | "a_valider" | "brouillon" | "erreur" | "annule", number>>;
 type Donnees = {
-  maintenant: string;
   autopilot: boolean;
-  jours: Jour[];
   rubriques: Record<"actu" | "citation" | "cyberbase" | "portrait", Compte>;
-  planifiees: number;
-  prochaine: { at: string; titre: string; rubrique: string } | null;
   citationsSansPhoto: number;
   erreurs: { id: string; titre: string; rubrique: string; detail: string }[];
   nbErreurs: number;
-  minute: { total: number; montes: number; brouillons: number; dernier: number };
   grin: { aTraiter: number };
-  recap: { date: string; statut: string } | null;
-  media: Stockage | null;
+  voa: { dernier: { auteur: string; at: string } | null; reponsesAuj: number } | null;
   error?: string;
   demo?: boolean;
 };
 
-const VERT = "#22C55E", ROUGE = "#E11D2E";
+const I = {
+  ...NAV_ICONS,
+  home: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z",
+  bell: "M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8M13.7 21a2 2 0 0 1-3.4 0",
+  chev: "M9 6l6 6-6 6",
+  shield: "M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6zM9 12l2 2 4-4",
+  clock: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2",
+  news: "M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5",
+  quote: "M7 7h4v4c0 3-1.5 5-4 6M14 7h4v4c0 3-1.5 5-4 6",
+  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0",
+  camera: "M4 7h3l2-3h6l2 3h3v13H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  warn: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 8v5M12 16h.01",
+  pause: "M7 5h3v14H7zM14 5h3v14h-3z",
+  play: "M8 5l11 7-11 7z",
+  film: "M4 5h16v14H4zM10 9l5 3-5 3z",
+};
+const NOM: Record<string, string> = { actu: "Actualité", citation: "Citation", cyberbase: "#CyberBase", portrait: "Portrait" };
+const CANAL: Record<string, string> = { facebook: "Facebook", linkedin: "LinkedIn", tiktok: "TikTok", wordpress: "Site" };
 const n = (x?: number) => x ?? 0;
-const pl = (k: number, mot: string) => `${k} ${mot}${k > 1 ? "s" : ""}`;
-
-function horodatage(d: Date) {
-  const j = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-  return `${j.charAt(0).toUpperCase()}${j.slice(1)} · ${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
+const quand = (p: Post) => new Date(p.scheduled_at ?? p.created_at);
+const hm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+const visuel = (p: Post) => p.visual?.image || p.visual?.photo || "";
+function ilya(iso: string) {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `il y a ${h} h` : `le ${new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`;
 }
-function heure(iso: string) {
-  const d = new Date(iso);
-  const auj = new Date().toDateString() === d.toDateString();
-  return `${auj ? "" : d.toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "") + " "}${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
+function dans(d: Date) {
+  const m = Math.round((d.getTime() - Date.now()) / 60000);
+  if (m <= 0) return "maintenant";
+  if (m < 60) return `dans ${m} min`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `dans ${h} h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}` : `le ${d.toLocaleDateString("fr-FR", { weekday: "long" })} à ${hm(d)}`;
 }
-const tuile = (a: string, b: string, size: number): React.CSSProperties => ({ width: size, height: size, borderRadius: Math.round(size * 0.28), background: `linear-gradient(145deg, ${a} 0%, ${b} 100%)` });
 
-type Alerte = { type: string; tag: [string, string]; txt: string; cta: string; href?: string; action?: () => void };
-
-export default function Dashboard() {
-  const router = useRouter();
+export default function Accueil() {
   const [d, setD] = useState<Donnees | null>(null);
   const [info, setInfo] = useState<Info | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [error, setError] = useState("");
-  const [now, setNow] = useState(() => new Date());
-  const [q, setQ] = useState("");
+  const moi = useMoi();
+  const admin = !moi || moi.role === "admin";
 
   useEffect(() => {
     getInfo().then(setInfo).catch(() => {});
@@ -63,285 +74,205 @@ export default function Dashboard() {
         setD(j);
       })
       .catch((e: Error) => setError(e.message));
-    const t = setInterval(() => setNow(new Date()), 30000);
-    return () => clearInterval(t);
+    const debut = new Date(); debut.setHours(0, 0, 0, 0);
+    listPostsEntre(debut, new Date(debut.getTime() + 3 * 864e5)).then(setPosts).catch(() => {});
   }, []);
 
   const auto = info?.settings.autopilot ?? d?.autopilot ?? false;
-  const moi = useMoi();
-  const admin = !moi || moi.role === "admin";
   async function basculer() {
     if (!info) return;
-    if (!admin) return setError("Seul l'administrateur principal peut activer ou couper le pilote automatique.");
+    if (!admin) return setError("Seul l'administrateur principal peut mettre VOA en pause.");
     const autopilot = !auto;
     setInfo({ ...info, settings: { ...info.settings, autopilot } });
     await saveSettings({ autopilot }).catch((e: Error) => setError(e.message));
   }
-  function chercher(e: React.FormEvent) {
-    e.preventDefault();
-    if (q.trim()) router.push(`/calendrier?q=${encodeURIComponent(q.trim())}`);
-  }
 
-  const pret = d && !d.demo && d.jours;
-  const auj = 6;
-  const jours = pret ? d.jours : [];
-  const publiees7 = jours.slice(0, auj + 1).reduce((s, j) => s + j.publie, 0);
-  const record = jours.slice(0, auj + 1).reduce((m, j) => (j.publie > m.publie ? j : m), jours[0] ?? { publie: 0, date: "" });
+  const maintenant = new Date();
+  const finJour = new Date(); finJour.setHours(23, 59, 59, 999);
+  const actifs = useMemo(() => posts.filter((p) => p.status !== "annule" && p.status !== "brouillon").sort((a, b) => quand(a).getTime() - quand(b).getTime()), [posts]);
+  const duJour = actifs.filter((p) => quand(p) <= finJour);
+  const aVenir = actifs.filter((p) => (p.status === "planifie" || p.status === "a_valider") && quand(p) > maintenant);
+  const prochain = aVenir[0] ?? null;
+  const restants = aVenir.filter((p) => quand(p) <= finJour);
+
+  // Ce qui attend une action, du plus urgent au moins urgent
   const R = d?.rubriques ?? { actu: {}, citation: {}, cyberbase: {}, portrait: {} };
-  const actu = R.actu, cit = R.citation, cyb = R.cyberbase, por = R.portrait;
-  const erreursAutres = (d?.erreurs ?? []).filter((e) => e.rubrique !== "citation");
-  const aValider = n(actu.a_valider) + n(cit.a_valider) + n(cyb.a_valider) + n(por.a_valider);
+  const aValider = n(R.actu.a_valider) + n(R.citation.a_valider) + n(R.cyberbase.a_valider) + n(R.portrait.a_valider);
+  const alerte = !d ? null
+    : d.nbErreurs ? { ico: I.warn, titre: d.nbErreurs > 1 ? `${d.nbErreurs} publications n'ont pas pu partir` : `« ${d.erreurs[0]?.titre.slice(0, 60) || "Un post"} » n'a pas pu partir`, sous: "Voir l'erreur et republier", cta: "Voir", href: "/calendrier?filtre=erreur" }
+    : d.citationsSansPhoto ? { ico: I.camera, titre: `${d.citationsSansPhoto > 1 ? `${d.citationsSansPhoto} citations attendent` : "Une citation attend"} leur photo`, sous: "Sans photo, elles ne partent pas", cta: "Ajouter", href: "/calendrier?filtre=a_valider" }
+    : aValider ? { ico: I.camera, titre: `${aValider > 1 ? `${aValider} posts attendent` : "Un post attend"} votre feu vert`, sous: "À relire avant l'heure prévue", cta: "Relire", href: "/calendrier?filtre=a_valider" }
+    : d.grin.aTraiter ? { ico: I.grin, titre: `${d.grin.aTraiter > 1 ? `${d.grin.aTraiter} commentaires attendent` : "Un commentaire attend"} votre réponse`, sous: "VOA vous les laisse", cta: "Voir", href: "/communaute" }
+    : null;
 
-  const alertes: Alerte[] = [];
-  if (d?.citationsSansPhoto) alertes.push({ type: "À FAIRE", tag: ["#E94A06", "#fff"], txt: `${pl(d.citationsSansPhoto, "citation")} ${d.citationsSansPhoto > 1 ? "attendent" : "attend"} leur photo avant de partir.`, cta: "Ajouter les photos", href: "/calendrier?filtre=erreur" });
-  if (erreursAutres.length) {
-    const e = erreursAutres[0];
-    const quoi = e.rubrique === "actu" ? "Une actualité" : e.rubrique === "cyberbase" ? "Un numéro #CyberBase" : "Un post";
-    const canal = /facebook/i.test(e.detail) ? " sur Facebook" : /linkedin/i.test(e.detail) ? " sur LinkedIn" : "";
-    alertes.push({ type: "ERREUR", tag: ["#FDD5D9", "#9F1239"], txt: erreursAutres.length > 1 ? `${erreursAutres.length} publications n'ont pas pu partir.` : `${quoi} n'a pas pu être publiée${canal}.`, cta: "Voir et republier", href: "/calendrier?filtre=erreur" });
-  }
-  if (aValider) alertes.push({ type: "À VALIDER", tag: ["#DBE7FF", "#1D4ED8"], txt: `${pl(aValider, "post")} ${aValider > 1 ? "attendent" : "attend"} ton feu vert.`, cta: "Valider", href: "/calendrier?filtre=a_valider" });
-  if (d?.grin.aTraiter) alertes.push({ type: "LE GRIN", tag: ["#FDE68A", "#7A4A00"], txt: `${pl(d.grin.aTraiter, "message")} de la communauté ${d.grin.aTraiter > 1 ? "attendent" : "attend"} une réponse.`, cta: "Ouvrir le Grin", href: "/communaute" });
-  if (info && !auto) alertes.push({ type: "RÉGLAGE", tag: ["rgba(255,255,255,0.15)", "#fff"], txt: "Le pilote automatique est en pause : rien ne part sans toi.", cta: "Le réactiver", action: basculer });
-  if (info && !info.ai) alertes.push({ type: "RÉGLAGE", tag: ["rgba(255,255,255,0.15)", "#fff"], txt: "Rédaction par l'IA inactive : ajoute la clé GEMINI_API_KEY dans Vercel.", cta: "Ouvrir les connexions", href: "/connexions" });
-  const vAl = useVoirPlus(alertes, 3, alertes.length);
-  const bulle = !d ? "Je regarde ce qui se passe…" : alertes.length === 0 ? "Tout est en ordre. Je garde un œil sur la Page." : alertes.length === 1 ? "Une seule chose pour vous. Rien de grave." : `${["", "", "Deux", "Trois", "Quatre", "Cinq", "Six"][alertes.length] ?? alertes.length} choses pour vous. La première est facile, promis.`;
-
-  const segs = (vals: number[], cols: [string, string][]) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-      {vals.map((v, i) => <span key={i} className="tv-seg" style={{ background: cols[i][0], color: cols[i][1], flex: `${Math.max(1, v)} 1 0` }}>{v}</span>)}
-    </div>
-  );
-  const etat = (ok: boolean, label: string) => (
-    <span role="img" aria-label={label} title={label} style={{ width: 14, height: 14, borderRadius: 7, flexShrink: 0, background: ok ? VERT : ROUGE, boxShadow: `0 0 0 5px ${ok ? "rgba(34,197,94,0.18)" : "rgba(225,29,46,0.16)"}` }} />
-  );
-
-  const une = [
-    { nom: "Actualités", href: "/calendrier", meta1: `${n(actu.publie)} publiées`, meta2: "7 derniers jours", desc: "La veille repère l'info tech, l'IA la résume en français, convertit les montants en FCFA et publie seule.", c: ["#60A5FA", "#1D4ED8"], ok: !n(actu.erreur), vals: [n(actu.publie), n(actu.a_valider) + n(actu.brouillon), n(actu.erreur)], cols: [["#2563EB", "#fff"], ["#FDE7C8", "#9A4A00"], ["#FDD5D9", "#B4111F"]] as [string, string][], leg: "Publiées · à valider · erreurs", canaux: ["F", "in", "W"], rythme: auto ? "Toutes les 30 min" : "Sur validation" },
-    { nom: "Citations", href: "/calendrier", meta1: `${n(cit.planifie)} planifiées`, meta2: `${n(cit.publie)} publiées`, desc: "Des voix tech d'Afrique et du monde, vérifiées, une toutes les deux heures. Il suffit d'ajouter la photo.", c: ["#C4B5FD", "#7C3AED"], ok: !n(cit.erreur), vals: [n(cit.publie), n(cit.planifie), n(cit.erreur)], cols: [["#7C3AED", "#fff"], ["#E9E3FF", "#5B21B6"], ["#FDD5D9", "#B4111F"]] as [string, string][], leg: "Publiées · planifiées · erreurs", canaux: ["F", "in"], rythme: "Toutes les 2 h" },
-  ];
-
-  const recapDate = d?.recap ? new Date(d.recap.date).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric" }) : null;
-  const m = d?.media?.categories;
-  const rubriques = [
-    { nom: "Actualités", href: "/calendrier", meta: `${n(actu.publie)} publiées · 7 j`, c: ["#60A5FA", "#1D4ED8"], ok: !n(actu.erreur), et: n(actu.erreur) ? `${pl(n(actu.erreur), "erreur")} à corriger` : auto ? "Pilote automatique actif" : "En attente de validation", bl: "Publiées · à valider · en erreur", v: [n(actu.publie), n(actu.a_valider) + n(actu.brouillon), n(actu.erreur)] },
-    { nom: "Citations", href: "/calendrier", meta: `${n(cit.planifie)} planifiées`, c: ["#C4B5FD", "#7C3AED"], ok: !n(cit.erreur), et: d?.citationsSansPhoto ? `${d.citationsSansPhoto} en attente de photo` : "Photos prêtes", bl: "Publiées · planifiées · en erreur", v: [n(cit.publie), n(cit.planifie), n(cit.erreur)] },
-    { nom: "#CyberBase", href: "/rubriques", meta: "Chaque jour à 7 h", c: ["#5EEAD4", "#0E9F8E"], ok: !n(cyb.erreur), et: n(cyb.planifie) ? `${pl(n(cyb.planifie), "numéro")} d'avance` : "Aucun numéro d'avance", bl: "Publiés · planifiés · en erreur", v: [n(cyb.publie), n(cyb.planifie), n(cyb.erreur)] },
-    { nom: "Portrait", href: "/creer", meta: "Vos visuels", c: ["#FDBA74", "#E94A06"], ok: !n(por.erreur), et: n(por.planifie) ? `${pl(n(por.planifie), "portrait")} planifié${n(por.planifie) > 1 ? "s" : ""}` : "Prêt à recevoir un visuel", bl: "Publiés · planifiés · à faire", v: [n(por.publie), n(por.planifie), n(por.brouillon) + n(por.a_valider)] },
-    { nom: "La minute cyber", href: "/minute-cyber", meta: "Vidéo · 1 min", c: ["#FCA5A5", "#B91C1C"], ok: true, et: d?.minute.dernier ? `Épisode ${d.minute.dernier} prêt` : "Premier épisode à écrire", bl: "Montés · brouillons", v: [n(d?.minute.montes), n(d?.minute.brouillons), 0] },
-    { nom: "Récap du vendredi", href: "/calendrier", meta: "Chaque vendredi", c: ["#93C5FD", "#0A2A66"], ok: d?.recap?.statut !== "erreur", et: recapDate ? `Dernier : ${recapDate}` : "Pas encore de récap", bl: "Publiés cette semaine", v: [n(actu.recap), 0, 0] },
-    { nom: "Le Grin · VOA", href: "/communaute", meta: "Community manager", c: ["#FDE68A", "#D97706"], ok: !d?.grin.aTraiter, et: d?.grin.aTraiter ? `${pl(d.grin.aTraiter, "message")} à traiter` : "Commentaires et messages suivis", bl: "À traiter", v: [0, n(d?.grin.aTraiter), 0] },
-    { nom: "Studio", href: "/studio", meta: "Visuels et vidéos", c: ["#A5B4FC", "#4338CA"], ok: true, et: "Visuels, carrousels, vidéos", bl: "Images · voix off · vidéos", v: [n(m?.images.n), n(m?.voix.n), n(m?.videos.n)] },
-  ];
-  const BAR = ["#2563EB", "#F5B94A", "#C9D3E3"];
-
-  const piloteTexte = d?.prochaine ? `Prochaine : ${heure(d.prochaine.at)}${d.prochaine.titre ? ` · ${d.prochaine.titre.slice(0, 40)}` : ""}` : "Rien de planifié pour les prochaines heures";
+  const prenom = (moi?.nom ?? "").split(/\s+/)[0];
+  const date = maintenant.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 
   return (
-    <div className="tv-page">
-      {/* En-tête téléphone */}
-      <header className="tv-hero-mobile tv-mobile">
-        <div className="row">
-          <LogoTuile taille={52} />
-          <span style={{ fontFamily: "var(--font-mont)", fontWeight: 700, fontSize: 12, letterSpacing: 2, color: "#9FB6E8" }}>STUDIO</span>
-          <span style={{ flex: 1 }} />
-          <Link href="/compte" className="tv-rond" aria-label="Mon compte"><Trait d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" size={18} stroke={2} /></Link>
-          <Link href="/calendrier" className="tv-rond" aria-label="Rechercher une publication"><Trait d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-3.5-3.5" size={18} stroke={2} /></Link>
-          <Link href="/calendrier?filtre=a_valider" className="tv-rond" aria-label={aValider ? `${pl(aValider, "post")} à valider` : "Posts à valider"}>
-            <Trait d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" size={18} />
-            {aValider || d?.nbErreurs ? <span className="pastille" /> : null}
-          </Link>
+    <main className="page v3-home">
+      {/* En-tête */}
+      <header className="row" style={{ gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+          <h1 style={{ fontSize: 24 }}>{prenom ? `Bonjour ${prenom}` : "Bonjour"}</h1>
+          <span className="muted" style={{ fontSize: 13 }}>Ouagadougou · {date}</span>
         </div>
-        <div>
-          <span style={{ fontSize: 13, color: "#BFD0FF" }}>{horodatage(now)}</span>
-          <h1 className="tv-titre" style={{ color: "#fff", marginTop: 4 }}>Tableau de bord</h1>
-        </div>
-        <button type="button" role="switch" aria-checked={auto} className="tv-pilote-mobile" onClick={basculer} disabled={!info || !admin}>
-          <span className={`tv-led${auto ? "" : " off"}`} style={{ width: 12, height: 12 }} />
-          <span style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
-            <strong style={{ fontSize: 14 }}>Pilote automatique {auto ? "actif" : "en pause"}</strong>
-            <span style={{ fontSize: 12, color: "#C9D6F2", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{piloteTexte}</span>
-          </span>
-          <span className={`switch${auto ? " on" : ""}`} aria-hidden="true" style={{ pointerEvents: "none" }}><span /></span>
-        </button>
+        <Link href="/communaute" className="v3-round" aria-label="Notifications">
+          <Trait d={I.bell} size={20} />
+          {alerte ? <span className="pt" /> : null}
+        </Link>
+        <Link href="/creer" className="v3-round bleu" aria-label="Créer un post"><Trait d={I.plus} size={20} stroke={2.2} /></Link>
       </header>
 
-      <div className="tv-corps">
-        {/* Barre du haut (ordinateur) */}
-        <div className="tv-desk" style={{ flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-          <form className="tv-recherche" role="search" onSubmit={chercher}>
-            <Trait d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-3.5-3.5" size={18} stroke={2} />
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher une publication, une source, une citation…" aria-label="Rechercher une publication" />
-          </form>
-          <span style={{ flex: 1 }} />
-          <button type="button" role="switch" aria-checked={auto} onClick={basculer} disabled={!info || !admin} className="tv-rond" style={{ width: "auto", padding: "0 16px 0 12px", gap: 10, fontSize: 13, fontWeight: 700 }}>
-            <span className={`switch${auto ? " on" : ""}`} aria-hidden="true" style={{ pointerEvents: "none", width: 40, height: 24 }}><span style={{ width: 18, height: 18 }} /></span>
-            Pilote auto {auto ? "activé" : "en pause"}
-          </button>
-          <Link href="/calendrier?filtre=a_valider" className="tv-rond" aria-label={aValider ? `${pl(aValider, "post")} à valider` : "Posts à valider"}>
-            <Trait d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" size={20} />
-            {aValider || d?.nbErreurs ? <span className="pastille" /> : null}
-          </Link>
-          <Link href="/connexions" className="tv-rond" aria-label="Connexions et réglages">
-            <Trait d={NAV_ICONS.cnx} size={20} />
-          </Link>
-          <div className="tv-rond" style={{ width: "auto", padding: "0 16px 0 6px", gap: 10, cursor: "default" }}>
-            <span style={{ width: 36, height: 36, borderRadius: 18, background: "#0A2A66", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-mont)", fontWeight: 800, fontSize: 14 }}>T</span>
-            <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.15, color: "var(--encre)" }}><strong style={{ fontSize: 14 }}>Équipe TUVOA</strong><span style={{ fontSize: 12, color: "#5B6B86" }}>Administrateur</span></span>
-          </div>
-        </div>
+      {error ? <p className="notice ambre">{error}</p> : null}
 
-        {/* En-tête (ordinateur) */}
-        <div className="tv-entete tv-desk">
-          <div style={{ flex: "1 1 360px", display: "flex", flexDirection: "column", gap: 6 }}>
-            <span className="tv-gris">{horodatage(now)}</span>
-            <h1 className="tv-titre">Tableau de bord</h1>
-          </div>
-          <Link href="/creer" className="tv-btn-nuit"><Trait d={NAV_ICONS.plus} size={18} stroke={2.2} />CRÉER UNE PUBLICATION</Link>
-        </div>
+      {alerte ? (
+        <Link href={alerte.href} className="v3-alert">
+          <span style={{ width: 40, height: 40, borderRadius: 12, background: "#E94A06", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Trait d={alerte.ico} size={20} stroke={2} /></span>
+          <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+            <strong style={{ fontSize: 14 }}>{alerte.titre}</strong>
+            <span style={{ fontSize: 12, color: "#8A3B00" }}>{alerte.sous}</span>
+          </span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#B54708" }}>{alerte.cta}</span>
+        </Link>
+      ) : null}
 
-        {error ? <p className="notice rouge" role="alert">{error}</p> : null}
-        {d?.demo || info?.demo ? <p className="notice">Mode démo : branche Supabase (voir Connexions) pour voir les chiffres du tableau de bord.</p> : null}
+      <div className="v3-home-grid">
+        <div style={{ display: "flex", flexDirection: "column", gap: 22, minWidth: 0 }}>
+          {/* Prochain post */}
+          {prochain ? (
+            <section className="v3-hero" aria-label="Prochain post">
+              {visuel(prochain) ? <img src={visuel(prochain)} alt="" /> : null}
+              <div>
+                <span className="row" style={{ gap: 8, fontSize: 14 }}>
+                  <span style={{ padding: "3px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", fontSize: 12, fontWeight: 700 }}>{NOM[prochain.rubrique] ?? "Post"}</span>
+                  Prochain post à {hm(quand(prochain))}
+                </span>
+                <strong style={{ fontSize: 23, lineHeight: 1.2, letterSpacing: "-0.4px", marginTop: 10, maxWidth: 520, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{prochain.title || prochain.visual?.titre || "Post sans titre"}</strong>
+                <span className="row" style={{ gap: 8, fontSize: 13, marginTop: 10 }}>
+                  <Trait d={I.shield} size={15} stroke={2} />
+                  {prochain.platforms.map((x) => CANAL[x] ?? x).join(" et ")} · {dans(quand(prochain))}
+                </span>
+                <div className="row" style={{ gap: 10, marginTop: "auto" }}>
+                  <Link href={`/apercu?id=${prochain.id}`} className="v3-pill blanc"><Trait d={NAV_ICONS.veille} size={16} stroke={2} />Voir l’aperçu</Link>
+                  <Link href={`/editeur?id=${prochain.id}`} className="v3-pill contour"><Trait d={NAV_ICONS.cal} size={15} stroke={2} />Décaler</Link>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="v3-card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+              <strong style={{ fontSize: 17 }}>Rien de planifié pour l’instant</strong>
+              <span className="muted">{auto ? "Le pilote automatique publiera les prochaines actus de la veille." : "Le pilote automatique est en pause."}</span>
+              <Link href="/creer" className="btn primary small" style={{ alignSelf: "flex-start" }}>Créer un post</Link>
+            </section>
+          )}
 
-        {/* Courbe */}
-        <section aria-labelledby="graph" className="tv-verre tv-graph">
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 20 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 240px" }}>
-              <h2 id="graph" className="tv-h2">Publications par jour</h2>
-              <span className="tv-gris">Les 7 derniers jours, puis ce qui est déjà planifié</span>
-            </div>
-            <div className="tv-graph-chiffres">
-              <div><strong>{pret ? publiees7 : "…"}</strong><span>publiées en 7 jours</span></div>
-              <div><strong>{pret ? record.publie : "…"}</strong><span>record{pret && record.date ? ` · ${new Date(`${record.date}T12:00:00Z`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", timeZone: "UTC" })}` : ""}</span></div>
-              <div><strong style={{ color: "#7C3AED" }}>{pret ? d.planifiees : "…"}</strong><span>déjà planifiées</span></div>
-            </div>
-          </div>
-          {pret ? (
-            <>
-              <div className="tv-desk-b"><Courbe jours={jours} auj={auj} /></div>
-              <div className="tv-mobile"><Courbe jours={jours} auj={auj} compact /></div>
-            </>
-          ) : <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center" }} className="tv-gris">{error ? "Chiffres indisponibles." : "Chargement des chiffres…"}</div>}
-          <div className="tv-legende">
-            <span><span style={{ width: 18, height: 4, borderRadius: 2, background: "#2563EB" }} />Toutes les publications</span>
-            <span><span style={{ width: 18, height: 4, borderRadius: 2, background: "#7C3AED" }} />Dont citations</span>
-            <span><span style={{ width: 18, height: 0, borderTop: "3px dashed #5B6B86" }} />Planifié</span>
-            <span style={{ flex: 1 }} />
-            <Link href="/calendrier" style={{ fontSize: 14, fontWeight: 600, textDecoration: "none" }}>Ouvrir le calendrier →</Link>
-          </div>
-        </section>
-
-        {/* Raccourcis (téléphone) */}
-        <nav className="tv-raccourcis tv-mobile" aria-label="Raccourcis">
-          {[["/studio", "Studio", NAV_ICONS.studio], ["/minute-cyber", "Minute cyber", NAV_ICONS.minute], ["/mediatheque", "Médiathèque", NAV_ICONS.media], ["/connexions", "Connexions", NAV_ICONS.cnx]].map(([href, l, ic]) => (
-            <Link key={href} href={href}><span><Trait d={ic} size={20} /></span><span>{l}</span></Link>
-          ))}
-        </nav>
-
-        {/* Deux rubriques à la une */}
-        <div className="tv-une">
-          {une.map((r) => (
-            <Link key={r.nom} href={r.href} style={{ textDecoration: "none", color: "inherit" }}>
-              <article>
-                <div style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
-                  <div className="tv-tuile tv-desk-b" style={tuile(r.c[0], r.c[1], 112)} />
-                  <div className="tv-tuile tv-mobile" style={tuile(r.c[0], r.c[1], 64)} />
-                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 14, color: "#5B6B86", flexWrap: "wrap" }}>
-                      <span>{r.meta1}</span><span style={{ width: 1, height: 14, background: "#C9D3E3" }} /><span>{r.meta2}</span>
-                      <span style={{ flex: 1 }} />
-                      {etat(r.ok, r.ok ? "En bonne santé" : "Des erreurs à corriger")}
+          {/* La journée */}
+          <section className="v3-card" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }} aria-label="La journée">
+            <div className="v3-h2"><h2>Aujourd’hui</h2><Link href="/calendrier" className="v3-more">Calendrier <Trait d={I.chev} size={16} stroke={2} /></Link></div>
+            {duJour.length ? (
+              <div className="v3-soft" style={{ padding: "16px 14px 12px" }}>
+                <div className="v3-frise">
+                  {duJour.slice(0, 10).map((p) => {
+                    const cls = p.status === "publie" ? "fait" : p.status === "erreur" ? "erreur" : p.id === prochain?.id ? "prochain" : "";
+                    return <span key={p.id} title={`${hm(quand(p))} · ${NOM[p.rubrique] ?? ""} · ${p.title}`}><i className={cls} /><b style={{ fontWeight: cls === "prochain" ? 800 : 500 }}>{String(quand(p).getHours())}h{quand(p).getMinutes() ? String(quand(p).getMinutes()).padStart(2, "0") : ""}</b></span>;
+                  })}
+                </div>
+                <div className="row" style={{ flexWrap: "wrap", gap: 14, marginTop: 12, fontSize: 12, color: "#4B5563" }}>
+                  <span>{duJour.filter((p) => p.status === "publie").length} publiés</span>
+                  <span>{restants.length} à venir</span>
+                  {duJour.some((p) => p.status === "erreur") ? <span style={{ color: "var(--rouge)" }}>{duJour.filter((p) => p.status === "erreur").length} en erreur</span> : null}
+                </div>
+              </div>
+            ) : <p className="muted">Aucun post aujourd’hui.</p>}
+            {restants.length ? (
+              <div style={{ display: "flex", gap: 14, overflowX: "auto", padding: "2px 2px 10px" }}>
+                {restants.slice(0, 8).map((p) => (
+                  <Link key={p.id} href={`/apercu?id=${p.id}`} className="v3-card v3-postcard">
+                    <div className="vis" style={{ background: p.rubrique === "citation" ? "#E94A06" : p.rubrique === "cyberbase" ? "#1E3A8A" : "#E5E7EB" }}>
+                      {p.rubrique === "citation"
+                        ? <span style={{ display: "flex", height: "100%", padding: "16px", alignItems: "center", color: "#fff", fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>« {(p.visual?.texte || p.title).slice(0, 90)}{(p.visual?.texte || p.title).length > 90 ? "…" : ""} »</span>
+                        : visuel(p) ? <img src={visuel(p)} alt="" /> : <span style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, padding: 16, textAlign: "center" }}>{p.visual?.titre || NOM[p.rubrique]}</span>}
+                      <span className="v3-chip white" style={{ position: "absolute", top: 10, left: 10 }}>{p.status === "a_valider" ? "À valider" : NOM[p.rubrique] ?? "Post"}</span>
                     </div>
-                    <h3 style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em" }}>{r.nom}</h3>
-                    <p style={{ fontSize: 15, lineHeight: 1.5, color: "#33425C" }}>{r.desc}</p>
-                  </div>
-                </div>
-                <div className="tv-une-stats">
-                  <div><span style={{ fontSize: 13, color: "#5B6B86" }} title={r.leg}>Cette semaine · {r.leg.toLowerCase()}</span>{segs(r.vals, r.cols)}</div>
-                  <div><span style={{ fontSize: 13, color: "#5B6B86" }}>Canaux</span><div style={{ display: "flex", gap: 6 }}>{r.canaux.map((c) => <span key={c} className="tv-canal">{c}</span>)}</div></div>
-                  <div><span style={{ fontSize: 13, color: "#5B6B86" }}>Rythme</span><span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600 }}><span style={{ width: 26, height: 26, borderRadius: 13, border: "1px solid #C7D6FB", color: "#1D4ED8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Trait d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2" size={14} stroke={2.2} /></span>{r.rythme}</span></div>
-                </div>
-              </article>
-            </Link>
-          ))}
-        </div>
-
-        {/* Toutes les rubriques + VOA */}
-        <div className="tv-bas">
-          <section aria-labelledby="toutes" style={{ flex: "999 1 600px", minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
-            <h2 id="toutes" className="tv-h2" style={{ fontSize: 22 }}>Toutes les rubriques</h2>
-            <div className="tv-rubriques">
-              {rubriques.map((r) => {
-                const tot = r.v.reduce((s, x) => s + x, 0);
-                return (
-                  <Link key={r.nom} href={r.href} className={`tv-rub${r.ok ? "" : " alerte"}`}>
-                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                      <span className="tv-tuile" style={tuile(r.c[0], r.c[1], 52)} />
-                      <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                        <span style={{ fontSize: 12, color: "#5B6B86" }}>{r.meta}</span>
-                        <strong style={{ fontFamily: "var(--font-mont)", fontSize: 17, color: "#0B1A33" }}>{r.nom}</strong>
+                    <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <strong style={{ fontSize: 15, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{p.title || p.visual?.titre}</strong>
+                      <span className="row" style={{ gap: 12, fontSize: 13, color: "#4B5563" }}>
+                        <span className="row" style={{ gap: 5 }}><Trait d={I.clock} size={14} stroke={2} />{hm(quand(p))}</span>
+                        <span>{p.platforms.map((x) => CANAL[x] ?? x).join(" · ")}</span>
                       </span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#33425C" }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 5, flexShrink: 0, background: r.ok ? VERT : ROUGE }} /><span>{r.et}</span>
-                    </div>
-                    <div className="tv-rub-bar">
-                      <span style={{ fontSize: 12, color: "#5B6B86" }}>{r.bl}{tot ? ` · ${r.v.filter((x, i) => x || i === 0).join(" · ")}` : ""}</span>
-                      <div style={{ display: "flex", gap: 4, height: 8 }}>
-                        {tot ? r.v.map((x, i) => (x ? <span key={i} style={{ flex: `${x} 1 0`, borderRadius: 4, background: BAR[i] }} /> : null)) : <span style={{ flex: 1, borderRadius: 4, background: "#DDE3EE" }} />}
-                      </div>
+                      {p.source_name ? <span className="v3-chip blue" style={{ alignSelf: "flex-start" }}><Trait d={I.shield} size={13} stroke={2.2} />{p.source_name.slice(0, 28)}</span> : null}
                     </div>
                   </Link>
-                );
-              })}
+                ))}
+              </div>
+            ) : null}
+          </section>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+          {/* Créer */}
+          <section className="v3-card" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 12 }} aria-label="Créer un post">
+            <div className="v3-h2"><h2>Créer un post</h2><Link href="/creer" className="v3-more">Tout voir <Trait d={I.chev} size={16} stroke={2} /></Link></div>
+            <div className="grid2" style={{ gap: 10 }}>
+              {[
+                { id: "actu", ico: I.news, info: n(R.actu.a_valider) ? `${R.actu.a_valider} à valider` : "Depuis la veille ou un lien" },
+                { id: "citation", ico: I.quote, info: "Auto à 9 h, 13 h, 17 h" },
+                { id: "cyberbase", ico: I.shield, info: "Auto chaque jour à 7 h" },
+                { id: "portrait", ico: I.user, info: n(R.portrait.a_valider) ? `${R.portrait.a_valider} à valider` : "Un acteur de la tech" },
+              ].map((r) => (
+                <Link key={r.id} href={`/creer/${r.id}`} className="v3-tile">
+                  <span className="v3-ico"><Trait d={r.ico} size={22} /></span>
+                  <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <strong style={{ fontSize: 15 }}>{NOM[r.id]}</strong>
+                    <span style={{ fontSize: 12, color: "#4B5563" }}>{r.info}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+            <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+              <Link href="/videos" className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}><Trait d={I.film} size={16} />Reel choc</Link>
+              <Link href="/minute-cyber" className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}><Trait d={NAV_ICONS.minute} size={16} />Minute cyber</Link>
+              <Link href="/studio" className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}><Trait d={NAV_ICONS.studio} size={16} />Studio</Link>
             </div>
           </section>
 
-          <aside aria-labelledby="voa" className="tv-voa">
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ flexShrink: 0, width: 92, display: "flex", justifyContent: "center" }}>
-                <Voa humeur={!d ? "veille" : alertes.length ? "parle" : "content"} taille={88} />
-              </span>
-              <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                <h2 id="voa" style={{ fontSize: 20, fontWeight: 800, color: "#fff" }}>VOA vous signale</h2>
-                <span style={{ fontSize: 13, color: "#BFD0FF" }}>Votre community manager</span>
-                <span style={{ marginTop: 6, padding: "8px 12px", borderRadius: "14px 14px 14px 4px", background: "rgba(255,255,255,0.12)", fontSize: 13, lineHeight: 1.35 }}>{bulle}</span>
-              </div>
-            </div>
-            {vAl.visibles.map((a, i) => (
-              <div key={i} className="tv-voa-alerte">
-                <span className="tv-tag" style={{ background: a.tag[0], color: a.tag[1] }}>{a.type}</span>
-                <span style={{ fontSize: 15, lineHeight: 1.4, fontWeight: 600 }}>{a.txt}</span>
-                {a.href ? <Link href={a.href}>{a.cta} →</Link> : <button type="button" onClick={a.action} style={{ alignSelf: "flex-start", border: 0, background: "none", padding: 0, fontSize: 13, fontWeight: 700, color: "#FFB48A", cursor: "pointer" }}>{a.cta} →</button>}
-              </div>
-            ))}
-            <div className="tv-sombre">{vAl.bouton}</div>
-            <Link href="/communaute" style={{ fontSize: 13, fontWeight: 700, color: "#C9D6F2", textDecoration: "none" }}>Ouvrir le Grin de VOA →</Link>
-          </aside>
-        </div>
+          {/* Veille */}
+          <Link href="/veille" className="v3-soft" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, textDecoration: "none", color: "#111827" }}>
+            <span className="v3-ico"><Trait d={NAV_ICONS.veille} size={22} /></span>
+            <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+              <strong style={{ fontSize: 15 }}>Veille : les sujets du jour</strong>
+              <span style={{ fontSize: 13, color: "#05603A", fontWeight: 600 }}>Le Burkina d’abord</span>
+            </span>
+            <Trait d={I.chev} size={18} stroke={2} />
+          </Link>
 
-        {/* Médiathèque */}
-        <section aria-labelledby="media" className="tv-verre tv-media">
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-            <div style={{ flex: "1 1 260px", display: "flex", flexDirection: "column", gap: 4 }}>
-              <h2 id="media" className="tv-h2" style={{ fontSize: 22 }}>Médiathèque</h2>
-              <span className="tv-gris">Ouvrez un dossier ou une catégorie pour voir ses fichiers.</span>
+          {/* VOA */}
+          <section className="v3-card" style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }} aria-label="VOA">
+            <div className="row" style={{ gap: 12 }}>
+              <span style={{ position: "relative", width: 40, height: 40, borderRadius: 20, background: "var(--bleu)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>
+                VOA<span style={{ position: "absolute", right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6, background: auto ? "#22C55E" : "#9CA3AF", border: "2px solid #fff" }} />
+              </span>
+              <Link href="/communaute" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2, textDecoration: "none", color: "#111827" }}>
+                <strong style={{ fontSize: 15 }}>{auto ? "VOA est en marche" : "VOA est en pause"}</strong>
+                <span style={{ fontSize: 13, color: "#4B5563" }}>{d?.voa?.dernier ? `A répondu à ${d.voa.dernier.auteur.split(/\s+/)[0]} ${ilya(d.voa.dernier.at)}` : "Aucune réponse récente"}</span>
+              </Link>
+              {admin ? (
+                <button type="button" onClick={basculer} className="btn ghost small" style={{ height: 40, padding: "0 12px" }}>
+                  <Trait d={auto ? I.pause : I.play} size={14} />{auto ? "Pause" : "Reprendre"}
+                </button>
+              ) : null}
             </div>
-            <Link href="/mediatheque" style={{ height: 40, padding: "0 14px", borderRadius: 10, background: "#0A2A66", color: "#fff", textDecoration: "none", display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700 }}>
-              <Trait d={NAV_ICONS.media} size={16} stroke={2} />Ouvrir
-            </Link>
-          </div>
-          {d?.media ? (
-            <>
-              <div className="tv-disques">
-                <Disque s={d.media} o={{ href: () => "/mediatheque" }} />
-                <Repartition s={d.media} o={{ href: (c) => (c ? `/mediatheque?dossier=${c}` : "/mediatheque") }} />
-              </div>
-              <Dossiers s={d.media} o={{ href: (c) => (c ? `/mediatheque?dossier=${c}` : "/mediatheque") }} />
-            </>
-          ) : <p className="tv-gris">{d ? "Stockage indisponible pour le moment." : "Lecture du stockage…"}</p>}
-        </section>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", borderTop: "1px solid #F0F0F0", paddingTop: 12 }}>
+              {[[String(aVenir.length), "posts à venir"], [String(d?.voa?.reponsesAuj ?? 0), "réponses aujourd’hui"], [String(d?.grin.aTraiter ?? 0), "à traiter"]].map(([v, t], i) => (
+                <div key={t} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, borderLeft: i ? "1px solid #F0F0F0" : "0" }}>
+                  <strong style={{ fontSize: 20 }}>{v}</strong>
+                  <span style={{ fontSize: 12, color: "#4B5563", textAlign: "center" }}>{t}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

@@ -5,8 +5,35 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Trait } from "@/components/BottomNav";
 import Voa from "@/components/Voa";
-import { chargerMoi } from "@/components/Moi";
+import { chargerMoi, useMoi } from "@/components/Moi";
+import { lienVisible } from "@/lib/roles";
 import { DROITS, ROLES, ROLES_MEMBRES, ROLE_NOM, ZONE_DETAIL, ZONE_NOM, type Role, type Zone } from "@/lib/roles";
+
+// Téléphone : la barre du bas n'a que 4 onglets, les autres écrans s'ouvrent d'ici.
+function Raccourcis() {
+  const moi = useMoi();
+  const liens = [
+    ["/veille", "Veille", "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
+    ["/creer", "Créer un post", "M12 5v14M5 12h14"],
+    ["/studio", "Studio", "M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5z"],
+    ["/videos", "Vidéos à reprendre", "M4 5h16v14H4zM10 9l5 3-5 3z"],
+    ["/declencheurs", "Déclencheurs", "M13 2L4 14h7l-1 8 9-12h-7z"],
+    ["/connexions", "Connexions", "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"],
+    ["/sources", "Sources", "M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16M5 19a1 1 0 1 0 0-.01"],
+    ["/mediatheque", "Médiathèque", "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 15l3-3 2 2 3-3 3 4"],
+  ].filter(([h]) => !moi || lienVisible(moi.role, h));
+  return (
+    <nav className="v3-card mobile-only" aria-label="Autres écrans" style={{ padding: "4px 16px", flexDirection: "column" }}>
+      {liens.map(([h, t, d]) => (
+        <Link key={h} href={h} className="row" style={{ padding: "12px 0", borderBottom: "1px solid #F0F0F0", textDecoration: "none", color: "#111827" }}>
+          <span className="v3-ico" style={{ background: "#F5F6F7" }}><Trait d={d} size={20} /></span>
+          <span style={{ flex: 1, fontSize: 15, fontWeight: 600 }}>{t}</span>
+          <Trait d="M9 6l6 6-6 6" size={18} stroke={2} />
+        </Link>
+      ))}
+    </nav>
+  );
+}
 
 type Session = { id: string; appareil: string | null; created_at: string; vu_at: string; moi: boolean };
 type MiniPost = { id: string; title: string; idea: string; status: string; platforms: string[]; created_at: string; scheduled_at: string | null };
@@ -113,6 +140,7 @@ function VueMembre(p: Props) {
   return (
     <div className="tv-veille">
       <div className="tv-veille-main">
+        <Raccourcis />
         <section className="tv-carte" style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 18 }}>
           <Av nom={c.nom} id={c.uid} taille={80} />
           <div style={{ flex: "1 1 260px", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -192,6 +220,7 @@ function VueAdmin(p: Props) {
   return (
     <div className="tv-veille">
       <div className="tv-veille-main">
+        <Raccourcis />
         <section className="tv-compte-principal" aria-label="Compte principal">
           <span style={{ position: "relative" }}><Av nom={c.nom || "TU"} id="admin" taille={68} /><span className="etoile"><Trait d="M12 2l3 7h7l-5.5 4.5 2 7.5L12 16.5 5.5 21l2-7.5L2 9h7z" size={12} stroke={2} /></span></span>
           <span style={{ flex: "1 1 240px", display: "flex", flexDirection: "column", gap: 4 }}>
