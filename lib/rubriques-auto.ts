@@ -1,4 +1,5 @@
-// #CyberBase et #Citation en automatique, chaque jour (appelé toutes les heures par /api/rubriques).
+// #CyberBase et #Citation en automatique, chaque jour (appelé toutes les 20 min par /api/cron-rubriques).
+// Les créneaux sont préparés jusqu'à 54 h à l'avance : une panne passagère de l'IA ne laisse pas de trou.
 // - #CyberBase : une notion par jour à 7 h, choisie et rédigée par l'IA (jamais deux fois la même), visuel généré.
 // - #Citation : à 9 h, 13 h et 17 h, jamais de créneau vide. D'abord une phrase extraite MOT POUR MOT d'un article de la veille,
 //   sinon une citation d'archive (même ancienne) vérifiée sur Wikiquote et mise en regard de l'actualité.
@@ -25,9 +26,9 @@ function creneauxLibres(posts: Pick<Post, "scheduled_at">[], heures: number[]): 
   const now = new Date();
   const pris = new Set(posts.map((p) => (p.scheduled_at ? new Date(p.scheduled_at).toISOString().slice(0, 13) : "")));
   const out: Date[] = [];
-  for (const j of [0, 1]) for (const h of heures) {
+  for (const j of [0, 1, 2]) for (const h of heures) {
     const d = creneau(now, j, h);
-    if (d.getTime() > now.getTime() + 20 * 60000 && d.getTime() < now.getTime() + 30 * 3.6e6 && !pris.has(d.toISOString().slice(0, 13))) out.push(d);
+    if (d.getTime() > now.getTime() + 20 * 60000 && d.getTime() < now.getTime() + 54 * 3.6e6 && !pris.has(d.toISOString().slice(0, 13))) out.push(d);
   }
   return out;
 }
@@ -264,4 +265,15 @@ export async function rubriquesAuto(log: string[]) {
   for (const [nom, f] of [["CyberBase", () => cyberbaseDuJour(log)], ["Citation", () => citationsDuJour(log, 2)]] as const) {
     try { await f(); } catch (e) { log.push(`${nom} : ${(e as Error).message}`); }
   }
+  // Filet de sécurité : un créneau de citation dans moins de 2 h encore vide → alerte Telegram.
+  try {
+    const proches = await postsRubrique("citation", 5);
+    const libres = creneauxLibres(proches.filter((p) => ["planifie", "a_valider", "publie"].includes(p.status)), HEURES_CITATION)
+      .filter((d) => d.getTime() - Date.now() < 2 * 3.6e6);
+    if (libres.length) {
+      const h = `${libres[0].getUTCHours()} h`;
+      log.push(`Citation de ${h} toujours vide.`);
+      await envoiUnique(`citation-vide:${libres[0].toISOString().slice(0, 13)}`, `⚠️ TUVOA · La citation de ${h} n'est pas encore prête (IA indisponible : ${log.find((l) => /IA indisponible|Quota/.test(l))?.slice(0, 120) ?? "aucune citation vérifiée trouvée"}). VOA réessaie toutes les 20 min ; vous pouvez aussi en créer une dans l'app.`, 3);
+    }
+  } catch { /* alerte facultative */ }
 }

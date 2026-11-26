@@ -62,6 +62,7 @@ export default function Accueil() {
   const [info, setInfo] = useState<Info | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [error, setError] = useState("");
+  const [visuels, setVisuels] = useState<Record<string, string>>({});
   const moi = useMoi();
   const admin = !moi || moi.role === "admin";
 
@@ -94,6 +95,21 @@ export default function Accueil() {
   const aVenir = actifs.filter((p) => (p.status === "planifie" || p.status === "a_valider") && quand(p) > maintenant);
   const prochain = aVenir[0] ?? null;
   const restants = aVenir.filter((p) => quand(p) <= finJour);
+
+  // Visuels tels qu'ils seront publiés (gabarit généré compris) : le prochain post et les posts à venir du jour.
+  const aCharger = [prochain, ...restants.slice(0, 8)].filter((p): p is Post => Boolean(p)).map((p) => p.id).filter((id, i, t) => t.indexOf(id) === i);
+  const cleVisuels = aCharger.join(",");
+  useEffect(() => {
+    if (!cleVisuels) return;
+    let fini = false;
+    Promise.all(cleVisuels.split(",").map((id) =>
+      fetch(`/api/posts?id=${id}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null))
+        .then((j: { post?: { visuals?: Record<string, string> } } | null) => [id, j?.post?.visuals?.facebook || j?.post?.visuals?.linkedin || ""] as const)
+        .catch(() => [id, ""] as const),
+    )).then((paires) => { if (!fini) setVisuels(Object.fromEntries(paires.filter(([, u]) => u))); });
+    return () => { fini = true; };
+  }, [cleVisuels]);
+  const apercu = (p: Post) => visuels[p.id] || visuel(p);
 
   // Ce qui attend une action, du plus urgent au moins urgent
   const R = d?.rubriques ?? { actu: {}, citation: {}, cyberbase: {}, portrait: {} };
@@ -141,7 +157,7 @@ export default function Accueil() {
           {/* Prochain post */}
           {prochain ? (
             <section className="v3-hero" aria-label="Prochain post">
-              {visuel(prochain) ? <img src={visuel(prochain)} alt="" /> : null}
+              {apercu(prochain) ? <img src={apercu(prochain)} alt="" style={{ objectFit: "contain", objectPosition: "100% 50%" }} /> : null}
               <div>
                 <span className="row" style={{ gap: 8, fontSize: 14 }}>
                   <span style={{ padding: "3px 9px", borderRadius: 8, background: "rgba(255,255,255,0.16)", fontSize: 12, fontWeight: 700 }}>{NOM[prochain.rubrique] ?? "Post"}</span>
@@ -189,9 +205,9 @@ export default function Accueil() {
                 {restants.slice(0, 8).map((p) => (
                   <Link key={p.id} href={`/apercu?id=${p.id}`} className="v3-card v3-postcard">
                     <div className="vis" style={{ background: p.rubrique === "citation" ? "#E94A06" : p.rubrique === "cyberbase" ? "#1E3A8A" : "#E5E7EB" }}>
-                      {p.rubrique === "citation"
+                      {p.rubrique === "citation" && !apercu(p)
                         ? <span style={{ display: "flex", height: "100%", padding: "16px", alignItems: "center", color: "#fff", fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>« {(p.visual?.texte || p.title).slice(0, 90)}{(p.visual?.texte || p.title).length > 90 ? "…" : ""} »</span>
-                        : visuel(p) ? <img src={visuel(p)} alt="" /> : <span style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, padding: 16, textAlign: "center" }}>{p.visual?.titre || NOM[p.rubrique]}</span>}
+                        : apercu(p) ? <img src={apercu(p)} alt="" /> : <span style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, padding: 16, textAlign: "center" }}>{p.visual?.titre || NOM[p.rubrique]}</span>}
                       <span className="v3-chip white" style={{ position: "absolute", top: 10, left: 10 }}>{p.status === "a_valider" ? "À valider" : NOM[p.rubrique] ?? "Post"}</span>
                     </div>
                     <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
