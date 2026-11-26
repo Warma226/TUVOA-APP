@@ -13,6 +13,17 @@ type Ligne = {
 const JOUR = 864e5;
 const cle = (d: Date) => d.toISOString().slice(0, 10); // Ouagadougou = UTC
 
+// Dernier geste de VOA et nombre de réponses depuis minuit (carte VOA de l'accueil et du menu).
+async function voaDuJour() {
+  const minuit = new Date(); minuit.setUTCHours(0, 0, 0, 0);
+  const [der, nb] = await Promise.all([
+    db().from("cm_journal").select("auteur,created_at").eq("action", "repondu").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    db().from("cm_journal").select("id", { count: "exact", head: true }).eq("action", "repondu").gte("created_at", minuit.toISOString()),
+  ]);
+  const d = der.data as { auteur: string | null; created_at: string } | null;
+  return { dernier: d ? { auteur: d.auteur ?? "un abonné", at: d.created_at } : null, reponsesAuj: nb.count ?? 0 };
+}
+
 // GET /api/tableau → chiffres du tableau de bord (7 derniers jours + 2 jours planifiés).
 export async function GET(req: Request) {
   if (isDemo()) return NextResponse.json({ demo: true });
@@ -32,7 +43,7 @@ export async function GET(req: Request) {
         if (!dom.has(x.source_name) && x.source_url) { try { dom.set(x.source_name, new URL(x.source_url).hostname.replace(/^www\./, "")); } catch { /* lien invalide */ } }
       }
       const sources = [...src.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([nom, n]) => ({ nom, n, domaine: dom.get(nom) }));
-      return NextResponse.json({ autopilot: s.autopilot, grin: { aTraiter: cm.count ?? 0 }, sources });
+      return NextResponse.json({ autopilot: s.autopilot, grin: { aTraiter: cm.count ?? 0 }, sources, voa: await voaDuJour().catch(() => null) });
     }
     const now = new Date();
     const debut = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - 6 * JOUR);
@@ -104,6 +115,7 @@ export async function GET(req: Request) {
       sources,
       minute: { total: eps.length, montes: eps.filter((e) => e.statut !== "brouillon").length, brouillons: eps.filter((e) => e.statut === "brouillon").length, dernier: Math.max(0, ...eps.map((e) => e.numero ?? 0)) },
       grin: { aTraiter: cm.count ?? 0 },
+      voa: await voaDuJour().catch(() => null),
       recap: recap.data ? { date: (recap.data as { scheduled_at: string | null; created_at: string }).scheduled_at ?? (recap.data as { created_at: string }).created_at, statut: (recap.data as { status: string }).status } : null,
       media,
     });

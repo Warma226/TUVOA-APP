@@ -46,27 +46,26 @@ export function LogoTuile({ taille = 76, bord = "#0A2A66" }: { taille?: number; 
 }
 
 const MENU: { href: string; label: string; d: string; badge?: "grin" }[] = [
-  { href: "/", label: "Tableau de bord", d: NAV_ICONS.bord },
+  { href: "/", label: "Accueil", d: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" },
   { href: "/veille", label: "Veille", d: NAV_ICONS.veille },
   { href: "/creer", label: "Créer", d: NAV_ICONS.creer },
   { href: "/calendrier", label: "Calendrier", d: NAV_ICONS.cal },
   { href: "/studio", label: "Studio", d: NAV_ICONS.studio },
   { href: "/minute-cyber", label: "La minute cyber", d: NAV_ICONS.minute },
-  { href: "/communaute", label: "Le Grin · VOA", d: NAV_ICONS.grin, badge: "grin" },
+  { href: "/communaute", label: "VOA", d: NAV_ICONS.grin, badge: "grin" },
   { href: "/sources", label: "Sources", d: NAV_ICONS.sources },
   { href: "/declencheurs", label: "Déclencheurs", d: NAV_ICONS.eclair },
   { href: "/connexions", label: "Connexions", d: NAV_ICONS.cnx },
 ];
 
 const ONGLETS: { href: string; label: string; d: string }[] = [
-  { href: "/", label: "Accueil", d: NAV_ICONS.bord },
-  { href: "/veille", label: "Veille", d: NAV_ICONS.veille },
-  { href: "/creer", label: "Créer", d: NAV_ICONS.plus },
-  { href: "/calendrier", label: "Agenda", d: NAV_ICONS.cal },
-  { href: "/communaute", label: "Grin", d: NAV_ICONS.grin },
+  { href: "/", label: "Accueil", d: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" },
+  { href: "/calendrier", label: "Calendrier", d: NAV_ICONS.cal },
+  { href: "/communaute", label: "VOA", d: NAV_ICONS.grin },
+  { href: "/compte", label: "Compte", d: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" },
 ];
 
-const SECONDAIRES = ["/studio", "/minute-cyber", "/creer/", "/editeur", "/apercu", "/declencheurs", "/rubriques", "/sources", "/mediatheque", "/connexions"];
+const SECONDAIRES = ["/studio", "/minute-cyber", "/creer/", "/editeur", "/apercu", "/rubriques", "/mediatheque"];
 
 type Etat = { autopilot: boolean; grin: number } | null;
 
@@ -91,8 +90,8 @@ export function BottomNav() {
     <>
       <nav className="tv-side" aria-label="Navigation principale">
         <Link href="/" className="tv-side-brand" aria-label="TUVOA Studio, tableau de bord">
-          <LogoTuile />
-          <span className="tv-side-studio">STUDIO</span>
+          <LogoTuile taille={42} bord="#FFFFFF" />
+          <span className="tv-side-studio">TUVOA Studio</span>
         </Link>
         <div className="tv-side-items">
           {MENU.filter((it) => voit(it.href)).map((it) => (
@@ -117,9 +116,9 @@ export function BottomNav() {
           </span>
         </Link>
         <div className="tv-side-pilote">
-          <span className="tv-kicker" style={{ color: "#FFB48A" }}>PILOTE AUTOMATIQUE</span>
-          <span style={{ fontSize: 13, lineHeight: 1.4, color: "#E6ECFA" }}>
-            {etat?.autopilot ? "L'app publie seule les actus de la veille." : "Les posts attendent ta validation."}
+          <span style={{ fontSize: 14, fontWeight: 700 }}>VOA et le pilote automatique</span>
+          <span style={{ fontSize: 13, lineHeight: 1.4, color: "#4B5563" }}>
+            {etat?.autopilot ? "L'app publie seule et VOA répond aux commentaires." : "Les posts attendent votre validation."}
           </span>
           <span className="row" style={{ gap: 8, fontSize: 13, fontWeight: 600 }}>
             <span className={`tv-led${etat?.autopilot ? "" : " off"}`} />
