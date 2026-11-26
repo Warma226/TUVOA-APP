@@ -234,21 +234,16 @@ export default function Accueil() {
                 { id: "actu", ico: I.news, info: n(R.actu.a_valider) ? `${R.actu.a_valider} à valider` : "Depuis la veille ou un lien" },
                 { id: "citation", ico: I.quote, info: "Auto à 9 h, 13 h, 17 h" },
                 { id: "cyberbase", ico: I.shield, info: "Auto chaque jour à 7 h" },
-                { id: "portrait", ico: I.user, info: n(R.portrait.a_valider) ? `${R.portrait.a_valider} à valider` : "Un acteur de la tech" },
+                { id: "videos", ico: I.film, info: "Reels d’une minute" },
               ].map((r) => (
-                <Link key={r.id} href={`/creer/${r.id}`} className="v3-tile">
+                <Link key={r.id} href={r.id === "videos" ? "/videos" : `/creer/${r.id}`} className="v3-tile">
                   <span className="v3-ico"><Trait d={r.ico} size={22} /></span>
                   <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <strong style={{ fontSize: 15 }}>{NOM[r.id]}</strong>
+                    <strong style={{ fontSize: 15 }}>{NOM[r.id] ?? "Vidéo choc"}</strong>
                     <span style={{ fontSize: 12, color: "#4B5563" }}>{r.info}</span>
                   </span>
                 </Link>
               ))}
-            </div>
-            <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-              <Link href="/videos" className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}><Trait d={I.film} size={16} />Reel choc</Link>
-              <Link href="/minute-cyber" className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}><Trait d={NAV_ICONS.minute} size={16} />Minute cyber</Link>
-              <Link href="/studio" className="chip" style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}><Trait d={NAV_ICONS.studio} size={16} />Studio</Link>
             </div>
           </section>
 

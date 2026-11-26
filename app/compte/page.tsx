@@ -15,8 +15,7 @@ function Raccourcis() {
   const liens = [
     ["/veille", "Veille", "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
     ["/creer", "Créer un post", "M12 5v14M5 12h14"],
-    ["/studio", "Studio", "M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5z"],
-    ["/videos", "Vidéos à reprendre", "M4 5h16v14H4zM10 9l5 3-5 3z"],
+    ["/videos", "Vidéos choc", "M4 5h16v14H4zM10 9l5 3-5 3z"],
     ["/declencheurs", "Déclencheurs", "M13 2L4 14h7l-1 8 9-12h-7z"],
     ["/connexions", "Connexions", "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"],
     ["/sources", "Sources", "M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16M5 19a1 1 0 1 0 0-.01"],
@@ -202,6 +201,7 @@ function VueAdmin(p: Props) {
   const [role, setRole] = useState<Role>("redacteur");
   const [lien, setLien] = useState<{ pour: string; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [voirEquipe, setVoirEquipe] = useState(false);
   const charger = useCallback(() => api("/api/membres").then(setEq).catch((e: Error) => setError(e.message)), [setError]);
   useEffect(() => { void charger(); }, [charger]);
   async function act(body: Record<string, unknown>, ok?: string) {
@@ -216,6 +216,7 @@ function VueAdmin(p: Props) {
   }
   const membres = eq?.membres ?? [];
   const n = (s: string) => membres.filter((m) => m.statut === s).length;
+  const equipe = voirEquipe || membres.length > 0;
 
   return (
     <div className="tv-veille">
@@ -231,6 +232,9 @@ function VueAdmin(p: Props) {
         </section>
         <section className="tv-carte"><Nom {...p} /></section>
 
+        {!equipe ? (
+          <button type="button" className="btn ghost small" style={{ alignSelf: "flex-start" }} onClick={() => setVoirEquipe(true)}>Inviter un membre de l&apos;équipe</button>
+        ) : <>
         <form className="tv-carte" aria-labelledby="t-ajout" style={{ border: "2px solid #2563EB" }} onSubmit={inviter}>
           <div className="row" style={{ alignItems: "baseline", gap: 10, flexWrap: "wrap" }}><h2 id="t-ajout" className="tv-h2" style={{ flex: 1 }}>Ajouter un membre</h2><span className="tv-gris" style={{ fontSize: 13 }}>Il reçoit un lien personnel pour choisir son mot de passe.</span></div>
           <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -300,6 +304,7 @@ function VueAdmin(p: Props) {
             </table>
           </div>
         </section>
+        </>}
         <Securite {...p} />
       </div>
 
