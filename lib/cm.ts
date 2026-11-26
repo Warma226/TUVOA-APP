@@ -225,8 +225,8 @@ async function collecter(log: string[]): Promise<Candidat[]> {
       });
     }
   } catch (e) {
-    log.push(`Mentions illisibles : ${(e as Error).message}
-  }`);
+    log.push(`Mentions illisibles : ${(e as Error).message}`);
+  }
   }
   const vus = await dejaTraites(out.map((c) => c.external_id));
   return out.filter((c) => !vus.has(c.external_id)).reverse().slice(0, MAX_PAR_PASSAGE);
