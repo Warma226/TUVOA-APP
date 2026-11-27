@@ -20,11 +20,23 @@ const COMMANDES = [
 // Branche le bot sur l'app (réception des commandes) et affiche le menu des commandes dans Telegram.
 export async function activerCommandes(): Promise<{ ok: boolean; detail: string }> {
   if (!process.env.TELEGRAM_BOT_TOKEN) return { ok: false, detail: "Ajoutez TELEGRAM_BOT_TOKEN dans Vercel." };
-  const w = await tg("setWebhook", { url: `${APP()}/api/telegram`, secret_token: secretWebhook(), allowed_updates: ["message"], drop_pending_updates: true });
+  const w = await tg("setWebhook", { url: `${APP()}/api/telegram`, secret_token: secretWebhook(), allowed_updates: ["message", "callback_query"], drop_pending_updates: true });
   if (!w.ok) return { ok: false, detail: `Telegram : ${w.description}` };
   await tg("setMyCommands", { commands: COMMANDES, language_code: "fr" });
   await tg("setMyCommands", { commands: COMMANDES });
   return { ok: true, detail: "Commandes actives : tapez / dans la discussion avec le bot." };
+}
+
+// Le webhook doit recevoir les boutons (callback_query) : réactivé tout seul s'il date d'avant.
+let boutonsVerifies = false;
+export async function verifierBoutons() {
+  if (boutonsVerifies || !process.env.TELEGRAM_BOT_TOKEN) return;
+  boutonsVerifies = true;
+  try {
+    const r = await tg("getWebhookInfo");
+    const w = r.result as { url?: string; allowed_updates?: string[] } | undefined;
+    if (w?.url?.endsWith("/api/telegram") && !(w.allowed_updates ?? []).includes("callback_query")) await activerCommandes();
+  } catch { boutonsVerifies = false; }
 }
 
 export async function commandesActives(): Promise<boolean> {
@@ -44,7 +56,7 @@ async function abonnes(): Promise<number | null> {
   try { return (await graph<{ followers_count?: number }>(PAGE(), { fields: "followers_count" })).followers_count ?? null; } catch { return null; }
 }
 
-async function brief(): Promise<string> {
+export async function brief(): Promise<string> {
   const debut = debutJour();
   const [pub, err, rest, prochain, grin, s, ab] = await Promise.all([
     db().from("posts").select("id", { count: "exact", head: true }).eq("status", "publie").gte("scheduled_at", debut),
@@ -68,7 +80,7 @@ async function brief(): Promise<string> {
   ].filter(Boolean).join("\n");
 }
 
-async function prochains(): Promise<string> {
+export async function prochains(): Promise<string> {
   const { data } = await db().from("posts").select("title,rubrique,scheduled_at,platforms").eq("status", "planifie").gte("scheduled_at", new Date(Date.now() - 15 * 60000).toISOString()).order("scheduled_at").limit(5);
   const l = (data ?? []) as { title: string | null; rubrique: string; scheduled_at: string }[];
   if (!l.length) return "🗓️ Aucun post programmé pour l'instant.";
@@ -103,7 +115,7 @@ export async function stats(titre = "📈 Les 7 derniers jours"): Promise<string
   ].filter((x, i, t) => x !== "" || t[i - 1] !== "").join("\n");
 }
 
-async function pilote(marche: boolean): Promise<string> {
+export async function pilote(marche: boolean): Promise<string> {
   const s = await getSettings();
   if (s.autopilot === marche) return marche ? "🤖 Le pilote automatique est déjà en marche." : "⏸️ Le pilote automatique est déjà à l'arrêt.";
   await saveSettings({ ...s, autopilot: marche });
@@ -120,18 +132,35 @@ const AIDE = [
   "/stats : le bilan des 7 derniers jours",
   "/pause : couper le pilote automatique",
   "/reprendre : le relancer",
+  "",
+  "Vous pouvez aussi m'écrire normalement, par exemple : « prépare un post sur la 5G au Burkina » ou « qu'est-ce qui part ce soir ? »",
 ].join("\n");
 
-// Réception d'un message envoyé au bot (webhook). Seule la discussion reliée est écoutée.
-export async function traiterMessage(update: { message?: { chat: { id: number }; text?: string } }) {
+// Réception d'un message ou d'un bouton envoyé au bot (webhook). Seule la discussion reliée est écoutée.
+type MajTelegram = {
+  message?: { chat: { id: number }; text?: string };
+  callback_query?: { id: string; data?: string; message?: { chat: { id: number }; message_id: number } };
+};
+export async function traiterMessage(update: MajTelegram) {
+  const chat = await chatTelegram();
+  const cb = update.callback_query;
+  if (cb) {
+    if (!chat || String(cb.message?.chat.id) !== chat) return void (await tg("answerCallbackQuery", { callback_query_id: cb.id, text: "Réservé à l'administration de TUVOA." }));
+    const { traiterBouton } = await import("./telegram-chat");
+    return traiterBouton(cb.id, cb.data ?? "", chat, cb.message?.message_id);
+  }
   const m = update.message;
   if (!m?.text) return;
-  const chat = await chatTelegram();
   if (!chat || String(m.chat.id) !== chat) {
     await tg("sendMessage", { chat_id: m.chat.id, text: "Ce bot est réservé à l'administration de TUVOA." });
     return;
   }
-  const cmd = m.text.trim().split(/[\s@]/)[0].toLowerCase();
+  const brut = m.text.trim();
+  const cmd = brut.split(/[\s@]/)[0].toLowerCase();
+  if (!brut.startsWith("/")) {
+    const { discuter } = await import("./telegram-chat");
+    return discuter(brut, chat);
+  }
   let texte: string;
   try {
     texte =
