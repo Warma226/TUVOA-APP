@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { appUrl } from "@/lib/sign";
 import { FB_APP_ID, enregistrerJetonFb, lireEtatOAuth } from "@/lib/fb-jeton";
+import { envoiUnique } from "@/lib/whatsapp";
 
 export const dynamic = "force-dynamic";
 const G = () => `https://graph.facebook.com/${process.env.FB_GRAPH_VERSION || "v21.0"}`;
@@ -31,6 +32,7 @@ export async function GET(req: Request) {
     await enregistrerJetonFb({ token: page.access_token, page: page.id, nom: page.name });
     // Réabonne la Page aux notifications (commentaires en temps réel).
     await fetch(`${G()}/${page.id}/subscribed_apps`, { method: "POST", body: new URLSearchParams({ subscribed_fields: "feed,messages", access_token: page.access_token }) }).catch(() => null);
+    await envoiUnique(`fb-reconnecte-${Date.now()}`, `✅ TUVOA · Facebook est reconnecté (Page « ${page.name} »). TUVOA publie et lit à nouveau les commentaires.`, 0).catch(() => undefined);
     return fin("fb=ok");
   } catch (e) {
     console.error("facebook retour", (e as Error).message);
