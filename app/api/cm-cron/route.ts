@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { cmPassage } from "@/lib/cm";
 import { alerte } from "@/lib/whatsapp";
 import { verifierGrin } from "@/lib/telegram-bot";
+import { chargerJetonFb } from "@/lib/fb-jeton";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 // Appelé toutes les 15 min par Supabase pg_cron : passage de l'agent community manager.
 export async function GET(req: Request) {
+  await chargerJetonFb();
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   try {

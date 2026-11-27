@@ -9,6 +9,7 @@ import { rapportLundi, verifierGrin, verifierViral } from "@/lib/telegram-bot";
 import { coverUrl, itemUrl, endUrl } from "@/lib/recap-url";
 import { GUARDRAILS, gardeFous, TOPICS, categorieWp, allSources, allTriggers, isOn, type Platform } from "@/lib/config";
 import { getSettings, filterUnseen, markSeen, savePost, emptyPost, duePosts, countAutoToday, recentAutoPosts, recentPosts, postedUrls, publishedSince, recapExists } from "@/lib/store";
+import { chargerJetonFb } from "@/lib/fb-jeton";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -22,6 +23,7 @@ function authorized(req: Request) {
 }
 
 export async function GET(req: Request) {
+  await chargerJetonFb();
   if (!authorized(req)) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   const log: string[] = [];
   const q = new URL(req.url).searchParams;

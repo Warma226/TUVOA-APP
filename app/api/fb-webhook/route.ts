@@ -1,11 +1,13 @@
 import { NextResponse, after } from "next/server";
 import { concerneVoa, jetonVerification, reagir, signatureValide } from "@/lib/fb-temps-reel";
+import { chargerJetonFb } from "@/lib/fb-jeton";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 // Vérification du webhook par Meta (une fois, à l'enregistrement de l'URL).
 export async function GET(req: Request) {
+  await chargerJetonFb();
   const q = new URL(req.url).searchParams;
   if (q.get("hub.mode") === "subscribe" && q.get("hub.verify_token") === jetonVerification()) {
     return new Response(q.get("hub.challenge") ?? "", { status: 200 });
@@ -15,6 +17,7 @@ export async function GET(req: Request) {
 
 // Notification de la Page : nouveau commentaire ou mention. On répond tout de suite à Meta, puis VOA travaille.
 export async function POST(req: Request) {
+  await chargerJetonFb();
   const corps = await req.text();
   if (!signatureValide(corps, req.headers.get("x-hub-signature-256"))) return NextResponse.json({ error: "Signature invalide" }, { status: 401 });
   let payload: Parameters<typeof concerneVoa>[0] = {};

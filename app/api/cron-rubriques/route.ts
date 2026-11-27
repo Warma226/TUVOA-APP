@@ -1,11 +1,13 @@
 // Tâche planifiée (toutes les heures, Supabase pg_cron) : #CyberBase et #Citation du jour en automatique.
 import { NextResponse } from "next/server";
 import { rubriquesAuto } from "@/lib/rubriques-auto";
+import { chargerJetonFb } from "@/lib/fb-jeton";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
+  await chargerJetonFb();
   const secret = process.env.CRON_SECRET;
   const ok = secret && (req.headers.get("authorization") === `Bearer ${secret}` || new URL(req.url).searchParams.get("key") === secret);
   if (!ok) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });

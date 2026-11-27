@@ -4,6 +4,7 @@ import { cmDiagnostic, cmJeton } from "@/lib/cm";
 import { statsStockage } from "@/lib/mediatheque";
 import { aiProvider } from "@/lib/claude";
 import type { Platform } from "@/lib/config";
+import { chargerJetonFb } from "@/lib/fb-jeton";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -14,6 +15,7 @@ type Ligne = { id: string; title: string | null; idea: string | null; scheduled_
 // GET /api/connexions/sante → état de santé des comptes : dernières publications réussies, incidents,
 // jeton Facebook (date d'expiration et autorisations, jamais le jeton), stockage. Aucun secret renvoyé.
 export async function GET() {
+  await chargerJetonFb();
   if (isDemo()) return NextResponse.json({ demo: true });
   const depuis = new Date(Date.now() - 14 * 864e5).toISOString();
   const [posts, jeton, diag, stockage] = await Promise.all([

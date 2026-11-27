@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, getSettings, isDemo } from "@/lib/store";
 import { statsStockage } from "@/lib/mediatheque";
+import { chargerJetonFb } from "@/lib/fb-jeton";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -26,6 +27,7 @@ async function voaDuJour() {
 
 // GET /api/tableau → chiffres du tableau de bord (7 derniers jours + 2 jours planifiés).
 export async function GET(req: Request) {
+  await chargerJetonFb();
   if (isDemo()) return NextResponse.json({ demo: true });
   try {
     if (new URL(req.url).searchParams.get("leger")) {

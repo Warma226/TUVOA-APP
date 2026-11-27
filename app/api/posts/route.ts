@@ -3,6 +3,7 @@ import { moi, nomDe } from "@/lib/equipe";
 import { listPosts, listPostsEntre, getPost, savePost, deletePost, emptyPost, isDemo, type Post } from "@/lib/store";
 import { imageFor } from "@/lib/visual-url";
 import { publishPost } from "@/lib/publish";
+import { chargerJetonFb } from "@/lib/fb-jeton";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -21,6 +22,7 @@ function normalize(input: Partial<Post> | undefined): Post {
 
 // GET /api/posts → liste ; GET /api/posts?id=… → un post avec ses visuels
 export async function GET(req: Request) {
+  await chargerJetonFb();
   try {
     const sp = new URL(req.url).searchParams;
     const id = sp.get("id");
@@ -40,6 +42,7 @@ export async function GET(req: Request) {
 //      | { action: "publish", id, post? } | { action: "cancel", id, post? } | { action: "delete", id }
 // En mode démo (sans Supabase), le navigateur garde les posts et envoie le post complet à chaque action.
 export async function POST(req: Request) {
+  await chargerJetonFb();
   try {
     const body = await req.json();
     const demo = isDemo();

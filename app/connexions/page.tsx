@@ -107,6 +107,23 @@ export default function Connexions() {
   const [info, setInfo] = useState<Info | null>(null);
   const [sante, setSante] = useState<Sante | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  // Retour de « Reconnecter Facebook »
+  const [fbRetour, setFbRetour] = useState<{ ok: boolean; texte: string } | null>(null);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const fb = q.get("fb");
+    if (!fb) return;
+    const textes: Record<string, string> = {
+      ok: "Facebook est reconnecté : TUVOA publie et lit à nouveau les commentaires de la Page.",
+      annule: "Reconnexion annulée sur Facebook.",
+      expire: "Le lien a expiré. Cliquez à nouveau sur « Reconnecter Facebook ».",
+      page: "Aucune Page TUVOA n'a été autorisée. Recommencez et cochez bien la Page TUVOA.",
+      config: "Il manque le secret de l'application Facebook (FB_APP_SECRET) dans Vercel.",
+      erreur: `Facebook a refusé la reconnexion : ${q.get("detail") ?? ""}`,
+    };
+    setFbRetour({ ok: fb === "ok", texte: textes[fb] ?? "Réponse inattendue de Facebook." });
+    window.history.replaceState(null, "", "/connexions");
+  }, []);
   const [error, setError] = useState("");
   const [tests, setTests] = useState<Record<string, { ok: boolean; detail: string }> | null>(null);
   const [testeA, setTesteA] = useState<Date | null>(null);
@@ -201,13 +218,15 @@ export default function Connexions() {
   const scopes = sante?.jeton?.autorisations ?? [];
   const manquantes = AUTORISATIONS.filter(([k]) => scopes.length && !scopes.includes(k));
   const alerte =
-    jetonJours !== null && jetonJours < 15 ? `Le jeton de la Page Facebook expire dans ${jetonJours} jour${jetonJours > 1 ? "s" : ""}. Renouvelez-le dans Vercel (FB_PAGE_TOKEN) avant cette date.`
+    jetonJours !== null && jetonJours < 15 ? `Le jeton de la Page Facebook expire dans ${jetonJours} jour${jetonJours > 1 ? "s" : ""}. Cliquez sur « Reconnecter Facebook » avant cette date.`
     : manquantes.length ? `Une autorisation manque sur la Page Facebook : « ${manquantes[0][1]} ». Sans elle, VOA ne peut pas faire ce travail.`
     : (sante?.diagnostic ?? []).find((d) => !d.ok)?.detail ?? "";
 
   const aide = (id: string, lignes: string[]) =>
     open === id ? <li><ol id={`aide-${id}`} className="tv-aide">{lignes.map((h) => <li key={h}>{h}</li>)}</ol></li> : null;
-  const btnAide = (id: string, configure: boolean) => (
+  const btnAide = (id: string, configure: boolean) => id === "facebook" ? (
+    <a className="btn small dark" href="/api/facebook/connecter" style={{ textDecoration: "none" }}>{configure ? "Reconnecter Facebook" : "Connecter Facebook"}</a>
+  ) : (
     <button type="button" className={configure ? "btn small" : "btn small dark"} aria-expanded={open === id} aria-controls={`aide-${id}`} onClick={() => setOpen(open === id ? null : id)}>
       {configure ? "Changer de compte" : "Relier"}
     </button>
@@ -232,11 +251,12 @@ export default function Connexions() {
         </div>
 
         {error ? <p className="notice rouge" role="alert">{error}</p> : null}
-        {alerte ? (
+        {fbRetour ? <p className={`notice ${fbRetour.ok ? "vert" : "rouge"}`} role="status">{fbRetour.texte}</p> : null}
+        {alerte && !fbRetour?.ok ? (
           <div className="tv-alerte-cnx" role="status">
             <Trait d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" size={22} stroke={2} />
             <span style={{ flex: "1 1 300px" }}>{alerte}</span>
-            <button type="button" className="tv-btn-nuit" style={{ height: 44 }} onClick={() => setOpen("facebook")}>Voir la marche à suivre</button>
+            <a className="tv-btn-nuit" href="/api/facebook/connecter" style={{ height: 44, display: "inline-flex", alignItems: "center", textDecoration: "none" }}>Reconnecter Facebook</a>
           </div>
         ) : null}
 
